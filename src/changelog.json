@@ -1,0 +1,263 @@
+[
+  {
+    "id": "DEV-0015",
+    "title": "Prepare hosted test deployment",
+    "summary": "Configured GitHub Pages deployment and made display pop-out URLs respect the hosted project path so testers can open the app and its display views from a shared URL.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 7:25 PM",
+    "areas": [
+      "Deployment",
+      "Displays"
+    ],
+    "files": [
+      ".github/workflows/deploy-pages.yml",
+      "vite.config.ts",
+      "src/vite-env.d.ts",
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "README.md"
+    ],
+    "tests": "Production build passed before deployment changes; GitHub-mode TypeScript verification was attempted but local tooling stalled, so GitHub Actions will provide the clean deployment verification."
+  },
+  {
+    "id": "DEV-0014",
+    "title": "Add donor alphabetical sorting",
+    "summary": "Added Manual, A-Z, and Z-A donor ordering controls so operators can quickly find names without changing the saved manual order.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 7:04 PM",
+    "areas": [
+      "Donors"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "TypeScript compilation passed; Vite bundle step blocked by managed sandbox access above workspace"
+  },
+  {
+    "id": "DEV-0013",
+    "title": "Direct announcement image manipulation",
+    "summary": "Made announcement images draggable in the live preview and applied Live Studio masks, rotation, mirror, and flip transforms to both previews and live display output.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 5:21 PM",
+    "areas": [
+      "Announcements",
+      "Live Studio"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Expanded UI transpiled successfully with esbuild"
+  },
+  {
+    "id": "DEV-0012",
+    "title": "Expand announcement and live presentation controls",
+    "summary": "Added announcement details, text/background colors, images with positioning controls, multi-display checkboxes and preview switching/fullscreen; balanced composer and preview widths; added persistent Live Studio previews plus compact rotate, mirror, flip, zoom/pan and shape-mask controls.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 5:20 PM",
+    "areas": [
+      "Announcements",
+      "Live Studio"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "App UI transpiled successfully with esbuild"
+  },
+  {
+    "id": "DEV-0011",
+    "title": "Freeform board layout editor",
+    "summary": "Added precise X/Y/W/H panel controls, drag and edge-resize manipulation with synchronized values, right-click type-and-place panel creation, image/PNG panels with clipped content, panel ordering, saved board create/duplicate/delete controls, and visible warm or primary-color particles in editor and display previews.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 5:14 PM",
+    "areas": [
+      "Board Editor",
+      "Display rendering",
+      "Saved boards"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx",
+      ".lantern/bugs/BUG-0003/catalog.json",
+      ".lantern/bugs/BUG-0003/report.md"
+    ],
+    "tests": "Focused TypeScript check (no new errors; pre-existing IdeasDrawer error remains); local browser verification of number edits, context menu, image placement, drag-to-number synchronization, bottom-button removal, and 24-particle preview rendering"
+  },
+  {
+    "id": "DEV-0010",
+    "title": "Remove duplicate dashboard ideas drawer",
+    "summary": "Removed the unintended Ideas & shortcuts drawer that rendered beneath the dashboard and deleted its obsolete layout styles.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:54 PM",
+    "areas": [
+      "Dashboard"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Confirmed no IdeasDrawer component, state, render call, or drawer styles remain"
+  },
+  {
+    "id": "DEV-0009",
+    "title": "Restore display appearance controls",
+    "summary": "Moved the display editor close action to the top-right, tightened the header, restored image-background and particle controls, grouped scrolling controls, added configurable donor marker shapes and placement, and added per-donor JPG/PNG icon overrides with generated sample assets. Existing saved background media is cleared by the demo-data migration so the previously applied image is removed.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:49 PM",
+    "areas": [
+      "Displays",
+      "Donors",
+      "Renderer",
+      "Sample data"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "public/assets/donor-icons/star.png",
+      "public/assets/donor-icons/toy-soldier.png"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npx vite build; Playwright Screens editor snapshot and screenshot at output/playwright/display-settings-restored.png"
+  },
+  {
+    "id": "DEV-0008",
+    "title": "Correct donor panel front and back",
+    "summary": "Moved the solid backing mesh to the rear face so it no longer covers the textured front while still covering the back during 3D rotation.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:42 PM",
+    "areas": [
+      "Board preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "Backing placement inspected and renderer source verified"
+  },
+  {
+    "id": "DEV-0007",
+    "title": "Correct donor panel front and back",
+    "summary": "Moved the solid backing mesh to the rear face so it no longer covers the textured front while still covering the back during 3D rotation.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:41 PM",
+    "areas": [
+      "Board preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "Panel renderer transpiled successfully with esbuild"
+  },
+  {
+    "id": "DEV-0006",
+    "title": "Improve Board Editor selector visibility",
+    "summary": "Expanded dropdown hit areas and focus styling, then replaced the clipped single-row toolbar with a responsive two-row layout based on usable editor width.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:41 PM",
+    "areas": [
+      "Board Editor",
+      "Responsive layout",
+      "Accessibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "TypeScript validation passed; browser runner timed out under machine CPU contention"
+  },
+  {
+    "id": "DEV-0005",
+    "title": "Saved announcement library and scheduling",
+    "summary": "Added a lower-page announcement library with create, edit, version, delete, and calendar scheduling controls, including one-time and weekly recurrence.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:30 PM",
+    "areas": [
+      "Announcements",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "Type-check attempted; project compiler exceeded four-minute verification window without diagnostics"
+  },
+  {
+    "id": "DEV-0004",
+    "title": "Rebuild revision history as a project changelog",
+    "summary": "Unified Codex code changes and restorable board publishes into a GitHub-style activity feed with rationale, changed areas, files, and verification.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:20 PM",
+    "areas": [
+      "Revision history",
+      "Agent workflow"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/changelog.json"
+    ],
+    "tests": "TypeScript and production build"
+  },
+  {
+    "id": "DEV-0003",
+    "title": "Fix dashboard board camera and framing",
+    "summary": "Removed preview clipping, expanded zoom, restored horizontal and vertical 3D rotation, and added per-panel 2D/3D and Reset view controls.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 4:12 PM",
+    "areas": [
+      "Dashboard",
+      "3D preview",
+      "Camera controls"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx",
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Production build and browser visual check"
+  },
+  {
+    "id": "DEV-0002",
+    "title": "Add interactive bug-evidence viewer",
+    "summary": "Added floating evidence inspection with zoom, pan, GIF playback control, and native video controls for MOV, MPEG, MP4, and WebM.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 10:56 AM",
+    "areas": [
+      "Bug catalogue",
+      "Evidence viewer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "vite.config.ts"
+    ],
+    "tests": "Production build and Playwright interaction check"
+  },
+  {
+    "id": "DEV-0001",
+    "title": "Connect Lantern bugs to Codex",
+    "summary": "Migrated browser-only reports into a disk-backed catalogue, persisted attachments, and added an agent work log and CLI workflow.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 10:52 AM",
+    "areas": [
+      "Bug bridge",
+      "Agent workflow",
+      "Evidence"
+    ],
+    "files": [
+      "vite.config.ts",
+      "scripts/lantern-bugs.mjs",
+      "src/App.tsx"
+    ],
+    "tests": "Production build and BUG-0002 migration check"
+  }
+]

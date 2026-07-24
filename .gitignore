@@ -1,0 +1,11 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/Cargo.lock
+output/
+.playwright-cli/
+.lantern/
+vite.*.log
+.DS_Store
+*.log
+*.tsbuildinfo
