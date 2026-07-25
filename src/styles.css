@@ -5951,7 +5951,7 @@ textarea:focus-visible,
 
 .board-builder {
   display: grid;
-  grid-template-rows: 48px minmax(0, 1fr);
+  grid-template-rows: 70px minmax(0, 1fr);
   gap: 9px;
   height: 100%;
   min-height: 0;
@@ -6057,7 +6057,7 @@ textarea:focus-visible,
 .board-stage-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   padding: 0 11px;
   border-bottom: 1px solid var(--border);

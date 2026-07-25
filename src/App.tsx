@@ -2027,7 +2027,7 @@ function ThemeStudio({
         <main className="direct-board-stage" onPointerDown={(event) => {
           if (!(event.target as Element).closest(".direct-board-canvas")) setSelectedPanelId("");
         }}>
-          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span><span>{panels.length} panels · {selectedProgram.donorIds.length} names</span></div>
+          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span></div>
           <DirectBoardCanvas
             state={state}
             display={display}
