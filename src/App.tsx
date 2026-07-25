@@ -2725,7 +2725,7 @@ function AnnouncementsView({
 
   return (
     <section className="comms-workspace">
-      <div className="workspace-tabbar"><EditorTabs value={mode} options={[["announcement", "Announcement"], ["live", "Live studio"]]} onChange={(value) => setMode(value as typeof mode)} /><span>{mode === "announcement" ? "Broadcast a timed message" : "Prepare a live presentation"}</span></div>
+      <div className="workspace-tabbar"><EditorTabs value={mode} options={[["announcement", "Announcement"], ["live", "Broadcast"]]} onChange={(value) => setMode(value as typeof mode)} /></div>
       {mode === "announcement" ? <div className="announcement-deck">
         <div className="form-panel announcement-form">
           <div className="panel-heading composer-heading"><div><p className="eyebrow">Message composer</p><h2>Create an announcement <InfoDot text="Short messages that temporarily appear on selected displays." /></h2><small>Write the message, choose where it appears, then preview or send it.</small></div><span className={state.announcement.active ? "state-dot active" : "state-dot"}>{state.announcement.active ? "Broadcasting" : "Draft"}</span></div>
@@ -2832,17 +2832,18 @@ function DirectLiveStage({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     kind: "move" | "resize" | "crop";
+    edge?: string;
     pointerId: number;
     x: number;
     y: number;
     frame: LanternState["live"]["frame"];
   } | null>(null);
 
-  const beginDrag = (event: React.PointerEvent<HTMLDivElement>, kind: "move" | "resize" | "crop") => {
+  const beginDrag = (event: React.PointerEvent<HTMLDivElement>, kind: "move" | "resize" | "crop", edge = "se") => {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { kind, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame: structuredClone(live.frame) };
+    dragRef.current = { kind, edge, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame: structuredClone(live.frame) };
   };
 
   const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -2855,7 +2856,19 @@ function DirectLiveStage({
     if (drag.kind === "move") {
       onFrameChange({ ...drag.frame, x: clamp(drag.frame.x + dx, 0, 100 - drag.frame.width), y: clamp(drag.frame.y + dy, 0, 100 - drag.frame.height) });
     } else if (drag.kind === "resize") {
-      onFrameChange({ ...drag.frame, width: clamp(drag.frame.width + dx, 10, 100 - drag.frame.x), height: clamp(drag.frame.height + dy, 10, 100 - drag.frame.y) });
+      let { x, y, width, height } = drag.frame;
+      const edge = drag.edge ?? "se";
+      if (edge.includes("e")) width = clamp(drag.frame.width + dx, 10, 100 - x);
+      if (edge.includes("s")) height = clamp(drag.frame.height + dy, 10, 100 - y);
+      if (edge.includes("w")) {
+        x = clamp(drag.frame.x + dx, 0, drag.frame.x + drag.frame.width - 10);
+        width = drag.frame.width + drag.frame.x - x;
+      }
+      if (edge.includes("n")) {
+        y = clamp(drag.frame.y + dy, 0, drag.frame.y + drag.frame.height - 10);
+        height = drag.frame.height + drag.frame.y - y;
+      }
+      onFrameChange({ ...drag.frame, x, y, width, height });
     } else {
       onFrameChange({ ...drag.frame, crop: { ...drag.frame.crop, x: clamp(drag.frame.crop.x + dx, -50, 50), y: clamp(drag.frame.crop.y + dy, -50, 50) } });
     }
@@ -2898,7 +2911,7 @@ function DirectLiveStage({
         >
           {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
           <div className="lower-third preview"><strong>{live.title}</strong><span>{live.lowerThird}</span></div>
-          {mode === "frame" && <div className="direct-resize-handle" title="Drag to resize" onPointerDown={(event) => beginDrag(event, "resize")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />}
+          {mode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}`} onPointerDown={(event) => beginDrag(event, "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
           <span className="direct-frame-size">{Math.round(live.frame.width)} × {Math.round(live.frame.height)}</span>
         </div>
       </div>
@@ -3278,14 +3291,14 @@ function LivePreviewPanel({
           <label className="switch-row"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span>Mouth-driven puppet preview</span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
         </section>
       </div>}
-      <div className={previewError || popupBlocked ? "preview-readiness error" : previewStream ? "preview-readiness ready" : "preview-readiness"}>
+      {(previewError || popupBlocked || (state.live.source !== "demo" && !previewStream)) && <div className={previewError || popupBlocked ? "preview-readiness error" : "preview-readiness"}>
         {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}
         <div>
           <strong>{previewBusy ? "Waiting for permission..." : previewStream ? "Video source ready" : state.live.source === "demo" ? "Test feed selected" : "Video source not connected"}</strong>
           <span>{previewError ?? (popupBlocked ? "The browser blocked the preview window. Allow pop-ups for 127.0.0.1, then try again." : previewStream ? "Camera or shared-window video is available to the preview." : "Open preview to choose a webcam, shared window, or generated test feed.")}</span>
         </div>
         {state.live.source === "camera" && !previewStream && !previewBusy && <button type="button" className="command-button secondary compact" onClick={() => void startPreview("camera")}><Camera size={15} />Try camera again</button>}
-      </div>
+      </div>}
       <section className="recording-panel">
         <div className="recording-command">
           <button type="button" className={recording ? "command-button danger" : "command-button secondary"} onClick={recording ? stopRecording : startRecording}>
@@ -4438,8 +4451,8 @@ function Slider({
         {label}
         <InfoDot text={info} />
       </span>
-      <b>{value}</b>
-      <input type="range" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <b>{Number.isInteger(value) ? value : value.toFixed(1)}</b>
+      <input type="range" min={min} max={max} step={1} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
 }

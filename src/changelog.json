@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0020",
+    "title": "Improve announcement broadcast controls",
+    "summary": "Renamed Live studio to Broadcast, moved the mode switch beside the Announcements heading, reclaimed vertical space, added resize handles on every frame edge and corner, and prevented raw decimal values and healthy status messages from crowding the controls.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 12:06 AM",
+    "areas": [
+      "Announcements",
+      "Broadcast"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build (passed: TypeScript and Vite production build, 2,068 modules)"
+  },
+  {
     "id": "DEV-0019",
     "title": "Repair board editing and TV output",
     "summary": "Board edits now render on assigned displays with shared panel geometry, per-panel typography, reliable assignment, edge-to-edge fit and optional framing, background image positioning, richer particle controls, and a simplified editor workspace.",

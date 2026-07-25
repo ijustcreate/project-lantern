@@ -4446,7 +4446,8 @@ textarea:focus-visible,
 /* Communications */
 .comms-workspace {
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr);
+  position: relative;
+  grid-template-rows: 0 minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   gap: 9px;
@@ -4456,16 +4457,21 @@ textarea:focus-visible,
 .workspace-tabbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  position: relative;
+  z-index: 12;
+  width: 330px;
+  justify-content: flex-start;
   min-height: 44px;
-  padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(23, 25, 57, 0.72);
+  margin-left: 255px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  transform: translateY(-63px);
 }
 
 .workspace-tabbar .editor-tabs {
-  width: min(330px, 45%);
+  width: 100%;
   border: 0;
   background: transparent;
 }
@@ -7604,16 +7610,33 @@ textarea:focus-visible,
 
 .direct-resize-handle {
   position: absolute;
-  right: 0;
-  bottom: 0;
   z-index: 8;
-  width: 18px;
-  height: 18px;
-  border-top: 2px solid #06101d;
-  border-left: 2px solid #06101d;
-  background: #61dce6;
-  cursor: nwse-resize;
+  background: transparent;
+  touch-action: none;
 }
+
+.direct-resize-handle.resize-n,
+.direct-resize-handle.resize-s { left: 10px; right: 10px; width: auto; height: 12px; }
+.direct-resize-handle.resize-e,
+.direct-resize-handle.resize-w { top: 10px; bottom: 10px; width: 12px; height: auto; }
+.direct-resize-handle.resize-ne,
+.direct-resize-handle.resize-se,
+.direct-resize-handle.resize-sw,
+.direct-resize-handle.resize-nw {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: #61dce6;
+  box-shadow: 0 0 0 2px #06101d;
+}
+.direct-resize-handle.resize-n { top: -6px; }
+.direct-resize-handle.resize-s { bottom: -6px; }
+.direct-resize-handle.resize-e { right: -6px; }
+.direct-resize-handle.resize-w { left: -6px; }
+.direct-resize-handle.resize-ne { top: -8px; right: -8px; border-radius: 0 5px 0 5px; }
+.direct-resize-handle.resize-se { right: -8px; bottom: -8px; border-radius: 5px 0 5px 0; }
+.direct-resize-handle.resize-sw { bottom: -8px; left: -8px; border-radius: 0 5px 0 5px; }
+.direct-resize-handle.resize-nw { top: -8px; left: -8px; border-radius: 5px 0 5px 0; }
 
 .direct-frame-size {
   position: absolute;
