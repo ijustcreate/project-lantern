@@ -211,7 +211,7 @@ function ControlCenter() {
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const videoBridge = useRef<DirectorVideoBridge | null>(null);
-  const showIdeas = (["donors", "schedule", "announcements"] as View[]).includes(view);
+  const showIdeas = false;
 
   useEffect(() => {
     let mounted = true;
@@ -505,6 +505,12 @@ function ControlCenter() {
             </button>
           </div>
         </header>
+        <nav className="mobile-primary-nav" aria-label="Primary navigation">
+          {navItems.filter((item) => ["dashboard", "donors", "theme", "schedule", "announcements", "settings"].includes(item.id)).map((item) => {
+            const Icon = item.icon;
+            return <button type="button" key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><Icon size={17} /><span>{item.label}</span></button>;
+          })}
+        </nav>
 
         {view === "dashboard" && (
           <Dashboard
@@ -534,7 +540,7 @@ function ControlCenter() {
           />
         )}
         {view === "theme" && <ThemeStudio state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} updateState={updateState} />}
-        {view === "schedule" && <ScheduleView
+        {view === "schedule" && <ScheduleCalendarView
           state={state}
           updateState={updateState}
           onEditDisplay={(target) => { setSelectedDisplayId(target === "all" ? firstDisplayId(state) : target); setView("theme"); }}
@@ -1820,6 +1826,7 @@ function ThemeStudio({
   const [newPanelType, setNewPanelType] = useState<BoardPanelType>("message");
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
+  const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const panels = selectedProgram?.panels?.length ? selectedProgram.panels : selectedProgram ? defaultBoardPanels(selectedProgram) : [];
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
@@ -2027,7 +2034,7 @@ function ThemeStudio({
         <main className="direct-board-stage" onPointerDown={(event) => {
           if (!(event.target as Element).closest(".direct-board-canvas")) setSelectedPanelId("");
         }}>
-          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span></div>
+          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span><div className="mobile-board-zoom" aria-label="Board preview zoom"><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value - .15, .75, 1.75))}>−</button><button type="button" onClick={() => setBoardEditorZoom(1)}>{Math.round(boardEditorZoom * 100)}%</button><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value + .15, .75, 1.75))}>+</button></div></div>
           <DirectBoardCanvas
             state={state}
             display={display}
@@ -2041,6 +2048,7 @@ function ThemeStudio({
             placingPanelType={placingPanelType}
             onBeginPlace={setPlacingPanelType}
             onAdd={addPanel}
+            editorZoom={boardEditorZoom}
           />
         </main>
 
@@ -2124,7 +2132,8 @@ function DirectBoardCanvas({
   onRenameDonor,
   placingPanelType,
   onBeginPlace,
-  onAdd
+  onAdd,
+  editorZoom
 }: {
   state: LanternState;
   display: DisplayProfile;
@@ -2138,6 +2147,7 @@ function DirectBoardCanvas({
   placingPanelType: BoardPanelType | null;
   onBeginPlace: (type: BoardPanelType | null) => void;
   onAdd: (type?: BoardPanelType, position?: { x: number; y: number }) => void;
+  editorZoom: number;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -2184,7 +2194,7 @@ function DirectBoardCanvas({
   };
   const backgroundScale = display.backgroundCrop?.scale ?? 1;
   const particleCount = display.particleCount ?? 34;
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat" }} onPointerDown={placePanel} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top }); }}>
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat", "--board-editor-zoom": editorZoom } as React.CSSProperties} onPointerDown={placePanel} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top }); }}>
     {display.backgroundImage && <div className="direct-board-background"><img src={display.backgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${display.backgroundCrop?.x ?? 50}% ${display.backgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
@@ -2725,7 +2735,7 @@ function AnnouncementsView({
 
   return (
     <section className="comms-workspace">
-      <div className="workspace-tabbar"><EditorTabs value={mode} options={[["announcement", "Announcement"], ["live", "Broadcast"]]} onChange={(value) => setMode(value as typeof mode)} /></div>
+      <div className="workspace-tabbar"><EditorTabs value={mode} options={[["announcement", "Announcements & scheduling"], ["live", "Live presentation"]]} onChange={(value) => setMode(value as typeof mode)} /><span>Compose scheduled messages or preview and broadcast a live presentation.</span></div>
       {mode === "announcement" ? <div className="announcement-deck">
         <div className="form-panel announcement-form">
           <div className="panel-heading composer-heading"><div><p className="eyebrow">Message composer</p><h2>Create an announcement <InfoDot text="Short messages that temporarily appear on selected displays." /></h2><small>Write the message, choose where it appears, then preview or send it.</small></div><span className={state.announcement.active ? "state-dot active" : "state-dot"}>{state.announcement.active ? "Broadcasting" : "Draft"}</span></div>
@@ -2782,7 +2792,7 @@ function AnnouncementsView({
           <div className="announcement-preview-stage">
             <div className={`announcement-display-preview ${orientationClass(previewScreen)}`} aria-label={`Announcement preview on ${previewScreen.label}`}>
               <BabylonDonorWall state={state} screenId={previewScreen.id} />
-              <AnnouncementLayer announcement={state.announcement} preview onImagePositionChange={(imageX, imageY) => patchAnnouncement({ imageX, imageY })} />
+              <FixedAnnouncementComposition screen={previewScreen} announcement={state.announcement} onImagePositionChange={(imageX, imageY) => patchAnnouncement({ imageX, imageY })} />
             </div>
           </div>
           <div className="preview-meta"><span><Monitor size={15} />{previewScreen.label}</span><span><History size={15} />{state.announcement.durationMinutes ? `${state.announcement.durationMinutes} min` : "Manual"}</span></div>
@@ -3348,6 +3358,45 @@ function LivePreviewPanel({
   );
 }
 
+function FixedAnnouncementComposition({
+  screen,
+  announcement,
+  startedAt,
+  playOnComplete = false,
+  onImagePositionChange
+}: {
+  screen: DisplayProfile;
+  announcement: LanternState["announcement"];
+  startedAt?: string;
+  playOnComplete?: boolean;
+  onImagePositionChange?: (x: number, y: number) => void;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const portrait = screen.orientation === "Portrait";
+  const designWidth = portrait ? 900 : 1600;
+  const designHeight = portrait ? 1600 : 900;
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const updateScale = () => {
+      const bounds = host.getBoundingClientRect();
+      setScale(Math.min(bounds.width / designWidth, bounds.height / designHeight));
+    };
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [designHeight, designWidth]);
+
+  return <div ref={hostRef} className={`fixed-announcement-composition${onImagePositionChange ? " editable" : ""}`}>
+    <div className={`announcement-fixed-canvas ${portrait ? "portrait" : "landscape"}`} style={{ width: designWidth, height: designHeight, transform: `translate(-50%, -50%) scale(${scale})` }}>
+      <AnnouncementLayer announcement={announcement} preview startedAt={startedAt} playOnComplete={playOnComplete} onImagePositionChange={onImagePositionChange} />
+    </div>
+  </div>;
+}
+
 function AnnouncementLayer({
   announcement,
   preview = false,
@@ -3801,6 +3850,251 @@ function ScreensView({
   );
 }
 
+function ScheduleCalendarView({
+  state,
+  updateState,
+  onEditDisplay,
+  onEditAnnouncement
+}: {
+  state: LanternState;
+  updateState: (updater: (current: LanternState) => LanternState) => void;
+  onEditDisplay: (target: TargetScreen) => void;
+  onEditAnnouncement: (announcementId: string) => void;
+}) {
+  const dayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const [viewMode, setViewMode] = useState<"week" | "month" | "agenda">(() => window.innerWidth <= 760 ? "agenda" : "week");
+  const [compact, setCompact] = useState(() => window.innerWidth <= 760);
+  const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const [displayFilter, setDisplayFilter] = useState<TargetScreen>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const [editorPosition, setEditorPosition] = useState({ x: Math.max(12, window.innerWidth - 376), y: 132 });
+  const editorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+  const calendarDragRef = useRef<{
+    id: string;
+    sourceDate: string;
+    mode: "move" | "resize-start" | "resize-end";
+    pointerX: number;
+    pointerY: number;
+    start: number;
+    end: number;
+    dayWidth: number;
+  } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ id: string; sourceDate: string; start: number; end: number; dayDelta: number } | null>(null);
+  const dragPreviewRef = useRef<typeof dragPreview>(null);
+  const selected = state.schedules.find((entry) => entry.id === selectedId) ?? null;
+  const visibleMode = compact ? "agenda" : viewMode;
+  const weekStart = startOfCalendarWeek(anchorDate);
+  const hourHeight = clamp((window.innerHeight - 280) / 17, 20, 32);
+  const hours = Array.from({ length: 17 }, (_, index) => index + 6);
+  const filtered = state.schedules.filter((entry) => displayFilter === "all" || entry.target === "all" || entry.target === displayFilter);
+  const monthStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+  const monthDates = Array.from({ length: 42 }, (_, index) => addCalendarDays(startOfCalendarWeek(monthStart), index));
+  const agendaDates = Array.from({ length: 14 }, (_, index) => addCalendarDays(anchorDate, index));
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayEntries = filtered.filter((entry) => entry.active && entryOccursOnDate(entry, now));
+  const onlineTodayEntries = todayEntries.filter((entry) => entry.target === "all"
+    ? Object.values(state.screens).some((screen) => screen.status !== "offline")
+    : state.screens[entry.target]?.status !== "offline");
+  const liveEntries = onlineTodayEntries.filter((entry) => timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes);
+  const nextEntry = onlineTodayEntries.filter((entry) => timeToMinutes(entry.startTime) > nowMinutes).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))[0];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    const resize = () => setCompact(window.innerWidth <= 760);
+    window.addEventListener("resize", resize);
+    return () => { window.clearInterval(timer); window.removeEventListener("resize", resize); };
+  }, []);
+
+  const patchEntry = (id: string, patch: Partial<ScheduleEntry>) => updateState((current) => ({
+    ...current,
+    schedules: current.schedules.map((entry) => entry.id === id ? { ...entry, ...patch } : entry)
+  }));
+  const removeEntry = (id: string) => {
+    updateState((current) => ({ ...current, schedules: current.schedules.filter((entry) => entry.id !== id) }));
+    if (selectedId === id) setSelectedId(null);
+  };
+  const duplicateEntry = (entry: ScheduleEntry) => {
+    const id = `schedule-${Date.now()}`;
+    updateState((current) => ({ ...current, schedules: [...current.schedules, { ...entry, id, name: `${entry.name} copy` }] }));
+    setSelectedId(id);
+  };
+  const addEntry = (contentType: "board" | "announcement") => {
+    const saved = state.savedAnnouncements[0];
+    const id = `schedule-${Date.now()}`;
+    updateState((current) => ({ ...current, schedules: [...current.schedules, {
+      id,
+      name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : "New scheduled board",
+      target: "all",
+      boardId: state.boardPrograms[0]?.id ?? "board-classic",
+      contentType,
+      announcementId: contentType === "announcement" ? saved?.id : undefined,
+      days: [1, 2, 3, 4, 5],
+      startTime: "09:00",
+      endTime: "10:00",
+      color: contentType === "announcement" ? "#b45a78" : "#4f63cf",
+      active: true
+    }] }));
+    setSelectedId(id);
+  };
+  const entriesForDate = (date: Date) => filtered.filter((entry) => entryOccursOnDate(entry, date)).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+  const conflictFor = (entry: ScheduleEntry, date: Date) => entry.active && filtered.some((candidate) =>
+    candidate.id !== entry.id && candidate.active && entryOccursOnDate(candidate, date)
+    && scheduleTargetsConflict(entry.target, candidate.target)
+    && timeToMinutes(candidate.startTime) < timeToMinutes(entry.endTime)
+    && timeToMinutes(candidate.endTime) > timeToMinutes(entry.startTime)
+  );
+  const displayIsOffline = (entry: ScheduleEntry) => entry.target === "all"
+    ? Object.values(state.screens).every((screen) => screen.status === "offline")
+    : state.screens[entry.target]?.status === "offline";
+  const movePeriod = (direction: -1 | 1) => {
+    const next = new Date(anchorDate);
+    if (visibleMode === "month") next.setMonth(next.getMonth() + direction);
+    else next.setDate(next.getDate() + direction * (visibleMode === "week" ? 7 : 14));
+    setAnchorDate(next);
+  };
+  const periodLabel = visibleMode === "month"
+    ? anchorDate.toLocaleDateString([], { month: "long", year: "numeric" })
+    : visibleMode === "agenda"
+      ? `${anchorDate.toLocaleDateString([], { month: "short", day: "numeric" })} – ${addCalendarDays(anchorDate, 13).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`
+      : `${weekStart.toLocaleDateString([], { month: "short", day: "numeric" })} – ${addCalendarDays(weekStart, 6).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+
+  const beginDrag = (event: React.PointerEvent<HTMLElement>, entry: ScheduleEntry, date: Date, mode: "move" | "resize-start" | "resize-end") => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const columns = event.currentTarget.closest(".week-columns")?.getBoundingClientRect();
+    const drag = {
+      id: entry.id,
+      sourceDate: toDateInputValue(date),
+      mode,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      start: timeToMinutes(entry.startTime),
+      end: timeToMinutes(entry.endTime),
+      dayWidth: (columns?.width ?? 700) / 7
+    };
+    calendarDragRef.current = drag;
+    const preview = { id: entry.id, sourceDate: drag.sourceDate, start: drag.start, end: drag.end, dayDelta: 0 };
+    dragPreviewRef.current = preview;
+    setDragPreview(preview);
+    setSelectedId(entry.id);
+  };
+  const moveDrag = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = calendarDragRef.current;
+    if (!drag) return;
+    event.preventDefault();
+    const minuteDelta = Math.round((((event.clientY - drag.pointerY) / hourHeight) * 60) / 15) * 15;
+    const sourceIndex = Math.round((dateFromInputValue(drag.sourceDate).getTime() - weekStart.getTime()) / 86400000);
+    const dayDelta = drag.mode === "move" ? clamp(Math.round((event.clientX - drag.pointerX) / drag.dayWidth), -sourceIndex, 6 - sourceIndex) : 0;
+    let start = drag.start;
+    let end = drag.end;
+    if (drag.mode === "move") {
+      const duration = drag.end - drag.start;
+      start = clamp(drag.start + minuteDelta, 360, 1380 - duration);
+      end = start + duration;
+    } else if (drag.mode === "resize-start") start = clamp(drag.start + minuteDelta, 360, drag.end - 15);
+    else end = clamp(drag.end + minuteDelta, drag.start + 15, 1380);
+    const preview = { id: drag.id, sourceDate: drag.sourceDate, start, end, dayDelta };
+    dragPreviewRef.current = preview;
+    setDragPreview(preview);
+  };
+  const finishDrag = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = calendarDragRef.current;
+    const preview = dragPreviewRef.current;
+    if (!drag || !preview) return;
+    event.preventDefault();
+    const entry = state.schedules.find((item) => item.id === drag.id);
+    if (entry) {
+      const patch: Partial<ScheduleEntry> = { startTime: minutesToTime(preview.start), endTime: minutesToTime(preview.end) };
+      if (drag.mode === "move" && preview.dayDelta) {
+        const sourceDate = dateFromInputValue(drag.sourceDate);
+        const targetDate = addCalendarDays(sourceDate, preview.dayDelta);
+        const sourceDay = sourceDate.getDay();
+        patch.days = [...new Set([...entry.days.filter((day) => day !== sourceDay), targetDate.getDay()])];
+        if (entry.recurrence === "once" || entry.scheduleDate) patch.scheduleDate = toDateInputValue(targetDate);
+      }
+      patchEntry(entry.id, patch);
+    }
+    calendarDragRef.current = null;
+    dragPreviewRef.current = null;
+    setDragPreview(null);
+  };
+  const eventStyle = (entry: ScheduleEntry, date: Date, lane: number, laneCount: number): React.CSSProperties => {
+    const start = timeToMinutes(entry.startTime);
+    const end = timeToMinutes(entry.endTime);
+    const preview = dragPreview?.id === entry.id && dragPreview.sourceDate === toDateInputValue(date) ? dragPreview : null;
+    const visualStart = preview?.start ?? start;
+    const visualEnd = preview?.end ?? end;
+    return {
+      top: `${((visualStart - 360) / 60) * hourHeight}px`,
+      height: `${Math.max(24, ((visualEnd - visualStart) / 60) * hourHeight)}px`,
+      left: `calc(${(lane / laneCount) * 100}% + 2px)`,
+      width: `calc(${100 / laneCount}% - 4px)`,
+      transform: preview ? `translateX(${preview.dayDelta * ((document.querySelector(".week-columns")?.getBoundingClientRect().width ?? 700) / 7)}px)` : undefined,
+      "--event-color": entry.color ?? "#5f55bd",
+      zIndex: preview ? 9 : undefined
+    } as React.CSSProperties;
+  };
+  const quickActions = (entry: ScheduleEntry) => <div className="schedule-quick-actions" aria-label={`Actions for ${entry.name}`}>
+    <button type="button" title="Edit" onClick={(event) => { event.stopPropagation(); setSelectedId(entry.id); }}><Pencil size={13} /></button>
+    <button type="button" title="Duplicate" onClick={(event) => { event.stopPropagation(); duplicateEntry(entry); }}><Plus size={13} /></button>
+    <button type="button" title={entry.active ? "Disable" : "Enable"} onClick={(event) => { event.stopPropagation(); patchEntry(entry.id, { active: !entry.active }); }}>{entry.active ? <Power size={13} /> : <Play size={13} />}</button>
+    <button type="button" className="danger" title="Delete" onClick={(event) => { event.stopPropagation(); removeEntry(entry.id); }}><Trash2 size={13} /></button>
+  </div>;
+
+  return <section className="schedule-overhaul">
+    <header className="schedule-commandbar">
+      <div className="schedule-navigation">
+        <button type="button" className="command-button secondary compact" onClick={() => setAnchorDate(new Date())}>Today</button>
+        <button type="button" className="icon-button" title="Previous period" onClick={() => movePeriod(-1)}><ChevronLeft size={18} /></button>
+        <button type="button" className="icon-button" title="Next period" onClick={() => movePeriod(1)}><ChevronRight size={18} /></button>
+        <strong>{periodLabel}</strong>
+        <label className="calendar-date-picker"><CalendarDays size={14} /><input type="date" aria-label="Choose calendar date" value={toDateInputValue(anchorDate)} onChange={(event) => event.target.value && setAnchorDate(dateFromInputValue(event.target.value))} /></label>
+      </div>
+      <div className="schedule-command-actions">
+        <div className="calendar-view-switch" aria-label="Calendar view">{(["week", "month", "agenda"] as const).map((option) => <button type="button" key={option} className={visibleMode === option ? "active" : ""} disabled={compact && option !== "agenda"} onClick={() => setViewMode(option)}>{option[0].toUpperCase() + option.slice(1)}</button>)}</div>
+        <label className="calendar-selector"><Monitor size={14} /><select aria-label="Display filter" value={displayFilter} onChange={(event) => setDisplayFilter(event.target.value as TargetScreen)}><option value="all">All displays</option>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label>
+        <button type="button" className="command-button secondary compact" onClick={() => addEntry("board")}><Plus size={15} /> Board</button>
+        <button type="button" className="command-button primary compact" onClick={() => addEntry("announcement")}><Megaphone size={15} /> Announcement</button>
+      </div>
+    </header>
+    <div className="schedule-status-strip">
+      <div className={`schedule-live-summary${liveEntries.length ? " active" : ""}`}><Radio size={14} /><span>{liveEntries.length ? "Live now" : "Nothing live now"}</span>{liveEntries.slice(0, 2).map((entry) => <button key={entry.id} onClick={() => setSelectedId(entry.id)}>{entry.name}</button>)}</div>
+      <div className="schedule-next-summary"><Clock3 size={14} /><span>Next up</span>{nextEntry ? <button onClick={() => setSelectedId(nextEntry.id)}><strong>{nextEntry.startTime}</strong> {nextEntry.name}</button> : <small>No more events today</small>}</div>
+      <div className="schedule-type-legend"><span><i className="board" /> Donor board</span><span><i className="announcement" /> Announcement</span><span><AlertTriangle size={12} /> Conflict</span></div>
+    </div>
+    <div className={`schedule-view-container ${visibleMode}`}>
+      {visibleMode === "week" && <div className="week-calendar schedule-week" style={{ "--calendar-hour": `${hourHeight}px` } as React.CSSProperties}>
+        <div className="week-header"><div />{dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); return <div className={isSameCalendarDate(date, now) ? "today" : ""} key={label}><span>{label.slice(0, 3)}</span><strong>{date.getDate()}</strong></div>; })}</div>
+        <div className="week-scroll"><div className="time-gutter">{hours.map((hour) => <span key={hour} style={{ top: `${(hour - 6) * hourHeight}px` }}>{formatHour(hour)}</span>)}</div><div className="week-columns">
+          {dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); const entries = entriesForDate(date); const today = isSameCalendarDate(date, now); return <div className={`week-day-column${today ? " is-today" : ""}`} key={label}>{hours.map((hour) => <i key={hour} style={{ top: `${(hour - 6) * hourHeight}px` }} />)}{today && nowMinutes >= 360 && nowMinutes <= 1380 && <div className="calendar-now-line" style={{ top: `${((nowMinutes - 360) / 60) * hourHeight}px` }}><span>Now</span></div>}{entries.map((entry) => {
+            const lane = scheduleLane(entry, entries);
+            const conflict = conflictFor(entry, date);
+            const live = today && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes;
+            const offline = displayIsOffline(entry);
+            return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={() => setSelectedId(entry.id)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}${offline ? ", target display offline" : ""}`} title="Drag to move. Drag the top or bottom edge to resize.">
+              <span className="calendar-resize-handle top" onPointerDown={(event) => beginDrag(event, entry, date, "resize-start")} />
+              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small>{offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
+              <span className="calendar-resize-handle bottom" onPointerDown={(event) => beginDrag(event, entry, date, "resize-end")} />
+            </button>;
+          })}</div>; })}
+        </div></div>
+      </div>}
+      {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={() => setSelectedId(entry.id)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{offline ? <WifiOff size={10} /> : conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
+      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={() => setSelectedId(entry.id)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Conflicts on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
+    </div>
+    {selected && createPortal(<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
+      <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - 150)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2 id="schedule-event-editor-title">Edit event</h2></div><button type="button" className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><X size={17} /></button></header>
+      <div className="schedule-event-editor-body">{quickActions(selected)}<LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div><LabeledSelect label="Content" info="Choose the scheduled content type." value={selected.contentType ?? "board"} options={["board", "announcement"]} optionLabels={{ board: "Donor board", announcement: "Saved announcement" }} onChange={(value) => patchEntry(selected.id, { contentType: value as "board" | "announcement", announcementId: value === "announcement" ? selected.announcementId ?? state.savedAnnouncements[0]?.id : undefined })} />
+        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
+        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => patchEntry(selected.id, { target: target as TargetScreen })} /><div className="schedule-color-row"><label className="field"><span>Calendar color</span><input type="color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label>{selected.contentType !== "announcement" && <button type="button" className="command-button secondary compact" onClick={() => onEditDisplay(selected.target)}><Palette size={14} /> Edit display</button>}</div><div className="field"><span>Repeats</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => patchEntry(selected.id, { days: selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day] })}>{label.slice(0, 1)}</button>; })}</div></div><label className="switch-row"><input type="checkbox" checked={selected.active} onChange={(event) => patchEntry(selected.id, { active: event.target.checked })} /><span>Active on displays</span></label>
+      </div>
+    </aside>, document.body)}
+  </section>;
+}
+
 function ScheduleView({
   state,
   updateState,
@@ -4083,6 +4377,16 @@ function scheduleLane(entry: ScheduleEntry, entries: ScheduleEntry[]) {
 function timeToMinutes(value: string) { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; }
 function formatHour(hour: number) { return `${hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? "PM" : "AM"}`; }
 function minutesToTime(value: number) { const minutes = clamp(Math.round(value), 0, 1439); return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`; }
+function startOfCalendarWeek(value: Date) { const date = new Date(value.getFullYear(), value.getMonth(), value.getDate()); date.setDate(date.getDate() - ((date.getDay() + 6) % 7)); return date; }
+function addCalendarDays(value: Date, amount: number) { const date = new Date(value); date.setDate(date.getDate() + amount); return date; }
+function isSameCalendarDate(left: Date, right: Date) { return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate(); }
+function toDateInputValue(value: Date) { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`; }
+function dateFromInputValue(value: string) { const [year, month, day] = value.split("-").map(Number); return new Date(year, month - 1, day); }
+function entryOccursOnDate(entry: ScheduleEntry, date: Date) {
+  if (entry.recurrence === "once" || entry.scheduleDate) return entry.scheduleDate ? entry.scheduleDate === toDateInputValue(date) : false;
+  return entry.days.includes(date.getDay());
+}
+function scheduleTargetsConflict(left: TargetScreen, right: TargetScreen) { return left === "all" || right === "all" || left === right; }
 function clamp(value: number, min: number, max: number) { return Math.min(max, Math.max(min, value)); }
 
 function RecognitionSettingsView({ state, updateState }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void }) {
@@ -4230,7 +4534,7 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
     <div className={`display-shell announcement-demo-shell ${orientationClass(screen)}`}>
       <BabylonDonorWall state={state} screenId={screen.id} />
       <div className="display-chrome"><span>Announcement demo</span><span>{screen.label}</span></div>
-      <AnnouncementLayer announcement={state.announcement} startedAt={demoStartedAt} playOnComplete />
+      <FixedAnnouncementComposition screen={screen} announcement={state.announcement} startedAt={demoStartedAt} playOnComplete />
       <div className="announcement-demo-toolbar">
         <span><Clock3 size={15} /> Demo preview</span>
         <button type="button" onClick={() => setDemoStartedAt(new Date().toISOString())}><RotateCcw size={15} /> Restart timer</button>
@@ -4362,10 +4666,10 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
       />
       {showAnnouncement && (
-        <AnnouncementLayer announcement={state.announcement} startedAt={state.announcement.startedAt} />
+        <FixedAnnouncementComposition screen={screen} announcement={state.announcement} startedAt={state.announcement.startedAt} />
       )}
       {!showAnnouncement && scheduledAnnouncement && (
-        <AnnouncementLayer announcement={scheduledAnnouncement.announcement} startedAt={scheduledAnnouncement.startedAt} />
+        <FixedAnnouncementComposition screen={screen} announcement={scheduledAnnouncement.announcement} startedAt={scheduledAnnouncement.startedAt} />
       )}
       {!showAnnouncement && !scheduledAnnouncement && scheduledMessage && (
         <div className="announcement-overlay ribbon">

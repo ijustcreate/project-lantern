@@ -1,5 +1,53 @@
 [
   {
+    "id": "DEV-0026",
+    "title": "Restore live presentation and stable announcement previews",
+    "summary": "Restored the live presentation workspace beside announcement scheduling and rendered announcements on a fixed-aspect design canvas that scales uniformly in previews and live output.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 2:20 PM",
+    "areas": [
+      "Announcements",
+      "Live Presentation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright 1280px, 900px, and 390px visual checks"
+  },
+  {
+    "id": "DEV-0025",
+    "title": "Repair mobile navigation and board editing",
+    "summary": "Moved primary mobile navigation below the header, removed the cramped bottom bar, and made the Board Editor a readable single-column canvas-first workflow with inspector below and pan/zoom controls.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 2:20 PM",
+    "areas": [
+      "Navigation",
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright 390x844 Board Editor visual check"
+  },
+  {
+    "id": "DEV-0024",
+    "title": "Overhaul calendar scheduling",
+    "summary": "Added responsive week, month, and agenda views with compact proportional events, drag-and-resize editing, a floating event editor, display filters, conflict and live/next cues, quick actions, and muted offline-display events.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 2:20 PM",
+    "areas": [
+      "Schedule",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright desktop and 390px mobile checks"
+  },
+  {
     "id": "DEV-0020",
     "title": "Improve announcement broadcast controls",
     "summary": "Renamed Live studio to Broadcast, moved the mode switch beside the Announcements heading, reclaimed vertical space, added resize handles on every frame edge and corner, and prevented raw decimal values and healthy status messages from crowding the controls.",
