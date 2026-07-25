@@ -5,6 +5,7 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -140,7 +141,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       const halfVerticalFov = camera.fov / 2;
       const verticalDistance = panelHeight / 2 / Math.tan(halfVerticalFov);
       const horizontalDistance = panelWidth / 2 / (Math.tan(halfVerticalFov) * aspect);
-      camera.radius = Math.max(verticalDistance, horizontalDistance) * 1.12;
+      camera.radius = Math.max(verticalDistance, horizontalDistance) * (screen.showFrame === false ? 1 : 1.025);
     };
     resizeCamera();
 
@@ -148,6 +149,8 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     prepareBackgroundMedia(screen, () => redrawPanel());
     const panelTexture = makePanelTexture(scene, state, screenId, screen, previewProgramId);
     const texture = panelTexture.texture;
+    texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
+    texture.anisotropicFilteringLevel = 16;
     redrawPanel = panelTexture.redraw;
     const panelMaterial = new StandardMaterial("baked-donor-lettering", scene);
     panelMaterial.diffuseTexture = texture;
@@ -175,22 +178,23 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     panelBack.position.z = -0.118;
     panelBack.material = backMaterial;
 
-    const trimMaterial = new StandardMaterial("trim", scene);
-    trimMaterial.diffuseColor = trimColor(state.theme.trim);
-    trimMaterial.specularColor = new Color3(0.82, 0.74, 0.52);
-
-    const topTrim = MeshBuilder.CreateBox("top-trim", { width: panelWidth + 0.16, height: 0.045, depth: 0.28 }, scene);
-    topTrim.position.y = panelHeight / 2 + 0.075;
-    topTrim.position.z = -0.01;
-    topTrim.material = trimMaterial;
-    const bottomTrim = topTrim.clone("bottom-trim");
-    bottomTrim.position.y = -panelHeight / 2 - 0.075;
-    const leftTrim = MeshBuilder.CreateBox("left-trim", { width: 0.045, height: panelHeight + 0.16, depth: 0.28 }, scene);
-    leftTrim.position.x = -panelWidth / 2 - 0.075;
-    leftTrim.position.z = -0.01;
-    leftTrim.material = trimMaterial;
-    const rightTrim = leftTrim.clone("right-trim");
-    rightTrim.position.x = panelWidth / 2 + 0.075;
+    if (screen.showFrame !== false) {
+      const trimMaterial = new StandardMaterial("trim", scene);
+      trimMaterial.diffuseColor = trimColor(state.theme.trim);
+      trimMaterial.specularColor = new Color3(0.82, 0.74, 0.52);
+      const topTrim = MeshBuilder.CreateBox("top-trim", { width: panelWidth + 0.16, height: 0.045, depth: 0.28 }, scene);
+      topTrim.position.y = panelHeight / 2 + 0.075;
+      topTrim.position.z = -0.01;
+      topTrim.material = trimMaterial;
+      const bottomTrim = topTrim.clone("bottom-trim");
+      bottomTrim.position.y = -panelHeight / 2 - 0.075;
+      const leftTrim = MeshBuilder.CreateBox("left-trim", { width: 0.045, height: panelHeight + 0.16, depth: 0.28 }, scene);
+      leftTrim.position.x = -panelWidth / 2 - 0.075;
+      leftTrim.position.z = -0.01;
+      leftTrim.material = trimMaterial;
+      const rightTrim = leftTrim.clone("right-trim");
+      rightTrim.position.x = panelWidth / 2 + 0.075;
+    }
     if (screen.style === "donor-wall" && announcementCharacter === "inspector" && (announcementActive || previousAnnouncementActive.current)) {
       addToyInspector(scene, isPortrait, panelWidth, panelHeight, announcementActive);
     }
@@ -237,10 +241,17 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
 function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, previewProgramId?: string) {
   const isPortrait = screen.orientation === "Portrait";
-  const width = isPortrait ? 1536 : 2560;
-  const height = isPortrait ? 2560 : 1440;
+  const width = isPortrait ? 2160 : 3840;
+  const height = isPortrait ? 3840 : 2160;
   const texture = new DynamicTexture("panel-texture", { width, height }, scene, false);
   const context = texture.getContext() as unknown as CanvasRenderingContext2D;
+  (context as StyledTextContext).__lanternTextStyle = {
+    finish: screen.textFinish ?? "flat",
+    shadowEnabled: screen.textShadowEnabled ?? false,
+    shadowStrength: screen.textShadowStrength ?? 55,
+    shadowAngle: screen.textShadowAngle ?? 135,
+    shadowDistance: screen.textShadowDistance ?? 5
+  };
 
   texture.hasAlpha = false;
   const redraw = (animationTime = performance.now()) => {
@@ -337,6 +348,7 @@ function drawMuseumBoard(
   wash.addColorStop(1, galleryPlaque ? "#0a0e11" : chalkboard ? "#0b1014" : "#04111f");
   context.fillStyle = wash;
   context.fillRect(0, 0, width, height);
+  if (screen?.backgroundImage) drawImageBackground(context, width, height, screen);
 
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
   else if (chalkboard) drawChalkTexture(context, width, height);
@@ -502,26 +514,24 @@ function drawComposableBoard(
   const gold = "#d9a657";
   const muted = "#bdc7c7";
   const teal = "#79cac6";
-  const font = screen?.fontFamily ?? "Montserrat";
   const panels = program.panels ?? [];
-  const gap = height * 0.009;
-  const left = width * 0.075;
-  const contentWidth = width * 0.85;
-  const top = height * 0.055;
-  const bottom = height * 0.055;
-  const weights = panels.map((panel) => panel.size === "feature" ? 2.55 : panel.size === "compact" ? 0.62 : 1.15);
-  const available = height - top - bottom - gap * Math.max(0, panels.length - 1);
-  const weightTotal = weights.reduce((sum, weight) => sum + weight, 0) || 1;
-  let y = top;
 
-  context.strokeStyle = "rgba(217, 166, 87, 0.62)";
-  context.lineWidth = Math.max(2, 4 * scale);
-  context.strokeRect(width * 0.03, height * 0.022, width * 0.94, height * 0.956);
+  if (screen?.showFrame !== false) {
+    context.strokeStyle = "rgba(217, 166, 87, 0.62)";
+    context.lineWidth = Math.max(2, 4 * scale);
+    context.strokeRect(width * 0.03, height * 0.022, width * 0.94, height * 0.956);
+  }
 
   panels.forEach((panel, panelIndex) => {
-    const panelHeight = available * (weights[panelIndex] / weightTotal);
-    const centerX = width / 2;
+    const left = width * ((panel.x ?? 5) / 100);
+    const y = height * ((panel.y ?? panelIndex * 20 + 5) / 100);
+    const contentWidth = width * ((panel.width ?? 90) / 100);
+    const panelHeight = height * ((panel.height ?? 18) / 100);
+    const centerX = left + contentWidth / 2;
     const centerY = y + panelHeight / 2;
+    const font = panel.fontFamily ?? screen?.fontFamily ?? "Montserrat";
+    const requestedSize = panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? screen?.nameSize ?? 28 : 24);
+    const fontUnit = Math.max(8, requestedSize * height / 900);
     context.save();
     context.beginPath();
     context.rect(left, y, contentWidth, panelHeight);
@@ -530,15 +540,15 @@ function drawComposableBoard(
     if (panel.type === "heading") {
       context.textAlign = "center";
       context.fillStyle = gold;
-      context.font = `600 ${Math.max(15, Math.round(panelHeight * 0.13 * scale))}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.eyebrow ?? "", centerX, y + panelHeight * 0.23, contentWidth * 0.75, Math.round(panelHeight * 0.13 * scale), 11);
+      context.font = `600 ${Math.round(fontUnit * 0.56)}px ${font}, Inter, sans-serif`;
+      fitText(context, panel.eyebrow ?? "", centerX, y + panelHeight * 0.23, contentWidth * 0.75, Math.round(fontUnit * 0.56), 9);
       context.fillStyle = ivory;
-      context.font = `600 ${Math.max(24, Math.round(panelHeight * 0.27 * scale))}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.title, centerX, y + panelHeight * 0.56, contentWidth * 0.92, Math.round(panelHeight * 0.27 * scale), 18);
+      context.font = `600 ${Math.round(fontUnit)}px ${font}, Inter, sans-serif`;
+      fitText(context, panel.title, centerX, y + panelHeight * 0.56, contentWidth * 0.92, Math.round(fontUnit), 12);
       if (panel.body) {
         context.fillStyle = muted;
-        context.font = `400 ${Math.max(12, Math.round(panelHeight * 0.105 * scale))}px ${font}, Inter, sans-serif`;
-        fitText(context, panel.body, centerX, y + panelHeight * 0.78, contentWidth * 0.78, Math.round(panelHeight * 0.105 * scale), 10);
+        context.font = `400 ${Math.round(fontUnit * 0.44)}px ${font}, Inter, sans-serif`;
+        fitText(context, panel.body, centerX, y + panelHeight * 0.78, contentWidth * 0.78, Math.round(fontUnit * 0.44), 8);
       }
     }
 
@@ -547,8 +557,8 @@ function drawComposableBoard(
       const titleHeight = Math.min(panelHeight * 0.18, height * 0.04);
       context.textAlign = "center";
       context.fillStyle = gold;
-      context.font = `700 ${Math.max(13, Math.round(titleHeight * 0.52 * scale))}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.title, centerX, y + titleHeight * 0.72, contentWidth * 0.8, Math.round(titleHeight * 0.52 * scale), 11);
+      context.font = `700 ${Math.round(fontUnit * 0.6)}px ${font}, Inter, sans-serif`;
+      fitText(context, panel.title, centerX, y + titleHeight * 0.72, contentWidth * 0.8, Math.round(fontUnit * 0.6), 9);
       const rows = Math.max(1, Math.ceil(donors.length / columns));
       const listTop = y + titleHeight;
       const rowHeight = (panelHeight - titleHeight) / rows;
@@ -559,7 +569,7 @@ function drawComposableBoard(
         const cellWidth = contentWidth / columns;
         const x = left + cellWidth * (column + 0.5);
         const baseline = listTop + rowHeight * (row + (showSubtext && (donor.subtext || donor.note) ? 0.47 : 0.58));
-        const baseSize = Math.min(screen?.nameSize ?? 28, Math.max(10, rowHeight * (showSubtext ? 0.34 : 0.48)));
+        const baseSize = Math.min(fontUnit, Math.max(9, rowHeight * (showSubtext ? 0.34 : 0.48)));
         context.save();
         drawDonorHighlight(context, donor, x, baseline, cellWidth * 0.88, baseSize * scale, gold);
         applyDonorCanvasEffect(context, donor, animationTime);
@@ -628,7 +638,6 @@ function drawComposableBoard(
     }
 
     context.restore();
-    y += panelHeight + gap;
   });
 }
 
@@ -1276,20 +1285,30 @@ function drawBoardStars(
   const direction = screen?.particleDriftDirection ?? "natural";
   const colorStyle = screen?.particleColorStyle ?? "warm";
   const elapsed = animated ? animationTime / 1000 : 0;
-  for (let index = 0; index < 34; index += 1) {
+  const count = screen?.particleCount ?? 34;
+  const size = screen?.particleSize ?? 3;
+  const spread = (screen?.particleSpread ?? 100) / 100;
+  const wander = screen?.particleWander ?? 5;
+  const lifetime = screen?.particleLifetime ?? 12;
+  const lifetimeRange = screen?.particleLifetimeRange ?? 4;
+  for (let index = 0; index < count; index += 1) {
     const random = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
-    const initialX = random(12.9898) * width;
-    const initialY = random(78.233) * height;
+    const initialX = width * (0.5 + (random(12.9898) - 0.5) * spread);
+    const initialY = height * (0.5 + (random(78.233) - 0.5) * spread);
     const depth = 0.28 + random(93.184) * 0.72;
-    const radius = 0.65 + random(39.346) * 2.15;
-    const particleTime = elapsed * (0.36 + speed * 0.055) * (0.72 + random(17.719) * 0.75);
+    const radius = Math.max(0.35, size * (0.25 + random(39.346) * 0.72));
+    const particleLife = Math.max(1, lifetime + (random(17.719) - 0.5) * lifetimeRange);
+    const particleTime = elapsed * (12 / particleLife) * (0.36 + speed * 0.055);
     const naturalDirection = random(54.531) >= 0.5 ? 1 : -1;
     const horizontalDirection = direction === "left" ? -1 : direction === "right" ? 1 : naturalDirection;
     const horizontalTravel = horizontalDirection * particleTime * (10 + random(44.123) * 24);
-    const airWobble = Math.sin(particleTime * (0.65 + random(63.726)) + index * 1.7) * (7 + random(28.417) * 22);
-    const verticalWander = Math.sin(particleTime * (0.42 + random(31.337) * 0.55) + index * 2.21) * (8 + random(71.943) * 24);
-    const fallSpeed = gravity * depth * 1.4 * particleTime;
-    const x = animated ? ((initialX + horizontalTravel + airWobble) % width + width) % width : initialX;
+    const wanderScale = wander * (1.4 + random(28.417) * 4.4);
+    const airWobble = Math.sin(particleTime * (0.65 + random(63.726)) + index * 1.7) * wanderScale;
+    const verticalWander = Math.sin(particleTime * (0.42 + random(31.337) * 0.55) + index * 2.21) * wanderScale;
+    const verticalDirection = direction === "up" ? -1 : direction === "down" ? 1 : 0;
+    const fallSpeed = (verticalDirection * (9 + speed * 2) + gravity * depth * 1.4) * particleTime;
+    const wanderX = direction === "wander" ? verticalWander : 0;
+    const x = animated ? ((initialX + horizontalTravel + airWobble + wanderX) % width + width) % width : initialX;
     const y = animated ? ((initialY + fallSpeed + verticalWander) % height + height) % height : initialY;
     const shimmer = animated ? 0.55 + Math.sin(particleTime * 1.7 + index * 2.6) * 0.25 : 0.68;
     const color = colorStyle === "primary"
@@ -1318,7 +1337,7 @@ function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date
   const schedule = state.schedules?.find((entry) => entry.contentType !== "announcement" && entry.active && (entry.recurrence === "once" && entry.scheduleDate ? entry.scheduleDate === localDate : entry.days.includes(day)) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
   if (schedule) return state.boardPrograms?.find((program) => program.id === schedule.boardId && program.active);
   const assignedProgramId = state.screens[screenId]?.boardProgramId;
-  return assignedProgramId ? state.boardPrograms?.find((program) => program.id === assignedProgramId && program.active) : undefined;
+  return assignedProgramId ? state.boardPrograms?.find((program) => program.id === assignedProgramId) : undefined;
 }
 
 function wrapLines(context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number) {
@@ -1661,7 +1680,57 @@ function fitText(
     size -= 1;
     context.font = context.font.replace(/[\d.]+px/, `${size}px`);
   }
-  context.fillText(text, x, y);
+  drawStyledText(context, text, x, y);
+}
+
+type StyledTextContext = CanvasRenderingContext2D & {
+  __lanternTextStyle?: {
+    finish: "flat" | "cut-brass";
+    shadowEnabled: boolean;
+    shadowStrength: number;
+    shadowAngle: number;
+    shadowDistance: number;
+  };
+};
+
+function drawStyledText(context: CanvasRenderingContext2D, text: string, x: number, y: number) {
+  const style = (context as StyledTextContext).__lanternTextStyle;
+  if (!style || (style.finish === "flat" && !style.shadowEnabled)) {
+    context.fillText(text, x, y);
+    return;
+  }
+  context.save();
+  const fontSize = Number.parseFloat(context.font) || 16;
+  if (style.shadowEnabled) {
+    const radians = style.shadowAngle * Math.PI / 180;
+    context.shadowColor = `rgba(0, 0, 0, ${Math.min(.9, .15 + style.shadowStrength / 125)})`;
+    context.shadowBlur = 1 + style.shadowStrength / 18;
+    context.shadowOffsetX = Math.cos(radians) * style.shadowDistance;
+    context.shadowOffsetY = Math.sin(radians) * style.shadowDistance;
+  }
+  if (style.finish === "cut-brass") {
+    const originalFill = context.fillStyle;
+    context.lineJoin = "round";
+    context.lineWidth = Math.max(1.5, fontSize * .055);
+    context.strokeStyle = "#5e3d13";
+    context.strokeText(text, x, y);
+    const gradient = context.createLinearGradient(x, y - fontSize, x, y + 4);
+    gradient.addColorStop(0, "#fff1a6");
+    gradient.addColorStop(.24, "#d7a943");
+    gradient.addColorStop(.58, "#8d5f1f");
+    gradient.addColorStop(.82, "#e5bd5a");
+    gradient.addColorStop(1, "#6b4517");
+    context.fillStyle = gradient;
+    context.fillText(text, x, y);
+    context.shadowColor = "transparent";
+    context.lineWidth = Math.max(.8, fontSize * .018);
+    context.strokeStyle = "rgba(255, 244, 174, .72)";
+    context.strokeText(text, x - .7, y - .8);
+    context.fillStyle = originalFill;
+  } else {
+    context.fillText(text, x, y);
+  }
+  context.restore();
 }
 
 function addConstellation(scene: Scene, isPortrait: boolean, panelWidth: number, panelHeight: number) {

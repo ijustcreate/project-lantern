@@ -136,6 +136,8 @@ export interface BoardPanel {
   height?: number;
   imageUrl?: string;
   imageFit?: "cover" | "contain";
+  fontFamily?: DisplayProfile["fontFamily"];
+  fontSize?: number;
 }
 
 export interface ScheduleEntry {
@@ -273,10 +275,22 @@ export interface DisplayProfile {
   donorScrollEnabled?: boolean;
   donorScrollSpeed?: number;
   particleAnimationEnabled?: boolean;
-  particleDriftDirection?: "natural" | "left" | "right";
+  particleDriftDirection?: "natural" | "left" | "right" | "up" | "down" | "wander";
   particleDriftSpeed?: number;
   particleGravity?: number;
   particleColorStyle?: "warm" | "primary";
+  particleCount?: number;
+  particleSize?: number;
+  particleSpread?: number;
+  particleWander?: number;
+  particleLifetime?: number;
+  particleLifetimeRange?: number;
+  showFrame?: boolean;
+  textFinish?: "flat" | "cut-brass";
+  textShadowEnabled?: boolean;
+  textShadowStrength?: number;
+  textShadowAngle?: number;
+  textShadowDistance?: number;
   showIcons?: boolean;
   donorIconStyle?: "circle" | "diamond" | "dash";
   donorIconPlacement?: "left" | "both";

@@ -1304,7 +1304,6 @@ function DonorsView({
         <select className="toolbar-select" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="all">All groups</option>{state.donorGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>
         <select className="toolbar-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">All donation types</option>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select>
         <select className="toolbar-select" aria-label="Sort donors" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)} title="Choose how donor names are ordered"><option value="manual">Manual order</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option></select>
-        <span className="fit-inline"><BadgeCheck size={16} />{warnings.length ? `${warnings.length} fit warning` : "All names fit"}</span>
         <button className="command-button primary" onClick={addDonor}>
           <Plus size={18} />
           Add donor
@@ -1854,6 +1853,13 @@ function ThemeStudio({
   }, [selectedProgramId]);
 
   useEffect(() => {
+    const assignedProgramId = display.boardProgramId ?? state.boardPrograms[0]?.id;
+    if (assignedProgramId && state.boardPrograms.some((program) => program.id === assignedProgramId)) {
+      setSelectedProgramId(assignedProgramId);
+    }
+  }, [display.id]);
+
+  useEffect(() => {
     if (selectedPanelId && !panels.some((panel) => panel.id === selectedPanelId)) setSelectedPanelId("");
   }, [panels, selectedPanelId]);
 
@@ -1894,15 +1900,6 @@ function ThemeStudio({
     setSelectedPanelId(nextPanels[Math.min(index, nextPanels.length - 1)].id);
   };
 
-  const movePanel = (panelId: string, direction: -1 | 1) => {
-    const index = panels.findIndex((panel) => panel.id === panelId);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= panels.length) return;
-    const nextPanels = [...panels];
-    [nextPanels[index], nextPanels[target]] = [nextPanels[target], nextPanels[index]];
-    patchProgram({ panels: nextPanels });
-  };
-
   const duplicateProgram = () => {
     if (!selectedProgram) return;
     const id = `board-${Date.now()}`;
@@ -1931,6 +1928,7 @@ function ThemeStudio({
 
   const deleteProgram = () => {
     if (state.boardPrograms.length <= 1 || !selectedProgram) return;
+    if (!window.confirm(`Delete “${selectedProgram.name}”? This cannot be undone.`)) return;
     const remaining = state.boardPrograms.filter((program) => program.id !== selectedProgram.id);
     updateState((current) => ({
       ...current,
@@ -1958,8 +1956,47 @@ function ThemeStudio({
       donors: current.donors.map((donor) => selectedProgram.donorIds.includes(donor.id)
         ? { ...donor, displayIds: [...new Set([...(donor.displayIds ?? []), display.id])] }
         : donor),
-      screens: { ...current.screens, [display.id]: { ...current.screens[display.id], style: "donor-wall", boardProgramId: selectedProgram.id } }
+      boardPrograms: current.boardPrograms.map((program) => program.id === selectedProgram.id ? { ...program, active: true } : program),
+      screens: {
+        ...current.screens,
+        [display.id]: {
+          ...current.screens[display.id],
+          style: "donor-wall",
+          boardProgramId: selectedProgram.id,
+          donorIds: [],
+          donorRosterConfigured: false,
+          customHeading: "",
+          customSubheading: "",
+          columns: undefined
+        }
+      }
     }));
+  };
+
+  const chooseBoardBackground = async (file?: File) => {
+    if (!file) return;
+    const mediaId = await storeLanternMedia(file);
+    void deleteLanternMedia(display.backgroundMediaId);
+    patchDisplay({
+      backgroundImage: URL.createObjectURL(file),
+      backgroundMediaId: mediaId,
+      backgroundMediaType: "image",
+      backgroundMediaName: file.name,
+      backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
+      backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
+    });
+  };
+
+  const removeBoardBackground = () => {
+    void deleteLanternMedia(display.backgroundMediaId);
+    patchDisplay({
+      backgroundImage: undefined,
+      backgroundMediaId: undefined,
+      backgroundMediaType: undefined,
+      backgroundMediaName: undefined,
+      backgroundMediaAnimated: undefined,
+      backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
+    });
   };
 
   const toggleProgramDonor = (donorId: string, checked: boolean) => {
@@ -1976,11 +2013,14 @@ function ThemeStudio({
   return (
     <section className="board-builder">
       <div className="board-builder-toolbar">
-        <label className="builder-select"><span>Board</span><select value={selectedProgram.id} onChange={(event) => setSelectedProgramId(event.target.value)}>{state.boardPrograms.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</select></label>
+        <div className="board-select-cluster">
+          <label className="builder-select"><span>Board</span><select value={selectedProgram.id} onChange={(event) => setSelectedProgramId(event.target.value)}>{state.boardPrograms.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</select></label>
+          <button type="button" className="command-button secondary compact" onClick={createProgram}><Plus size={16} /> New</button>
+          <button type="button" className="command-button secondary compact" onClick={duplicateProgram}>Duplicate</button>
+          <button type="button" className="icon-button danger-icon" onClick={deleteProgram} disabled={state.boardPrograms.length <= 1} title="Delete saved board"><Trash2 size={16} /></button>
+        </div>
         <label className="builder-select"><span>Display</span><select value={display.id} onChange={(event) => setSelectedDisplayId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label>
-        <label className="builder-select"><span>Format</span><select value={display.orientation} onChange={(event) => patchDisplay({ orientation: event.target.value as DisplayProfile["orientation"] })}><option>Portrait</option><option>Landscape</option></select></label>
-        <div className="board-config-actions"><button type="button" className="command-button secondary compact" onClick={createProgram}><Plus size={16} /> New</button><button type="button" className="command-button secondary compact" onClick={duplicateProgram}>Duplicate</button><button type="button" className="icon-button danger-icon" onClick={deleteProgram} disabled={state.boardPrograms.length <= 1} title="Delete saved board"><Trash2 size={16} /></button></div>
-        <button type="button" className="command-button primary compact" onClick={useBoardOnDisplay}><Monitor size={16} /> Use on display</button>
+        <button type="button" className={display.boardProgramId === selectedProgram.id ? "command-button success compact" : "command-button primary compact"} onClick={useBoardOnDisplay}><Monitor size={16} /> {display.boardProgramId === selectedProgram.id ? `Using on ${display.label}` : `Use on ${display.label}`}</button>
       </div>
 
       <div className="board-builder-workspace">
@@ -1996,7 +2036,6 @@ function ThemeStudio({
             selectedPanelId={selectedPanel?.id ?? ""}
             onSelect={setSelectedPanelId}
             onPatch={patchPanel}
-            onMove={movePanel}
             onRemove={removePanel}
             onRenameDonor={renameDonor}
             placingPanelType={placingPanelType}
@@ -2006,7 +2045,7 @@ function ThemeStudio({
         </main>
 
         <aside className="board-panel-inspector">
-          <div className="inspector-sticky-head"><div><p className="eyebrow">Selected panel</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "None selected"}</h2></div>{selectedPanel && <div className="panel-icon-actions"><button className="icon-button" onClick={() => movePanel(selectedPanel.id, -1)} title="Move panel up"><ChevronUp size={17} /></button><button className="icon-button" onClick={() => movePanel(selectedPanel.id, 1)} title="Move panel down"><ChevronDown size={17} /></button><button className="icon-button danger-icon" onClick={() => removePanel(selectedPanel.id)} title="Remove panel"><Trash2 size={17} /></button></div>}</div>
+          <div className="inspector-sticky-head"><div><p className="eyebrow">Selected panel</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "None selected"}</h2></div></div>
           <div className="board-inspector-scroll">
             {selectedPanel ? <div className="inspector-block">
               <div className="panel-position-grid">
@@ -2016,6 +2055,8 @@ function ThemeStudio({
                   patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) });
                 }} /></label>)}
               </div>
+              <LabeledSelect label="Panel font" info="Typeface used only by this panel." value={selectedPanel.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} />
+              <Slider label="Panel font size" info="Changes text size without changing the panel box." value={selectedPanel.fontSize ?? 24} min={10} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} />
               {selectedPanel.type === "donors" && <>
                 <div className="field"><span>Columns</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1 column"], ["2", "2 columns"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as 1 | 2 })} /></div>
                 <div className="mini-actions"><button type="button" onClick={() => patchProgram({ donorIds: state.donors.filter((donor) => donor.active).map((donor) => donor.id) })}>Use active</button><button type="button" onClick={() => patchProgram({ donorIds: [] })}>Clear</button></div>
@@ -2025,19 +2066,41 @@ function ThemeStudio({
               {selectedPanel.type === "qr" && <LabeledInput label="QR destination" info="Website opened when visitors scan this panel." value={display.qrUrl ?? state.board.qrUrl} onChange={(qrUrl) => patchDisplay({ qrEnabled: true, qrUrl })} />}
               {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Choose PNG or image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchPanel(selectedPanel.id, { imageUrl: String(reader.result) }); reader.readAsDataURL(file); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the panel." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
             </div> : <div className="board-selection-empty"><Palette size={22} /><strong>No panel selected</strong><span>Select a panel to edit it. Click the area around the board to clear your selection.</span></div>}
-            <details className="inspector-details" open><summary>Add panel</summary><div className="inspector-block"><LabeledSelect label="Panel type" info="Choose a type, then click its intended position on the board." value={newPanelType} options={boardPanelTypes} optionLabels={Object.fromEntries(boardPanelTypes.map((type) => [type, boardPanelLabel(type)]))} onChange={(value) => setNewPanelType(value as BoardPanelType)} /><button type="button" className={`command-button ${placingPanelType ? "primary" : "secondary"}`} onClick={() => setPlacingPanelType(placingPanelType ? null : newPanelType)}><Plus size={16} /> {placingPanelType ? "Cancel placement" : "Place on board"}</button></div></details>
             <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
+              <div className="field"><span>Format <InfoDot text="Choose the physical orientation for this display." /></span><SegmentedControl value={display.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchDisplay({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
               <LabeledSelect label="Visual style" info="Overall surface treatment for this board." value={state.board.visualStyle} options={["chalkboard", "chalkboard-minimal", "gallery-plaque", "museum"]} optionLabels={{ chalkboard: "Chalkboard", "chalkboard-minimal": "Minimal plaque", "gallery-plaque": "Gallery plaque", museum: "Museum board" }} onChange={(value) => patchBoard({ visualStyle: value as LanternState["board"]["visualStyle"] })} />
-              <LabeledSelect label="Font" info="Typeface used throughout this display." value={display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchDisplay({ fontFamily: fontFamily as DisplayProfile["fontFamily"] })} />
               <Slider label="Name size" info="Preferred donor-name size." value={display.nameSize ?? 28} min={14} max={48} onChange={(nameSize) => patchDisplay({ nameSize })} />
+              <label className="switch-row"><input type="checkbox" checked={display.showFrame ?? true} onChange={(event) => patchDisplay({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
+              <div className="board-background-controls">
+                <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {display.backgroundImage ? "Replace background" : "Add background image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
+                {display.backgroundImage && <button type="button" className="command-button danger compact" onClick={removeBoardBackground}><Trash2 size={15} /> Remove background</button>}
+              </div>
+              {display.backgroundImage && <>
+                <Slider label="Background scale" info="Zoom the background image behind the board." value={Math.round(display.backgroundCrop.scale * 100)} min={50} max={300} onChange={(value) => patchDisplay({ backgroundCrop: { ...display.backgroundCrop, scale: value / 100 } })} />
+                <Slider label="Background pan X" info="Move the background image horizontally." value={display.backgroundCrop.x} min={-100} max={100} onChange={(x) => patchDisplay({ backgroundCrop: { ...display.backgroundCrop, x } })} />
+                <Slider label="Background pan Y" info="Move the background image vertically." value={display.backgroundCrop.y} min={-100} max={100} onChange={(y) => patchDisplay({ backgroundCrop: { ...display.backgroundCrop, y } })} />
+              </>}
+              <LabeledSelect label="Text finish" info="Cut brass adds a metallic face, beveled edge, and dimensional highlight." value={display.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchDisplay({ textFinish: textFinish as DisplayProfile["textFinish"] })} />
+              <label className="switch-row"><input type="checkbox" checked={display.textShadowEnabled ?? false} onChange={(event) => patchDisplay({ textShadowEnabled: event.target.checked })} /><span>Shadow under text</span></label>
+              {display.textShadowEnabled && <>
+                <Slider label="Shadow strength" info="Controls how dark and pronounced the text shadow appears." value={display.textShadowStrength ?? 55} min={0} max={100} onChange={(textShadowStrength) => patchDisplay({ textShadowStrength })} />
+                <Slider label="Shadow angle" info="Sets the direction the shadow falls, in degrees." value={display.textShadowAngle ?? 135} min={0} max={360} onChange={(textShadowAngle) => patchDisplay({ textShadowAngle })} />
+                <Slider label="Shadow distance" info="Sets how far the text appears lifted from the board." value={display.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchDisplay({ textShadowDistance })} />
+              </>}
               <label className="switch-row"><input type="checkbox" checked={display.showIcons ?? false} onChange={(event) => patchDisplay({ showIcons: event.target.checked })} /><span>Show donor icons</span></label>
               <label className="switch-row"><input type="checkbox" checked={display.particleAnimationEnabled ?? false} onChange={(event) => patchDisplay({ particleAnimationEnabled: event.target.checked })} /><span>Animate board particles</span></label>
               {display.particleAnimationEnabled && <div className="particle-motion-controls">
                 <LabeledSelect label="Particle colors" info="Warm uses white and gold; primary uses classic red, yellow, and blue." value={display.particleColorStyle ?? "warm"} options={["warm", "primary"]} optionLabels={{ warm: "White + warm gold", primary: "Primary colors" }} onChange={(particleColorStyle) => patchDisplay({ particleColorStyle: particleColorStyle as DisplayProfile["particleColorStyle"] })} />
-                <LabeledSelect label="Drift direction" info="Sets the overall air-current direction while keeping a subtle natural wobble." value={display.particleDriftDirection ?? "natural"} options={["natural", "left", "right"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right" }} onChange={(particleDriftDirection) => patchDisplay({ particleDriftDirection: particleDriftDirection as DisplayProfile["particleDriftDirection"] })} />
+                <LabeledSelect label="Drift direction" info="Sets the overall air-current direction." value={display.particleDriftDirection ?? "natural"} options={["natural", "left", "right", "up", "down", "wander"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right", up: "Float up", down: "Fall down", wander: "Random wander" }} onChange={(particleDriftDirection) => patchDisplay({ particleDriftDirection: particleDriftDirection as DisplayProfile["particleDriftDirection"] })} />
                 <Slider label="Drift speed" info="How quickly the dust moves across the board." value={display.particleDriftSpeed ?? 4} min={1} max={10} onChange={(particleDriftSpeed) => patchDisplay({ particleDriftSpeed })} />
                 <Slider label="Gravity" info="How strongly particles settle toward the bottom of the board." value={display.particleGravity ?? 3} min={0} max={10} onChange={(particleGravity) => patchDisplay({ particleGravity })} />
+                <Slider label="Particle count" info="How many particles are visible." value={display.particleCount ?? 34} min={4} max={120} onChange={(particleCount) => patchDisplay({ particleCount })} />
+                <Slider label="Particle size" info="Average particle size." value={display.particleSize ?? 4} min={1} max={12} onChange={(particleSize) => patchDisplay({ particleSize })} />
+                <Slider label="Dispersion" info="How widely particles are scattered across the board." value={display.particleSpread ?? 100} min={10} max={100} onChange={(particleSpread) => patchDisplay({ particleSpread })} />
+                <Slider label="Wander" info="How far particles deviate from their main direction." value={display.particleWander ?? 5} min={0} max={10} onChange={(particleWander) => patchDisplay({ particleWander })} />
+                <Slider label="Lifetime" info="Base time before each particle fades and restarts." value={display.particleLifetime ?? 12} min={2} max={30} onChange={(particleLifetime) => patchDisplay({ particleLifetime })} />
+                <Slider label="Lifetime range" info="Adds random variation around the base lifetime." value={display.particleLifetimeRange ?? 4} min={0} max={20} onChange={(particleLifetimeRange) => patchDisplay({ particleLifetimeRange })} />
               </div>}
               <p className="field-note">Donor subtext is controlled per name in Displays &gt; Assigned names.</p>
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.active} onChange={(event) => patchProgram({ active: event.target.checked })} /><span>Available to schedules</span></label>
@@ -2057,7 +2120,6 @@ function DirectBoardCanvas({
   selectedPanelId,
   onSelect,
   onPatch,
-  onMove,
   onRemove,
   onRenameDonor,
   placingPanelType,
@@ -2071,7 +2133,6 @@ function DirectBoardCanvas({
   selectedPanelId: string;
   onSelect: (id: string) => void;
   onPatch: (id: string, patch: Partial<BoardPanel>) => void;
-  onMove: (id: string, direction: -1 | 1) => void;
   onRemove: (id: string) => void;
   onRenameDonor: (id: string, name: string) => void;
   placingPanelType: BoardPanelType | null;
@@ -2085,12 +2146,9 @@ function DirectBoardCanvas({
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [onBeginPlace]);
-  const rosterIds = display.donorIds ?? [];
-  const donors = state.donors.filter((donor) => {
-    if (!donor.active || !donor.displayIds?.includes(display.id)) return false;
-    if (display.donorRosterConfigured) return rosterIds.includes(donor.id);
-    return program.donorIds.includes(donor.id) && (!rosterIds.length || rosterIds.includes(donor.id));
-  }).sort((a, b) => display.donorRosterConfigured ? rosterIds.indexOf(a.id) - rosterIds.indexOf(b.id) : 0);
+  const donors = program.donorIds
+    .map((id) => state.donors.find((donor) => donor.id === id))
+    .filter((donor): donor is Donor => Boolean(donor?.active));
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
     event.preventDefault();
@@ -2124,25 +2182,31 @@ function DirectBoardCanvas({
     const rect = canvasRef.current.getBoundingClientRect();
     onAdd(placingPanelType, { x: (event.clientX - rect.left) / rect.width * 100, y: (event.clientY - rect.top) / rect.height * 100 });
   };
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat" }} onPointerDown={placePanel} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top }); }}>
-    {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: 34 }, (_, index) => {
+  const backgroundScale = display.backgroundCrop?.scale ?? 1;
+  const particleCount = display.particleCount ?? 34;
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat" }} onPointerDown={placePanel} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top }); }}>
+    {display.backgroundImage && <div className="direct-board-background"><img src={display.backgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${display.backgroundCrop?.x ?? 50}% ${display.backgroundCrop?.y ?? 50}%` }} /></div>}
+    {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
+      const spread = (display.particleSpread ?? 100) / 100;
+      const size = display.particleSize ?? 3;
+      const lifetime = display.particleLifetime ?? 12;
       return <i key={index} style={{
-        "--particle-x": `${scatter(12.9898) * 100}%`,
-        "--particle-y": `${scatter(78.233) * 100}%`,
-        "--particle-size": `${0.8 + scatter(39.346) * 3.8}px`,
+        "--particle-x": `${50 + (scatter(12.9898) - 0.5) * spread * 100}%`,
+        "--particle-y": `${50 + (scatter(78.233) - 0.5) * spread * 100}%`,
+        "--particle-size": `${Math.max(0.5, size * (0.45 + scatter(39.346)))}px`,
         "--particle-depth": 0.32 + scatter(93.184) * 0.68,
-        "--particle-duration": 0.72 + scatter(17.719) * 0.75,
+        "--particle-duration": `${Math.max(1, lifetime + (scatter(17.719) - 0.5) * (display.particleLifetimeRange ?? 4))}s`,
         "--particle-delay": `${-scatter(63.726) * 24}s`,
-        "--particle-wander": `${14 + scatter(44.123) * 48}px`,
+        "--particle-wander": `${(display.particleWander ?? 5) * (2 + scatter(44.123) * 7)}px`,
         "--particle-lift": `${10 + scatter(28.417) * 34}px`,
         "--particle-phase": scatter(54.531) > 0.5 ? 1 : -1
       } as React.CSSProperties} />;
     })}</div>}
     <div className="direct-board-inner">
-      {panels.map((panel, index) => <section key={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{ left: `${panel.x ?? 5}%`, top: `${panel.y ?? index * 20 + 5}%`, width: `${panel.width ?? 90}%`, height: `${panel.height ?? 18}%`, zIndex: index + 2 }} onClick={(event) => { event.stopPropagation(); onSelect(panel.id); }}>
-        {panel.id === selectedPanelId && <div className="direct-panel-tools" onClick={(event) => event.stopPropagation()}><button onClick={() => onMove(panel.id, -1)} disabled={index === 0} title="Move up"><ChevronUp size={14} /></button><button onClick={() => onMove(panel.id, 1)} disabled={index === panels.length - 1} title="Move down"><ChevronDown size={14} /></button><button onClick={() => onRemove(panel.id)} disabled={panels.length === 1} title="Remove panel"><Trash2 size={14} /></button></div>}
+      {panels.map((panel, index) => <section key={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{ left: `${panel.x ?? 5}%`, top: `${panel.y ?? index * 20 + 5}%`, width: `${panel.width ?? 90}%`, height: `${panel.height ?? 18}%`, zIndex: index + 2, fontFamily: panel.fontFamily ?? display.fontFamily ?? "Montserrat", "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px` } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id); }}>
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
+        <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
         {panel.type === "heading" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
         {panel.type === "donors" && <><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><div className={`direct-donor-grid columns-${panel.columns ?? program.columns}`}>{donors.map((donor) => <div

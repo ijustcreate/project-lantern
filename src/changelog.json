@@ -1,5 +1,73 @@
 [
   {
+    "id": "DEV-0019",
+    "title": "Repair board editing and TV output",
+    "summary": "Board edits now render on assigned displays with shared panel geometry, per-panel typography, reliable assignment, edge-to-edge fit and optional framing, background image positioning, richer particle controls, and a simplified editor workspace.",
+    "author": "Codex",
+    "createdAt": "Jul 24, 2026, 11:56 PM",
+    "areas": [
+      "Board Editor",
+      "Displays",
+      "Donors"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build (passed: TypeScript and Vite production build, 2,068 modules)"
+  },
+  {
+    "id": "DEV-0018",
+    "title": "Simplify dashboard header",
+    "summary": "Removed the Display 1, Display 2, and Next status nodes from the dashboard header so the page title and primary actions have a cleaner layout.",
+    "author": "Codex",
+    "createdAt": "Jul 24, 2026, 11:15 PM",
+    "areas": [
+      "Dashboard",
+      "Navigation"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build passed"
+  },
+  {
+    "id": "DEV-0017",
+    "title": "Natural dust particle motion",
+    "summary": "Made board particles feel like dust suspended in a shaft of light by varying their size, depth, glow, opacity, timing, and wandering paths in both editor previews and live displays.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 7:44 PM",
+    "areas": [
+      "Board editor",
+      "Display renderer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "Reviewed both render paths; TypeScript and Vite production builds attempted but timed out without diagnostics in the saturated local environment"
+  },
+  {
+    "id": "DEV-0016",
+    "title": "Move display management to Dashboard",
+    "summary": "Removed the Screens navigation tab and promoted full display management into larger Dashboard cards with status, power, identify, room-camera, edit, delete, open, and add controls.",
+    "author": "Codex",
+    "createdAt": "Jul 23, 2026, 7:44 PM",
+    "areas": [
+      "Dashboard",
+      "Navigation",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Verified live Vite DOM: Screens nav absent, two display cards rendered, management controls present, and Ideas drawer absent; captured dashboard screenshot; npm run build timed out under existing Node workload without reporting a compile error."
+  },
+  {
     "id": "DEV-0015",
     "title": "Prepare hosted test deployment",
     "summary": "Configured GitHub Pages deployment and made display pop-out URLs respect the hosted project path so testers can open the app and its display views from a shared URL.",
