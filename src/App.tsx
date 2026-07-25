@@ -211,7 +211,7 @@ function ControlCenter() {
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const videoBridge = useRef<DirectorVideoBridge | null>(null);
-  const showIdeas = (["donors", "theme", "schedule", "announcements"] as View[]).includes(view);
+  const showIdeas = (["donors", "schedule", "announcements"] as View[]).includes(view);
 
   useEffect(() => {
     let mounted = true;
