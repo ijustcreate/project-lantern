@@ -469,13 +469,7 @@ function ControlCenter() {
         <header className={view === "dashboard" ? "topbar dashboard-topbar" : "topbar"}>
           <div className="page-identity">
             <p className="eyebrow"><span>Lantern control</span><i />Published {state.publishedAt}</p>
-            <div className="dashboard-heading-row">
-              <h1>{titleFor(view)}</h1>
-              {view === "dashboard" && <div className="dashboard-header-status">
-                {Object.values(state.screens).map((screen) => <button className={selectedDisplayId === screen.id ? "header-screen-pill active" : "header-screen-pill"} key={screen.id} onClick={() => setSelectedDisplayId(screen.id)}>{screen.status === "offline" ? <WifiOff size={13} /> : <Wifi size={13} />}<span><strong>{screen.label}</strong><small>{screen.status === "offline" ? "Not attached" : "Attached"}</small></span></button>)}
-                <div className="header-next-pill" title={`Next scheduled item: ${state.nextScheduledEvent}`}><History size={13} /><span><strong>Next</strong><small>{state.nextScheduledEvent}</small></span></div>
-              </div>}
-            </div>
+            <h1>{titleFor(view)}</h1>
           </div>
           <div className="topbar-actions">
             {view === "dashboard" && (
