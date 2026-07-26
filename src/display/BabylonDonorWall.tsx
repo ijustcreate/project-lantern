@@ -13,7 +13,6 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import QRCode from "qrcode";
 import "@babylonjs/loaders/glTF";
 import "@babylonjs/loaders/OBJ";
 import "@babylonjs/core/Meshes/Builders/boxBuilder";
@@ -98,7 +97,9 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     const panelWidth = isPortrait ? 4.8 : 11.4;
     const panelHeight = isPortrait ? 8.1 : 5.7;
 
-    const defaultCameraRadius = isPortrait ? 10.6 : 10.4;
+    // Leave enough room for a useful 3D orbit without clipping the board at
+    // the edge of the dashboard card.
+    const defaultCameraRadius = isPortrait ? 12.4 : 12.8;
     const camera = new ArcRotateCamera(
       "camera",
       Math.PI / 2,
@@ -118,10 +119,12 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       camera.lowerBetaLimit = Math.PI / 2;
       camera.upperBetaLimit = Math.PI / 2;
     } else {
-      camera.lowerAlphaLimit = -Math.PI * 2;
-      camera.upperAlphaLimit = Math.PI * 2;
-      camera.lowerBetaLimit = 0.22;
-      camera.upperBetaLimit = Math.PI - 0.22;
+      // Keep the front in view. Unlimited orbit can leave the preview almost
+      // edge-on, where the board appears broken rather than inspectable.
+      camera.lowerAlphaLimit = Math.PI / 2 - 1.15;
+      camera.upperAlphaLimit = Math.PI / 2 + 1.15;
+      camera.lowerBetaLimit = 0.62;
+      camera.upperBetaLimit = Math.PI - 0.62;
     }
     if (interactive) {
       camera.attachControl(false, false, 2);
@@ -145,8 +148,13 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
     const resizeCamera = () => {
       engine.resize();
-      if (!fitToScreen) {
+      // The straight-on 2D preview is an exact orthographic output surface.
+      // A 3D preview must use perspective: orthographic radius changes do not
+      // alter its visible scale, which made mouse-wheel zoom appear broken.
+      if (!fitToScreen || viewMode === "3d") {
         camera.mode = Camera.PERSPECTIVE_CAMERA;
+        camera.alpha = Math.PI / 2;
+        camera.beta = Math.PI / 2.08;
         camera.radius = defaultCameraRadius;
         return;
       }
@@ -236,7 +244,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     let lastMediaRedraw = 0;
     engine.runRenderLoop(() => {
       const now = performance.now();
-      const animatedBackground = screen.style === "image" && screen.backgroundImage && (screen.backgroundMediaType === "video" || screen.backgroundMediaAnimated);
+      const animatedBackground = screen.backgroundMode === "image" && screen.backgroundImage && (screen.backgroundMediaType === "video" || screen.backgroundMediaAnimated);
       const animatedDonors = state.donors.some((donor) => donor.animation && donor.animation !== "none");
       if ((animatedBackground || screen.donorScrollEnabled || animatedDonors || screen.particleAnimationEnabled) && now - lastMediaRedraw > 33) {
         lastMediaRedraw = now;
@@ -329,10 +337,6 @@ function drawTextureContent(
       drawConstellationBackground(context, width, height, state, isPortrait);
       drawHeading(context, width, height, screenId, state.revision, "constellation", displayProgram);
       drawConstellationDonors(context, width, height, donors, isPortrait);
-    } else if (screen.style === "image") {
-      drawImageBackground(context, width, height, screen);
-      drawHeading(context, width, height, screenId, state.revision, "image", displayProgram);
-      drawDonors(context, width, height, donors, isPortrait, state.theme.lettering, screen.layoutScale);
     } else {
       drawMuseumBoard(context, width, height, state, donors, isPortrait, screen.layoutScale, displayProgram, screen, animationTime);
     }
@@ -374,7 +378,7 @@ function drawMuseumBoard(
   wash.addColorStop(1, galleryPlaque ? "#0a0e11" : chalkboard ? "#0b1014" : "#04111f");
   context.fillStyle = wash;
   context.fillRect(0, 0, width, height);
-  if (screen?.backgroundImage) drawImageBackground(context, width, height, screen);
+  if (screen?.backgroundMode === "image" && screen.backgroundImage) drawImageBackground(context, width, height, screen);
 
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
   else if (!chalkboard) drawBoardStars(context, width, height, screen, animationTime);
@@ -517,10 +521,6 @@ function drawScrollingDonorBoard(
   context.fillStyle = gold;
   context.font = `500 ${Math.round((isPortrait ? 22 : 17) * scale)}px ${family}, Inter, sans-serif`;
   fitText(context, footer.toUpperCase(), width / 2, height * (isPortrait ? 0.945 : 0.94), width * 0.66, Math.round((isPortrait ? 22 : 17) * scale), 11);
-  if (screen.qrEnabled && screen.qrUrl) {
-    const qrSize = Math.min(width, height) * (isPortrait ? 0.085 : 0.08);
-    drawQr(context, width * 0.075, height * (isPortrait ? 0.855 : 0.84), qrSize, ivory, screen.qrUrl);
-  }
   context.restore();
 }
 
@@ -577,20 +577,19 @@ function drawComposableBoard(
       }
     }
 
-    if (panel.type === "donors") {
-      const columns = panel.columns ?? program.columns;
-      const donorHeadingSize = panel.donorHeadingSize ?? Math.round(requestedSize * 0.62);
-      const donorNameSize = panel.donorNameSize ?? requestedSize;
-      const headingFontUnit = Math.max(8, donorHeadingSize * height / 900);
-      const nameFontUnit = Math.max(8, donorNameSize * height / 900);
-      const titleHeight = Math.min(panelHeight * 0.3, Math.max(height * 0.04, headingFontUnit * 1.5));
+    if (panel.type === "supporters-heading") {
       context.textAlign = "center";
       context.fillStyle = gold;
-      context.font = `700 ${Math.round(headingFontUnit)}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.title, centerX, y + (titleHeight + headingFontUnit * 0.72) / 2, contentWidth * 0.8, Math.round(headingFontUnit), 8);
+      context.font = `700 ${Math.round(fontUnit)}px ${font}, Inter, sans-serif`;
+      fitText(context, panel.title, centerX, centerY + fontUnit * 0.36, contentWidth * 0.9, Math.round(fontUnit), 8);
+    }
+
+    if (panel.type === "donors") {
+      const columns = panel.columns ?? program.columns;
+      const nameFontUnit = Math.max(8, requestedSize * height / 900);
       const rows = Math.max(1, Math.ceil(donors.length / columns));
-      const listTop = y + titleHeight;
-      const rowHeight = (panelHeight - titleHeight) / rows;
+      const listTop = y;
+      const rowHeight = panelHeight / rows;
       donors.forEach((donor, index) => {
         const showSubtext = donorSubtextVisible(screen, donor.id);
         const column = index % columns;
@@ -647,22 +646,6 @@ function drawComposableBoard(
       context.font = `400 ${Math.max(10, Math.round(panelHeight * 0.095 * scale))}px ${font}, Inter, sans-serif`;
       const lines = wrapLines(context, panel.body ?? "", textWidth * 0.94, 2);
       lines.forEach((line, lineIndex) => context.fillText(line, textX, y + panelHeight * (0.72 + lineIndex * 0.13)));
-    }
-
-    if (panel.type === "qr") {
-      const qrSize = Math.min(panelHeight * 0.72, contentWidth * 0.18);
-      drawQr(context, left + contentWidth * 0.04, centerY - qrSize / 2, qrSize, ivory, screen?.qrUrl ?? state.board.qrUrl);
-      const textX = left + contentWidth * 0.04 + qrSize + contentWidth * 0.05;
-      context.textAlign = "left";
-      context.fillStyle = gold;
-      context.font = `700 ${Math.max(10, Math.round(panelHeight * 0.12 * scale))}px ${font}, Inter, sans-serif`;
-      context.fillText(panel.eyebrow ?? "", textX, y + panelHeight * 0.31);
-      context.fillStyle = ivory;
-      context.font = `650 ${Math.max(14, Math.round(panelHeight * 0.18 * scale))}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.title, textX, y + panelHeight * 0.56, contentWidth * 0.62, Math.round(panelHeight * 0.18 * scale), 11);
-      context.fillStyle = muted;
-      context.font = `400 ${Math.max(9, Math.round(panelHeight * 0.09 * scale))}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.body ?? "", textX, y + panelHeight * 0.75, contentWidth * 0.62, Math.round(panelHeight * 0.09 * scale), 8);
     }
 
     if (panel.type === "footer") {
@@ -834,9 +817,6 @@ function drawChalkboardPortrait(
   context.font = `500 ${Math.round(22 * scale)}px Inter, Segoe UI, sans-serif`;
   drawHeart(context, width / 2, height * 0.9, 18 * scale, gold);
   context.fillText(footer, width / 2, height * 0.94);
-  if (screen?.qrEnabled && screen.qrUrl) {
-    drawQr(context, width * 0.09, height * 0.84, width * 0.1, cream, screen.qrUrl);
-  }
 }
 
 function drawGalleryPlaque(
@@ -971,10 +951,6 @@ function drawGalleryPlaque(
   drawHeart(context, width / 2, heartY, Math.min(width, height) * 0.018, gold);
   drawTrackedLabel(context, footer.toUpperCase(), width / 2, height * (isPortrait ? 0.945 : 0.935), width * 0.72, Math.round((isPortrait ? 22 : 18) * scale), 11, family, 400, gold, 0.25);
 
-  if (screen?.qrEnabled && screen.qrUrl) {
-    const qrSize = Math.min(width, height) * (isPortrait ? 0.095 : 0.1);
-    drawQr(context, width * 0.075, height * (isPortrait ? 0.855 : 0.83), qrSize, ivory, screen.qrUrl);
-  }
   context.restore();
 }
 
@@ -1199,9 +1175,6 @@ function drawLandscapeBoard(
   context.font = `500 ${Math.round(16 * scale)}px Inter, Segoe UI, sans-serif`;
   const storyLines = wrapLines(context, state.board.storyBody, width * 0.17, 3);
   storyLines.forEach((line, index) => context.fillText(line, left + 22, top + height * 0.255 + index * 24));
-  if (screen?.qrEnabled !== false) drawQr(context, left + width * 0.14, bottom - 64, 48, cream, screen?.qrUrl ?? state.board.qrUrl);
-  context.font = `800 ${Math.round(14 * scale)}px Inter, Segoe UI, sans-serif`;
-  context.fillText(state.board.qrLabel, left + 22, bottom - 18);
 
   const columns = [
     ["COMMUNITY PARTNERS", "Community", "#bda8ff"],
@@ -1281,17 +1254,6 @@ function drawFooter(context: CanvasRenderingContext2D, width: number, height: nu
   }
 }
 
-function drawQr(context: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, url: string) {
-  context.fillStyle = color;
-  context.fillRect(x, y, size, size);
-  context.fillStyle = "#061a2d";
-  const code = QRCode.create(url || "https://example.github.io/museum-supporters", { errorCorrectionLevel: "M" });
-  const margin = size * 0.08;
-  const cell = (size - margin * 2) / code.modules.size;
-  for (let row = 0; row < code.modules.size; row += 1) for (let col = 0; col < code.modules.size; col += 1) {
-    if (code.modules.get(row, col)) context.fillRect(x + margin + col * cell, y + margin + row * cell, Math.ceil(cell), Math.ceil(cell));
-  }
-}
 
 function drawBoardStars(
   context: CanvasRenderingContext2D,

@@ -30,6 +30,7 @@ export function loadLanternState(): LanternState {
         screens: Object.fromEntries(Object.entries(saved.screens).map(([id, screen]) => [id, {
           ...screen,
           style: screen.style === "image" ? "donor-wall" : screen.style,
+          backgroundMode: screen.style === "image" ? "image" : screen.backgroundMode,
           backgroundImage: undefined,
           backgroundMediaId: undefined,
           backgroundMediaType: undefined,
@@ -333,7 +334,8 @@ function normalizeScreen(
     ...screen,
     id,
     label: screen?.label?.startsWith("Entrance") || screen?.label?.startsWith("Main Gallery") ? fallback.label : screen?.label ?? fallback.label,
-    style: screen?.style === "constellation" ? "donor-wall" : screen?.style ?? fallback.style,
+    style: screen?.style === "constellation" || screen?.style === "image" ? "donor-wall" : screen?.style ?? fallback.style,
+    backgroundMode: screen?.backgroundMode ?? (screen?.style === "image" ? "image" : "board"),
     backgroundMediaType: screen?.backgroundMediaType ?? (screen?.backgroundImage?.startsWith("data:video/") ? "video" : screen?.backgroundImage ? "image" : undefined),
     backgroundMediaName: screen?.backgroundMediaName,
     backgroundMediaAnimated: screen?.backgroundMediaAnimated ?? false,
@@ -353,8 +355,6 @@ function normalizeScreen(
     donorScrollSpeed: Math.min(10, Math.max(1, screen?.donorScrollSpeed ?? 4)),
     showIcons: screen?.showIcons ?? false,
     showSubtext: screen?.showSubtext ?? false,
-    qrEnabled: screen?.qrEnabled ?? false,
-    qrUrl: screen?.qrUrl ?? fallback.qrUrl,
     roomVideoDeviceId: screen?.roomVideoDeviceId,
     roomAudioDeviceId: screen?.roomAudioDeviceId,
     roomAudioEnabled: screen?.roomAudioEnabled ?? true

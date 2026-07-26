@@ -1,5 +1,207 @@
 [
   {
+    "id": "DEV-0047",
+    "title": "Panel editing reflects on the board",
+    "summary": "Separated the supporters label from donor names, made font size apply to the selected panel, removed the ineffective visual-style control, and dismisses the Add panel menu when clicking away.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 3:01 AM",
+    "areas": [
+      "Board editor",
+      "Live display"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0046",
+    "title": "Expand Schedule calendar controls",
+    "summary": "The Schedule calendar now has slot-aware right-click actions, a full 24-hour scrollable timeline beginning at 6 AM, and display previews for scheduled events.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 2:52 AM",
+    "areas": [
+      "Schedule calendar",
+      "Display preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      ".lantern/bugs/BUG-0007/catalog.json"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0045",
+    "title": "Keep retargeted events visible",
+    "summary": "Changing a scheduled event to a specific display now moves the calendar to that display so the event stays visible instead of appearing to disappear.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 2:45 AM",
+    "areas": [
+      "Schedule calendar"
+    ],
+    "files": [
+      "src/App.tsx",
+      ".lantern/bugs/BUG-0006/catalog.json"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0044",
+    "title": "Restore calendar right-click menu",
+    "summary": "Schedule calendar right-click menus are available again for event actions and for creating new scheduled boards or announcements from an empty week slot.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 2:43 AM",
+    "areas": [
+      "Schedule calendar"
+    ],
+    "files": [
+      "src/App.tsx",
+      ".lantern/bugs/BUG-0005/catalog.json"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0043",
+    "title": "Polish 32 mobile interface details",
+    "summary": "Improve phone spacing, touch targets, navigation, filters, controls, cards, previews, and live feedback.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 1:50 AM",
+    "areas": [
+      "Mobile interface",
+      "Live controls"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright iPhone 15 live-screen visual check"
+  },
+  {
+    "id": "DEV-0042",
+    "title": "Fix dashboard 3D preview camera",
+    "summary": "Use a perspective camera for interactive 3D previews so wheel zoom works, keep 2D output framing exact, and constrain orbit angles to prevent edge-on clipping.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 1:49 AM",
+    "areas": [
+      "Dashboard display preview",
+      "3D camera controls"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0041",
+    "title": "Repair mobile broadcast workspace",
+    "summary": "Stack frame controls on phones and present the live preview in-app instead of an about:blank popup.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 12:37 AM",
+    "areas": [
+      "Mobile broadcast",
+      "Live preview"
+    ],
+    "files": [
+      "src/styles.css",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright iPhone 15 Broadcast / Stream visual checks"
+  },
+  {
+    "id": "DEV-0040",
+    "title": "Fix mobile workspace layouts",
+    "summary": "Make phone screens flow and scroll correctly, keep the bug-report dialog viewport-safe, and provide a clear capture fallback.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 9:03 PM",
+    "areas": [
+      "Mobile layout",
+      "Bug reporting"
+    ],
+    "files": [
+      "src/styles.css",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright iPhone 15 donor-list and bug-report visual checks"
+  },
+  {
+    "id": "DEV-0039",
+    "title": "Keep board layout with image backgrounds",
+    "summary": "Selecting an image background now keeps the same board layout and uses the selected media only as the board background.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 8:51 PM",
+    "areas": [
+      "Displays",
+      "Board renderer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/host/lanternHost.ts",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0038",
+    "title": "Remove QR code destinations",
+    "summary": "Removed museum QR-code controls, website destinations, suggestion copy, and all QR rendering from recognition boards and displays.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 8:44 PM",
+    "areas": [
+      "Board Editor",
+      "Displays",
+      "Display renderer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/styles.css",
+      "package.json",
+      "package-lock.json"
+    ],
+    "tests": "rg verified no QR references in source or package manifest; npx vite build passed"
+  },
+  {
+    "id": "DEV-0037",
+    "title": "Fix announcement preview sizing",
+    "summary": "Made the live announcement monitor use the selected display aspect ratio at full available width and collapsed the preview card around its content, eliminating the tall empty band and squished TV preview.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 8:41 PM",
+    "areas": [
+      "Announcements",
+      "Live preview",
+      "Responsive layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright visual check at 1740x900; browser console 0 errors and 0 warnings"
+  },
+  {
+    "id": "DEV-0036",
+    "title": "Repair Broadcast and Stream studio layout",
+    "summary": "Renamed the standalone live feature to Broadcast / Stream and fixed its full-page grid so the complete studio remains visible instead of collapsing to a thin strip.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 8:39 PM",
+    "areas": [
+      "Navigation",
+      "Broadcast / Stream",
+      "Responsive layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright at 1737x857 with visual screenshot and control snapshot"
+  },
+  {
     "id": "DEV-0035",
     "title": "Improve schedule calendar editing",
     "summary": "Add a live current-time marker, content-aware event styling, and a draggable, dismissible event inspector.",

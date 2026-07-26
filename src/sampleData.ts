@@ -55,8 +55,6 @@ export const initialState: LanternState = {
     storyTitle: "Wonder grows here.",
     storyBody: "Your support builds hands-on learning, sparks curiosity, and creates a brighter future.",
     storyImageUrl: "",
-    qrUrl: "https://example.org/visit",
-    qrLabel: "SCAN TO LEARN MORE",
     hoursLabel: "TODAY'S HOURS",
     hoursValue: "10:00 AM - 5:00 PM",
     impactLines: ["YOU HELP", "IMAGINATION", "COME TO LIFE"],
@@ -67,7 +65,6 @@ export const initialState: LanternState = {
     socialLabel: "FOLLOW US",
     socialValue: "Stay connected",
     footerVisibility: {
-      portraitQr: true,
       portraitHours: true,
       portraitImpact: true,
       landscapeTheater: true,
@@ -185,8 +182,6 @@ export const initialState: LanternState = {
       donorIconStyle: "circle",
       donorIconPlacement: "left",
       showSubtext: false,
-      qrEnabled: false,
-      qrUrl: "https://example.github.io/museum-supporters"
     },
     "display-2": {
       id: "display-2",
@@ -220,8 +215,6 @@ export const initialState: LanternState = {
       donorIconStyle: "circle",
       donorIconPlacement: "left",
       showSubtext: false,
-      qrEnabled: true,
-      qrUrl: "https://example.github.io/museum-supporters"
     }
   },
   revisions: [

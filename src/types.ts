@@ -85,8 +85,6 @@ export interface BoardContent {
   storyTitle: string;
   storyBody: string;
   storyImageUrl?: string;
-  qrUrl: string;
-  qrLabel: string;
   hoursLabel: string;
   hoursValue: string;
   impactLines: string[];
@@ -97,7 +95,6 @@ export interface BoardContent {
   socialLabel: string;
   socialValue: string;
   footerVisibility: {
-    portraitQr: boolean;
     portraitHours: boolean;
     portraitImpact: boolean;
     landscapeTheater: boolean;
@@ -120,7 +117,7 @@ export interface DonorBoardProgram {
   panels?: BoardPanel[];
 }
 
-export type BoardPanelType = "heading" | "donors" | "message" | "story" | "qr" | "footer" | "image";
+export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image";
 
 export interface BoardPanel {
   id: string;
@@ -138,7 +135,9 @@ export interface BoardPanel {
   imageFit?: "cover" | "contain";
   fontFamily?: DisplayProfile["fontFamily"];
   fontSize?: number;
+  /** Preserved only to migrate boards created before the supporters heading was its own panel. */
   donorHeadingSize?: number;
+  /** Preserved only to migrate boards created before the donor list used the panel font size. */
   donorNameSize?: number;
   donorDividerColor?: string;
   donorDividerThickness?: number;
@@ -267,6 +266,8 @@ export interface DisplayProfile {
   resolution: string;
   assignment: string;
   style: DisplayStyle;
+  /** Selects the source behind the board without changing its layout or renderer. */
+  backgroundMode?: "board" | "image";
   backgroundImage?: string;
   backgroundMediaId?: string;
   backgroundMediaType?: "image" | "video";
@@ -315,8 +316,6 @@ export interface DisplayProfile {
   donorIconPlacement?: "left" | "both";
   /** Legacy default used when a donor has no per-display visibility setting. */
   showSubtext?: boolean;
-  qrEnabled?: boolean;
-  qrUrl?: string;
   roomVideoDeviceId?: string;
   roomAudioDeviceId?: string;
   roomAudioEnabled?: boolean;
