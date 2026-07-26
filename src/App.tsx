@@ -4413,6 +4413,9 @@ function ScheduleView({
   const [selectedId, setSelectedId] = useState<string | null>(state.schedules[0]?.id ?? null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [calendarFilter, setCalendarFilter] = useState<TargetScreen>("all");
+  const [calendarNow, setCalendarNow] = useState(() => new Date());
+  const [inspectorPosition, setInspectorPosition] = useState({ x: Math.max(24, window.innerWidth - 370), y: 150 });
+  const inspectorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [dragPreview, setDragPreview] = useState<{
     id: string;
@@ -4448,6 +4451,20 @@ function ScheduleView({
     window.addEventListener("blur", close);
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
   }, [contextMenu]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCalendarNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const moveInspector = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = inspectorDragRef.current;
+    if (!drag) return;
+    setInspectorPosition({
+      x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 350)),
+      y: clamp(drag.y + event.clientY - drag.pointerY, 72, Math.max(72, window.innerHeight - 160))
+    });
+  };
 
   const patchEntry = (id: string, patch: Partial<ScheduleEntry>) => {
     updateState((current) => ({ ...current, schedules: current.schedules.map((entry) => entry.id === id ? { ...entry, ...patch } : entry) }));
@@ -4591,6 +4608,7 @@ function ScheduleView({
     };
   };
 
+
   return (
     <section className="schedule-layout calendar-workspace">
       <div className="calendar-commandbar">
@@ -4603,12 +4621,12 @@ function ScheduleView({
           <div className="week-scroll">
             <div className="time-gutter">{hours.map((hour) => <span key={hour} style={{ top: `${(hour - 6) * calendarHourHeight}px` }}>{formatHour(hour)}</span>)}</div>
             <div className="week-columns">
-              {days.map(([day]) => { const dayEntries = state.schedules.filter((entry) => entry.days.includes(day) && (calendarFilter === "all" || entry.target === "all" || entry.target === calendarFilter)); return <div className="week-day-column" key={day}>{hours.map((hour) => <i key={hour} style={{ top: `${(hour - 6) * calendarHourHeight}px` }} />)}{dayEntries.map((entry) => {
+              {days.map(([day], dayIndex) => { const dayEntries = state.schedules.filter((entry) => entry.days.includes(day) && (calendarFilter === "all" || entry.target === "all" || entry.target === calendarFilter)); const columnDate = new Date(weekStart); columnDate.setDate(weekStart.getDate() + dayIndex); const isToday = columnDate.toDateString() === calendarNow.toDateString(); const nowMinutes = calendarNow.getHours() * 60 + calendarNow.getMinutes(); return <div className={`week-day-column${isToday ? " is-today" : ""}`} key={day}>{hours.map((hour) => <i key={hour} style={{ top: `${(hour - 6) * calendarHourHeight}px` }} />)}{isToday && nowMinutes >= 360 && nowMinutes <= 1380 && <div className="calendar-now-line" style={{ top: `${((nowMinutes - 360) / 60) * calendarHourHeight}px` }}><span>Now</span></div>}{dayEntries.map((entry) => {
                 const preview = dragPreview?.id === entry.id && dragPreview.sourceDay === day ? dragPreview : null;
                 const lane = scheduleLane(entry, dayEntries);
                 return <button
                   key={entry.id}
-                  className={`calendar-event${selectedId === entry.id ? " selected" : ""}${preview ? " dragging" : ""}`}
+                  className={`calendar-event layer-${entry.contentType ?? "board"}${selectedId === entry.id ? " selected" : ""}${preview ? " dragging" : ""}`}
                   style={eventVisualPosition(entry, day, lane.index, lane.count)}
                   onClick={() => setSelectedId(entry.id)}
                   onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedId(entry.id); setContextMenu({ id: entry.id, x: event.clientX, y: event.clientY }); }}
@@ -4628,9 +4646,9 @@ function ScheduleView({
             </div>
           </div>
         </div>
-        <aside className="calendar-inspector">
-          {selected ? <>
-            <div className="panel-heading"><div><p className="eyebrow">Schedule item</p><h2>Edit event</h2></div><button className="icon-button danger-icon" onClick={() => { removeSchedule(selected.id); setSelectedId(null); }} title="Delete event"><Trash2 size={17} /></button></div>
+        {selected && <aside className="calendar-inspector floating" style={{ left: inspectorPosition.x, top: inspectorPosition.y }}>
+          <>
+            <div className="panel-heading floating-window-handle" onPointerDown={(event) => { if ((event.target as Element).closest("button")) return; inspectorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...inspectorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={moveInspector} onPointerUp={() => { inspectorDragRef.current = null; }} onPointerCancel={() => { inspectorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2>Edit event</h2></div><div className="panel-icon-actions"><button className="icon-button danger-icon" onClick={() => { removeSchedule(selected.id); setSelectedId(null); }} title="Delete event"><Trash2 size={17} /></button><button className="icon-button" onClick={() => setSelectedId(null)} title="Close editor"><X size={17} /></button></div></div>
             <LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(value) => patchEntry(selected.id, { name: value })} />
             <div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div>
             <LabeledSelect label="Content" info="Choose whether this calendar item displays a donor board or a saved announcement." value={selected.contentType ?? "board"} options={["board", "announcement"]} optionLabels={{ board: "Donor board", announcement: "Saved announcement" }} onChange={(value) => {
@@ -4654,8 +4672,8 @@ function ScheduleView({
             {selected.contentType !== "announcement" && <LabeledInput label="Message" info="Optional message shown with the scheduled board." value={selected.message ?? ""} onChange={(value) => patchEntry(selected.id, { message: value })} />}
             <div className="field"><span>Repeats</span><div className="schedule-days">{days.map(([day, label]) => <button className={selected.days.includes(day) ? "selected" : ""} key={day} onClick={() => toggleDay(selected, day)}>{label.slice(0, 1)}</button>)}</div></div>
             <label className="switch-row"><input type="checkbox" checked={selected.active} onChange={(event) => patchEntry(selected.id, { active: event.target.checked })} /><span>Active on displays</span></label>
-          </> : <div className="empty-inspector"><CalendarDays size={30} /><strong>Select an event</strong><span>Edit its board, screens, message, and repeating days here.</span></div>}
-        </aside>
+          </>
+        </aside>}
       </div>
       {contextMenu && (() => { const entry = state.schedules.find((item) => item.id === contextMenu.id); return entry ? <div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu"><button onClick={() => { setSelectedId(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button>{entry.contentType === "announcement" ? <button disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button onClick={() => { duplicateSchedule(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button className="danger" onClick={() => { removeSchedule(entry.id); setSelectedId(null); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></div> : null; })()}
     </section>
