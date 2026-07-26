@@ -1,5 +1,36 @@
 [
   {
+    "id": "DEV-0056",
+    "title": "Clarify dashboard display status",
+    "summary": "Display cards now identify their schedule-resolved active board and any currently running scheduled message, while redundant display launch controls were removed from the top header to reduce crowding.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 1:53 PM",
+    "areas": [
+      "Dashboard",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright production-preview snapshot and visual inspection"
+  },
+  {
+    "id": "DEV-0055",
+    "title": "Make web bug reports reliable on static hosting",
+    "summary": "GitHub Pages no longer calls a development-only bug endpoint. Reports and evidence remain available on the device, optional configured backends can sync them, and unavailable sharing services produce a clear export instruction.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 1:53 PM",
+    "areas": [
+      "Bug reporting",
+      "Deployment"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright production-preview submission and console regression"
+  },
+  {
     "id": "DEV-0054",
     "title": "Load How-to screenshots from the deployment base",
     "summary": "Made packaged walkthrough screenshots resolve through the configured Vite base path so they load on the project-lantern GitHub Pages site as well as locally.",

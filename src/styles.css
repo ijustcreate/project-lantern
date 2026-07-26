@@ -2713,6 +2713,38 @@ body,
   gap: 2px;
 }
 
+.dashboard-display-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-display-heading > strong {
+  flex: 0 0 auto;
+}
+
+.dashboard-display-heading .dashboard-assignment-pill {
+  max-width: min(180px, 20vw);
+  padding: 2px 7px;
+  overflow: hidden;
+  border: 1px solid rgba(103, 219, 217, .28);
+  border-radius: 999px;
+  color: #a9efeb;
+  background: rgba(55, 184, 187, .1);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-display-heading .dashboard-assignment-pill.live {
+  border-color: rgba(186, 117, 255, .4);
+  color: #e5c9ff;
+  background: rgba(136, 76, 218, .17);
+}
+
 .dashboard-display-status,
 .dashboard-display-actions {
   display: flex;

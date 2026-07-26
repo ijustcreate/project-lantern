@@ -493,18 +493,12 @@ function ControlCenter() {
               <button className="header-operation-button" onClick={() => setView("live")} title="Open the broadcast and streaming studio">
                 <Radio size={16} /><span>Broadcast / Stream</span>
               </button>
-              <button className="header-operation-button" onClick={openDisplays} title="Open both independent display windows">
-                <Monitor size={16} /><span>Displays</span>
-              </button>
               <button className="command-button secondary help-launch-button" onClick={() => setHelpOpen(true)} title="Open the Project Lantern walkthrough">
                 <BookOpen size={18} />
                 How to use
               </button>
               </>
             )}
-            <button className="icon-button" onClick={openDisplays} title="Open independent display windows">
-              <Monitor size={19} />
-            </button>
             <button className="command-button secondary" onClick={restoreDonorWall} title="Stop live video and announcements, then return every display to its scheduled donor board">
               <RotateCcw size={18} />
               Restore boards
@@ -602,18 +596,27 @@ type BugRecord = { bugId: string; summary: string; details: string; fixTips: str
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
 const BUG_USERS_KEY = "project-lantern-bug-users";
 const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
+const BUG_API_ENDPOINT = (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
+  || (import.meta.env.DEV ? "/__lantern/bugs" : "");
 function isTauri() { return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window; }
 function readWebBugs(): BugRecord[] { try { return JSON.parse(localStorage.getItem(WEB_BUGS_KEY) ?? "[]") as BugRecord[]; } catch { return []; } }
 function writeWebBugs(bugs: BugRecord[]) { localStorage.setItem(WEB_BUGS_KEY, JSON.stringify(bugs)); }
+async function readBugResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`Bug service returned ${response.status} instead of JSON`);
+  }
+  const body = await response.json() as T & { error?: string };
+  if (!response.ok) throw new Error(body.error ?? `Bug service returned ${response.status}`);
+  return body;
+}
 async function readBridgeBugs(): Promise<BugRecord[]> {
-  const response = await fetch("/__lantern/bugs");
-  if (!response.ok) throw new Error(`Bug bridge returned ${response.status}`);
-  return response.json();
+  if (!BUG_API_ENDPOINT) return [];
+  return readBugResponse<BugRecord[]>(await fetch(BUG_API_ENDPOINT, { headers: { "Accept": "application/json" } }));
 }
 async function writeBridgeBug(bug: BugRecord): Promise<BugRecord> {
-  const response = await fetch("/__lantern/bugs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bug) });
-  if (!response.ok) throw new Error((await response.json()).error ?? `Bug bridge returned ${response.status}`);
-  return response.json();
+  if (!BUG_API_ENDPOINT) throw new Error("No shared bug service is configured");
+  return readBugResponse<BugRecord>(await fetch(BUG_API_ENDPOINT, { method: "PUT", headers: { "Accept": "application/json", "Content-Type": "application/json" }, body: JSON.stringify(bug) }));
 }
 
 function BugReportPanel({ initialAttachments, captureStatus, state, view, onSaved, onClose }: {
@@ -726,8 +729,16 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         const record: BugRecord = { bugId, summary, details, fixTips, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
         bugs.unshift(record);
         writeWebBugs(bugs);
-        await writeBridgeBug(record);
-        reportPath = `${bugId} in the shared Codex bug catalogue`;
+        if (BUG_API_ENDPOINT) {
+          try {
+            await writeBridgeBug(record);
+            reportPath = `${bugId} in the shared Codex bug catalogue`;
+          } catch {
+            reportPath = `${bugId} on this device. The shared bug service is unavailable; use Bugs > Export all to send the report`;
+          }
+        } else {
+          reportPath = `${bugId} on this device. Use Bugs > Export all to send the report`;
+        }
       }
       setStatus(`Saved to ${reportPath}`);
       window.setTimeout(() => { onClose(); onSaved(); }, 900);
@@ -873,17 +884,28 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
   const [commentTab, setCommentTab] = useState<"user" | "ai">("user");
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
+    if (isTauri()) {
+      try { setBugs(await invoke<BugRecord[]>("list_bug_reports")); }
+      catch (error) { setMessage(`Could not load bugs: ${String(error)}`); }
+      return;
+    }
+    const local = readWebBugs();
+    setBugs(local);
+    if (!BUG_API_ENDPOINT) {
+      setMessage(local.length ? "Reports are saved on this device. Use Export all to share them." : "");
+      return;
+    }
     try {
-      if (isTauri()) { setBugs(await invoke<BugRecord[]>("list_bug_reports")); return; }
-      const local = readWebBugs();
       let shared = await readBridgeBugs();
       const sharedIds = new Set(shared.map((bug) => bug.bugId));
       for (const bug of local.filter((item) => !sharedIds.has(item.bugId))) await writeBridgeBug(bug);
       shared = await readBridgeBugs();
       writeWebBugs(shared);
       setBugs(shared);
+      setMessage("");
+    } catch {
+      setMessage("Shared bug service unavailable. Reports on this device are still available and can be exported.");
     }
-    catch (error) { setMessage(`Could not load bugs: ${String(error)}`); }
   }, []);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { localStorage.setItem(BUG_USERS_KEY, JSON.stringify(users)); }, [users]);
@@ -917,8 +939,8 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
     try {
       if (isTauri()) await invoke<BugRecord>("update_bug_report", { bug: next });
       else {
-        await writeBridgeBug(next);
         writeWebBugs(bugs.map((item) => item.bugId === next.bugId ? next : item));
+        if (BUG_API_ENDPOINT) await writeBridgeBug(next);
       }
       setSelected(next); setMessage(`${next.bugId} updated`); await load();
     } catch (error) { setMessage(`Could not update bug: ${String(error)}`); }
@@ -1202,10 +1224,20 @@ function Dashboard({
             <div className="button-row"><button className="command-button secondary compact" onClick={openDisplays}><Monitor size={16} /> Open displays</button><button className="command-button primary compact" onClick={addDisplay}><Plus size={16} /> Add display</button></div>
           </div>
           <div className={`dashboard-display-grid ${previewGridClass}`} data-display-count={displays.length}>
-            {displays.map((screen) => (
+            {displays.map((screen) => {
+              const activeBoard = resolveActiveBoardProgram(state, screen.id);
+              const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
+              return (
               <article className="dashboard-display-tile" key={screen.id}>
                 <header className="dashboard-display-label">
-                  <div><strong>{screen.label}</strong><span>{screen.orientation} · {screen.resolution}</span></div>
+                  <div>
+                    <div className="dashboard-display-heading">
+                      <strong>{screen.label}</strong>
+                      <span className="dashboard-assignment-pill board" title={`Active board: ${activeBoard?.name ?? "No board assigned"}`}>Board · {activeBoard?.name ?? "None"}</span>
+                      {liveMessage && <span className="dashboard-assignment-pill live" title={`Live scheduled message: ${liveMessage.title || "Untitled message"}`}>Live · {liveMessage.title || "Message"}</span>}
+                    </div>
+                    <span>{screen.orientation} · {screen.resolution}</span>
+                  </div>
                   <div className="dashboard-display-status"><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
                 <div className={`dashboard-display-preview ${orientationClass(screen)} mode-${preview3d[screen.id] ? "3d" : "2d"}`}>
@@ -1216,7 +1248,7 @@ function Dashboard({
                 <div className="dashboard-display-summary"><span>{labelForStyle(screen.style)}</span><span>{screen.donorScrollEnabled ? `Scrolling · ${screen.donorScrollSpeed ?? 4}/10` : `${screen.columns ?? 1} column${screen.columns === 2 ? "s" : ""}`}</span><span>{screen.roomVideoDeviceId ? "Room camera assigned" : "Default room camera"}</span></div>
                 <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" onClick={() => editDisplay(screen.id)}><Settings2 size={16} /> Edit</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
-            ))}
+            );})}
           </div>
         </div>
       </div>
@@ -5504,6 +5536,25 @@ function scheduleMatchesDate(entry: ScheduleEntry, now: Date) {
   if (entry.scheduleDate && localDate < entry.scheduleDate) return false;
   if (entry.scheduleEndDate && localDate > entry.scheduleEndDate) return false;
   return entry.days.includes(now.getDay());
+}
+
+function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now = new Date()) {
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const scheduled = state.schedules?.find((entry) =>
+    entry.contentType !== "announcement"
+    && entry.active
+    && scheduleMatchesDate(entry, now)
+    && (entry.target === "all" || entry.target === screenId)
+    && time >= entry.startTime
+    && time < entry.endTime
+  );
+  if (scheduled) {
+    const program = state.boardPrograms.find((candidate) => candidate.id === scheduled.boardId && candidate.active);
+    if (program) return program;
+  }
+  const assignedId = state.screens[screenId]?.boardProgramId;
+  return state.boardPrograms.find((candidate) => candidate.id === assignedId)
+    ?? state.boardPrograms[0];
 }
 
 function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedScheduledAnnouncement | null {
