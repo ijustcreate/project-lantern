@@ -600,6 +600,8 @@ type BugEvidence = { name: string; dataUrl?: string; path?: string; mimeType?: s
 type AgentWorkEntry = { at: string; author: string; kind: "analysis" | "proposal" | "change" | "test" | "handoff"; note: string };
 type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
+const BUG_USERS_KEY = "project-lantern-bug-users";
+const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
 function isTauri() { return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window; }
 function readWebBugs(): BugRecord[] { try { return JSON.parse(localStorage.getItem(WEB_BUGS_KEY) ?? "[]") as BugRecord[]; } catch { return []; } }
 function writeWebBugs(bugs: BugRecord[]) { localStorage.setItem(WEB_BUGS_KEY, JSON.stringify(bugs)); }
@@ -858,7 +860,17 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const splitDrag = useRef<{ startX: number; startWidth: number; containerWidth: number } | null>(null);
   const [sort, setSort] = useState<"newest" | "oldest" | "status">("newest");
-  const [filter, setFilter] = useState<"all" | BugStatus>("all");
+  const [statusFilters, setStatusFilters] = useState<BugStatus[]>([]);
+  const [users, setUsers] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(BUG_USERS_KEY) ?? "[]") as string[];
+      return Array.from(new Set(["Felix", ...saved.filter(Boolean)]));
+    } catch {
+      return ["Felix"];
+    }
+  });
+  const [activeUser, setActiveUser] = useState(() => localStorage.getItem(ACTIVE_BUG_USER_KEY) || "Felix");
+  const [commentTab, setCommentTab] = useState<"user" | "ai">("user");
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
     try {
@@ -874,6 +886,8 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
     catch (error) { setMessage(`Could not load bugs: ${String(error)}`); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { localStorage.setItem(BUG_USERS_KEY, JSON.stringify(users)); }, [users]);
+  useEffect(() => { localStorage.setItem(ACTIVE_BUG_USER_KEY, activeUser); }, [activeUser]);
   useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!splitDrag.current) return;
@@ -891,10 +905,13 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
       window.removeEventListener("pointerup", stop);
     };
   }, []);
-  const visible = useMemo(() => bugs.filter((bug) => filter === "all" || bug.status === filter).sort((a, b) => {
+  const visible = useMemo(() => bugs.filter((bug) => !statusFilters.length || statusFilters.includes(bug.status)).sort((a, b) => {
     if (sort === "status") return a.status.localeCompare(b.status);
     return sort === "oldest" ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt);
-  }), [bugs, filter, sort]);
+  }), [bugs, statusFilters, sort]);
+  const toggleStatusFilter = (status: BugStatus) => {
+    setStatusFilters((current) => current.includes(status) ? current.filter((value) => value !== status) : [...current, status]);
+  };
   const save = async (bug: BugRecord) => {
     const next = { ...bug, updatedAt: new Date().toISOString() };
     try {
@@ -920,20 +937,32 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
     } catch (error) { setMessage(`Could not export bugs: ${String(error)}`); }
   };
   const counts = { open: bugs.filter((bug) => bug.status === "open").length, testing: bugs.filter((bug) => bug.status === "ready-for-test").length, closed: bugs.filter((bug) => bug.status === "closed" || bug.status === "verified").length };
+  const addUser = () => {
+    const name = window.prompt("New user name");
+    if (!name?.trim()) return;
+    const normalized = name.trim();
+    setUsers((current) => current.some((user) => user.toLowerCase() === normalized.toLowerCase()) ? current : [...current, normalized]);
+    setActiveUser(normalized);
+  };
   const addComment = () => {
     if (!selected || !comment.trim()) return;
     const replyLabel = replyTo === null ? "" : `Reply to ${selected.agentWork?.[replyTo]?.author ?? "comment"}: `;
-    setSelected({ ...selected, agentWork: [...(selected.agentWork ?? []), { at: new Date().toISOString(), author: "You", kind: "handoff", note: `${replyLabel}${comment.trim()}` }] });
+    setSelected({ ...selected, agentWork: [...(selected.agentWork ?? []), { at: new Date().toISOString(), author: activeUser, kind: "handoff", note: `${replyLabel}${comment.trim()}` }] });
     setComment("");
     setReplyTo(null);
+    setCommentTab("user");
   };
+  const isAiComment = (entry: AgentWorkEntry) => entry.kind !== "handoff" || /^(codex|ai|agent)\b/i.test(entry.author);
+  const discussionEntries = (selected?.agentWork ?? [])
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => commentTab === "ai" ? isAiComment(entry) : !isAiComment(entry));
   return <section className="bugs-page">
     <div className="bugs-toolbar">
       <div><h2>Bug catalogue</h2><p>Track reports from discovery through verification.</p></div>
-      <div><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
+      <div><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") addUser(); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
     </div>
     <div className="bug-metrics"><article><Bug /><span><b>{counts.open}</b>Open</span></article><article><BadgeCheck /><span><b>{counts.testing}</b>Ready for test</span></article><article><CheckCircle2 /><span><b>{counts.closed}</b>Verified / closed</span></article></div>
-    <div className="bugs-controls"><div className="bug-filter-pills">{(["all", "open", "in-progress", "ready-for-test", "verified", "closed"] as const).map((value) => <button className={filter === value ? "active" : ""} key={value} onClick={() => setFilter(value)}>{value.replace(/-/g, " ")}</button>)}</div><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div>
+    <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status"><button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button>{(["open", "in-progress", "ready-for-test", "verified", "closed"] as const).map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{value.replace(/-/g, " ")}</button>)}</div><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div>
     <div className="bugs-layout" style={{ gridTemplateColumns: `${listWidth}fr 8px ${100 - listWidth}fr` }}>
       <div className="bug-list">{visible.map((bug) => <button className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId} onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{bug.bugId} · {bug.status.replace(/-/g, " ")}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span><ChevronRight size={17} /></button>)}{!visible.length && <div className="bugs-empty"><Bug size={28} /><strong>No bugs here</strong><span>New reports will appear in this catalogue.</span></div>}</div>
       <div className="bugs-splitter" role="separator" aria-label="Resize bug list and selected bug" onPointerDown={(event) => {
@@ -943,7 +972,22 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
         document.body.classList.add("bugs-resizing");
         event.preventDefault();
       }}><GripVertical size={15} /></div>
-      <aside className="bug-detail">{selected ? <><div className="bug-detail-scroll"><div className="bug-detail-head"><span>Selected bug · {selected.bugId}</span><button className="icon-button" onClick={() => setSelected(null)}><X size={16} /></button></div><label className="field"><span>Summary</span><input value={selected.summary} onChange={(e) => setSelected({ ...selected, summary: e.target.value })} /></label><label className="field"><span>Status</span><select value={selected.status} onChange={(e) => setSelected({ ...selected, status: e.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select></label><label className="field"><span>Details</span><textarea value={selected.details} onChange={(e) => setSelected({ ...selected, details: e.target.value })} /></label><label className="field"><span>Fix / test notes</span><textarea value={selected.fixTips} onChange={(e) => setSelected({ ...selected, fixTips: e.target.value })} /></label><div className="bug-detail-evidence"><strong>Evidence</strong><div>{selected.evidence?.map((item, i) => <button type="button" key={i} onClick={() => setViewingEvidence(item)}>{item.dataUrl?.startsWith("data:image/") ? <img src={item.dataUrl} alt={item.name} title={item.name} /> : <><ImageIcon size={15} />{item.path ?? item.name}</>}</button>)}{!selected.evidence?.length && selected.attachments.map((name) => <span key={name}><ImageIcon size={15} />{name}</span>)}</div></div><div className="agent-work-log"><strong>Comments & agent work log</strong>{selected.agentWork?.length ? selected.agentWork.map((entry, index) => <article key={`${entry.at}-${index}`} className={replyTo === index ? "replying" : ""}><header><b>{entry.kind === "handoff" && entry.author === "You" ? "comment" : entry.kind}</b><span>{entry.author} · {new Date(entry.at).toLocaleString()}</span></header><p>{entry.note}</p><button type="button" className="work-log-reply" onClick={() => setReplyTo(index)}><MessageSquare size={12} /> Reply</button></article>) : <small>No comments or agent work recorded yet.</small>}<div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? "Add a comment…" : "Write a reply…"} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div></div></div><footer className="bug-detail-actions"><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer></> : <div className="bugs-empty"><Pencil size={26} /><strong>Select a bug</strong><span>Open it here to edit details or move it to Ready for test.</span></div>}</aside>
+      <aside className="bug-detail">{selected ? <>
+        <div className="bug-detail-scroll">
+          <div className="bug-detail-head"><span>Selected bug · {selected.bugId}</span><button className="icon-button" onClick={() => setSelected(null)}><X size={16} /></button></div>
+          <label className="field"><span>Summary</span><input value={selected.summary} onChange={(e) => setSelected({ ...selected, summary: e.target.value })} /></label>
+          <label className="field"><span>Status</span><select value={selected.status} onChange={(e) => setSelected({ ...selected, status: e.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select></label>
+          <label className="field"><span>Details</span><textarea value={selected.details} onChange={(e) => setSelected({ ...selected, details: e.target.value })} /></label>
+          <label className="field"><span>Fix / test notes</span><textarea value={selected.fixTips} onChange={(e) => setSelected({ ...selected, fixTips: e.target.value })} /></label>
+          <div className="bug-detail-evidence"><strong>Evidence</strong><div>{selected.evidence?.map((item, i) => <button type="button" key={i} onClick={() => setViewingEvidence(item)}>{item.dataUrl?.startsWith("data:image/") ? <img src={item.dataUrl} alt={item.name} title={item.name} /> : <><ImageIcon size={15} />{item.path ?? item.name}</>}</button>)}{!selected.evidence?.length && selected.attachments.map((name) => <span key={name}><ImageIcon size={15} />{name}</span>)}</div></div>
+          <div className="agent-work-log">
+            <div className="bug-comment-tabs" role="tablist" aria-label="Bug discussion"><button type="button" role="tab" aria-selected={commentTab === "user"} className={commentTab === "user" ? "active" : ""} onClick={() => { setCommentTab("user"); setReplyTo(null); }}>User comments</button><button type="button" role="tab" aria-selected={commentTab === "ai"} className={commentTab === "ai" ? "active" : ""} onClick={() => { setCommentTab("ai"); setReplyTo(null); }}>AI comments</button></div>
+            {discussionEntries.length ? discussionEntries.map(({ entry, index }) => <article key={`${entry.at}-${index}`} className={replyTo === index ? "replying" : ""}><header><b>{commentTab === "user" ? "comment" : entry.kind}</b><span>{entry.author === "You" ? "Felix" : entry.author} · {new Date(entry.at).toLocaleString()}</span></header><p>{entry.note}</p><button type="button" className="work-log-reply" onClick={() => { setReplyTo(index); if (commentTab === "ai") setCommentTab("user"); }}><MessageSquare size={12} /> Reply</button></article>) : <small>No {commentTab === "user" ? "user comments" : "AI comments"} yet.</small>}
+            {commentTab === "user" && <div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? `Comment as ${activeUser}…` : `Reply as ${activeUser}…`} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div>}
+          </div>
+        </div>
+        <footer className="bug-detail-actions"><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
+      </> : <div className="bugs-empty"><Pencil size={26} /><strong>Select a bug</strong><span>Open it here to edit details or move it to Ready for test.</span></div>}</aside>
     </div>
     {message && <div className="bugs-message">{message}</div>}
     {selected && viewingEvidence && <EvidenceViewer bugId={selected.bugId} evidence={viewingEvidence} onClose={() => setViewingEvidence(null)} />}
@@ -966,49 +1010,70 @@ const helpSlides = [
     title: "Run recognition displays with confidence",
     copy: "Project Lantern keeps donor content, screen layouts, schedules, and live announcements together in one control center.",
     points: ["Build the content", "Preview the result", "Publish to your displays"],
-    accent: "01"
+    accent: "01",
+    image: "/assets/help/dashboard.png",
+    imageAlt: "Recognition OS dashboard showing display previews and publishing controls",
+    callout: "Your control center"
   },
   {
     kicker: "Start here",
     title: "Connect and check your screens",
     copy: "Open Screens to name each display, choose its orientation, and confirm that it is attached. The Dashboard status pills show what is ready at a glance.",
     points: ["Open display windows", "Confirm each screen says Attached", "Select a screen before editing"],
-    accent: "02"
+    accent: "02",
+    image: "/assets/help/dashboard.png",
+    imageAlt: "Dashboard showing the connected display cards and screen controls",
+    callout: "Check display status here"
   },
   {
     kicker: "People",
     title: "Add and organize donors",
     copy: "Use Donors to create recognition profiles. Add a name, giving details, group, optional story, and a visual treatment for special recognition.",
     points: ["Choose Add donor", "Complete the guided setup", "Keep Active enabled to show the donor"],
-    accent: "03"
+    accent: "03",
+    image: "/assets/help/donors.png",
+    imageAlt: "Donors workspace showing recognition profiles and donor tools",
+    callout: "Add and manage profiles"
   },
   {
     kicker: "Design",
     title: "Build the recognition board",
     copy: "In Board Editor, select a display and arrange headings, donor lists, messages, stories, and footers. The canvas is your live layout preview.",
     points: ["Choose the target display", "Add and reorder panels", "Adjust colors, type, and background media"],
-    accent: "04"
+    accent: "04",
+    image: "/assets/help/board-editor.png",
+    imageAlt: "Board Editor with layout controls and a live recognition board preview",
+    callout: "Design with a live preview"
   },
   {
     kicker: "Timing",
     title: "Schedule what appears when",
     copy: "Schedule lets you place boards and saved announcements on a calendar. Set the target screen, start time, and duration, then check for overlaps.",
     points: ["Create a schedule entry", "Pick a board or announcement", "Review conflicts before publishing"],
-    accent: "05"
+    accent: "05",
+    image: "/assets/help/schedule.png",
+    imageAlt: "Schedule workspace showing the recognition content calendar",
+    callout: "Plan content by time"
   },
   {
     kicker: "Broadcast / Stream",
     title: "Publish, announce, and broadcast",
     copy: "Publish sends the current revision to your displays. Announcements can temporarily take over a screen, while Broadcast / Stream supports camera, screen-share, and presentation content.",
     points: ["Preview before publishing", "Use Announcements for time-sensitive messages", "Use Restore to return to the donor wall"],
-    accent: "06"
+    accent: "06",
+    image: "/assets/help/announcements.png",
+    imageAlt: "Announcements workspace with message controls and a display preview",
+    callout: "Preview before going live"
   },
   {
     kicker: "Good practice",
     title: "A simple operating rhythm",
     copy: "Prepare content early, verify every target display, publish once, and watch the screen status. Revisions give you a safe record of recent changes.",
     points: ["Edit → preview → publish", "Check legibility from viewing distance", "Use Revisions when you need to roll back"],
-    accent: "07"
+    accent: "07",
+    image: "/assets/help/broadcast.png",
+    imageAlt: "Broadcast and Stream workspace for live presentation content",
+    callout: "Present with confidence"
   }
 ];
 
@@ -1046,7 +1111,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
 
         {mode === "slides" ? (
           <div className="help-presentation">
-            <div className="help-slide">
+            <div className="help-slide" key={current.accent}>
               <div className="help-slide-number" aria-hidden="true">{current.accent}</div>
               <div className="help-slide-copy">
                 <p className="help-kicker">{current.kicker}</p>
@@ -1054,7 +1119,13 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
                 <p>{current.copy}</p>
                 <ul>{current.points.map((point) => <li key={point}><CheckCircle2 size={17} /> {point}</li>)}</ul>
               </div>
-              <div className="help-slide-orbit" aria-hidden="true"><Sparkles size={34} /><span /><i /></div>
+              <figure className="help-slide-visual">
+                <div className="help-slide-browser">
+                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>Recognition OS</span></div>
+                  <img src={current.image} alt={current.imageAlt} />
+                </div>
+                <figcaption><Sparkles size={14} /> {current.callout}</figcaption>
+              </figure>
             </div>
             <footer className="help-slide-controls">
               <button className="command-button secondary" disabled={slide === 0} onClick={() => setSlide((value) => value - 1)}><ChevronLeft size={17} /> Previous</button>
@@ -1079,6 +1150,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
               {helpSlides.slice(1).map((item, index) => (
                 <li key={item.title}>
                   <span>{index + 1}</span>
+                  <img src={item.image} alt="" aria-hidden="true" />
                   <div><strong>{item.title}</strong><p>{item.copy}</p></div>
                 </li>
               ))}
@@ -1136,7 +1208,7 @@ function Dashboard({
                   <div><strong>{screen.label}</strong><span>{screen.orientation} · {screen.resolution}</span></div>
                   <div className="dashboard-display-status"><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
-                <div className={`dashboard-display-preview ${orientationClass(screen)}`}>
+                <div className={`dashboard-display-preview ${orientationClass(screen)} mode-${preview3d[screen.id] ? "3d" : "2d"}`}>
                   <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
                   <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
                   <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
@@ -1809,12 +1881,12 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
 const boardPanelTypes: BoardPanelType[] = ["heading", "supporters-heading", "donors", "message", "story", "footer", "image"];
 
 function boardPanelLabel(type: BoardPanelType) {
-  return ({ heading: "Heading", "supporters-heading": "Supporters heading", donors: "Donor list", message: "Message", story: "Feature story", footer: "Footer", image: "Image / PNG" })[type];
+  return ({ heading: "Heading", "supporters-heading": "Subheader", donors: "Donor list", message: "Message", story: "Feature story", footer: "Footer", image: "Image / PNG" })[type];
 }
 
 function defaultBoardPanels(program: LanternState["boardPrograms"][number]): BoardPanel[] {
   return [
-    { id: `${program.id}-heading`, type: "heading", eyebrow: program.heading, title: program.subtitle, body: program.description, size: "standard", x: 4, y: 4, width: 92, height: 22 },
+    { id: `${program.id}-heading`, type: "heading", title: [program.heading, program.subtitle].filter(Boolean).join(" "), size: "standard", x: 4, y: 4, width: 92, height: 22 },
     { id: `${program.id}-supporters-heading`, type: "supporters-heading", title: "Our supporters", size: "compact", x: 5, y: 29, width: 90, height: 7 },
     { id: `${program.id}-donors`, type: "donors", title: "", size: "feature", columns: program.columns, x: 5, y: 36, width: 90, height: 45 },
     { id: `${program.id}-footer`, type: "footer", title: program.footer, size: "compact", x: 5, y: 84, width: 90, height: 11 }
@@ -1824,7 +1896,7 @@ function defaultBoardPanels(program: LanternState["boardPrograms"][number]): Boa
 function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): BoardPanel {
   const id = `${type}-${Date.now()}`;
   const templates: Record<BoardPanelType, BoardPanel> = {
-    heading: { id, type, eyebrow: "THANK YOU", title: "OUR GENEROUS DONORS", body: "Together, we make a difference.", size: "standard" },
+    heading: { id, type, title: "OUR GENEROUS DONORS", size: "standard" },
     "supporters-heading": { id, type, title: "Our supporters", size: "compact" },
     donors: { id, type, title: "", size: "feature", columns: 2 },
     message: { id, type, eyebrow: "A NOTE OF GRATITUDE", title: "Your support makes discovery possible", body: "Thank you for investing in our community.", size: "standard" },
@@ -1886,7 +1958,7 @@ function ThemeStudio({
       ...current,
       boardPrograms: current.boardPrograms.map((program) => program.id === selectedProgram.id ? { ...program, panels: migrated } : program)
     }));
-    setSelectedPanelId(migrated[0].id);
+    setSelectedPanelId("");
   }, [selectedProgram?.id, selectedProgram?.panels?.length, updateState]);
 
   useEffect(() => {
@@ -1917,8 +1989,17 @@ function ThemeStudio({
   }, [selectedProgram?.id, selectedProgram?.panels, display.nameSize]);
 
   useEffect(() => {
-    setSelectedPanelId(panels[0]?.id ?? "");
+    setSelectedPanelId("");
   }, [selectedProgramId]);
+
+  useEffect(() => {
+    if (!selectedProgram?.panels?.some((panel) => panel.type === "heading" && (panel.eyebrow || panel.body))) return;
+    patchProgram({
+      panels: selectedProgram.panels.map((panel) => panel.type === "heading"
+        ? { ...panel, title: [panel.eyebrow, panel.title].filter(Boolean).join(" "), eyebrow: undefined, body: undefined }
+        : panel)
+    });
+  }, [selectedProgram?.id, selectedProgram?.panels]);
 
   useEffect(() => {
     const assignedProgramId = display.boardProgramId ?? state.boardPrograms[0]?.id;
@@ -1944,7 +2025,7 @@ function ThemeStudio({
     const nextPanels = panels.map((panel) => panel.id === panelId ? { ...panel, ...patch } : panel);
     const nextPanel = nextPanels.find((panel) => panel.id === panelId);
     const legacyPatch = nextPanel?.type === "heading"
-      ? { heading: nextPanel.eyebrow ?? "", subtitle: nextPanel.title, description: nextPanel.body ?? "" }
+      ? { heading: "", subtitle: nextPanel.title, description: "" }
       : nextPanel?.type === "footer"
         ? { footer: nextPanel.title }
         : nextPanel?.type === "donors"
@@ -1965,7 +2046,7 @@ function ThemeStudio({
     const index = panels.findIndex((panel) => panel.id === panelId);
     const nextPanels = panels.filter((panel) => panel.id !== panelId);
     patchProgram({ panels: nextPanels });
-    setSelectedPanelId(nextPanels[Math.min(index, nextPanels.length - 1)].id);
+    setSelectedPanelId("");
   };
 
   const duplicateProgram = () => {
@@ -1977,7 +2058,7 @@ function ThemeStudio({
       boardPrograms: [...current.boardPrograms, { ...selectedProgram, id, name: `${selectedProgram.name} copy`, active: false, panels: clonedPanels }]
     }));
     setSelectedProgramId(id);
-    setSelectedPanelId(clonedPanels[0]?.id ?? "");
+    setSelectedPanelId("");
   };
 
   const createProgram = () => {
@@ -2083,12 +2164,10 @@ function ThemeStudio({
       <div className="board-builder-toolbar">
         <div className="board-select-cluster">
           <label className="builder-select"><span>Board</span><select value={selectedProgram.id} onChange={(event) => setSelectedProgramId(event.target.value)}>{state.boardPrograms.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</select></label>
+          <button type="button" className="command-button secondary compact" onClick={duplicateProgram}>Duplicate current</button>
           <button type="button" className="command-button secondary compact" onClick={createProgram}><Plus size={16} /> New</button>
-          <button type="button" className="command-button secondary compact" onClick={duplicateProgram}>Duplicate</button>
           <button type="button" className="icon-button danger-icon" onClick={deleteProgram} disabled={state.boardPrograms.length <= 1} title="Delete saved board"><Trash2 size={16} /></button>
         </div>
-        <label className="builder-select"><span>Display</span><select value={display.id} onChange={(event) => setSelectedDisplayId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label>
-        <button type="button" className={display.boardProgramId === selectedProgram.id ? "command-button success compact" : "command-button primary compact"} onClick={useBoardOnDisplay}><Monitor size={16} /> {display.boardProgramId === selectedProgram.id ? `Using on ${display.label}` : `Use on ${display.label}`}</button>
       </div>
 
       <div className="board-builder-workspace">
@@ -2114,7 +2193,7 @@ function ThemeStudio({
         </main>
 
         <aside className="board-panel-inspector">
-          <div className="inspector-sticky-head"><div><p className="eyebrow">Selected panel</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "None selected"}</h2></div></div>
+          <div className="inspector-sticky-head"><div><p className="eyebrow">{selectedPanel ? "Selected panel" : "Selection"}</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "Board selected"}</h2>{!selectedPanel && <span className="inspector-selection-note">Select a panel to modify or edit it.</span>}</div></div>
           <div className="board-inspector-scroll">
             {selectedPanel ? <div className="inspector-block">
               <div className="panel-position-grid">
@@ -2125,7 +2204,7 @@ function ThemeStudio({
                 }} /></label>)}
               </div>
               <LabeledSelect label="Panel font" info="Typeface used only by this panel." value={selectedPanel.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} />
-              {selectedPanel.type !== "image" && <Slider label="Font size" info="Changes the text size for the selected panel without changing its box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} />}
+              {selectedPanel.type !== "image" && <div className="panel-type-row"><Slider label="Font size" info="Changes the text size for the selected panel without changing its box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div>}
               {selectedPanel.type === "donors" && <>
                 <div className="donor-divider-controls">
                   <div className="two-col">
@@ -2140,7 +2219,7 @@ function ThemeStudio({
                 <Pager page={donorPage} pageCount={donorPageCount} onChange={setDonorPage} />
               </>}
               {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Choose PNG or image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchPanel(selectedPanel.id, { imageUrl: String(reader.result) }); reader.readAsDataURL(file); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the panel." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
-            </div> : <div className="board-selection-empty"><Palette size={22} /><strong>No panel selected</strong><span>Select a panel to edit it. Click the area around the board to clear your selection.</span></div>}
+            </div> : <><div className="board-selection-empty"><Palette size={22} /><strong>Board selected</strong><span>Select a panel to modify or edit it. Click the area around the board to clear your selection.</span></div>
             <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
               <div className="field"><span>Format <InfoDot text="Choose the physical orientation for this display." /></span><SegmentedControl value={display.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchDisplay({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
@@ -2168,7 +2247,7 @@ function ThemeStudio({
               </div>
               <p className="field-note">Donor subtext is controlled per name in Displays &gt; Assigned names.</p>
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.active} onChange={(event) => patchProgram({ active: event.target.checked })} /><span>Available to schedules</span></label>
-            </div></details>
+            </div></details></>}
           </div>
         </aside>
       </div>
@@ -2287,7 +2366,7 @@ function DirectBoardCanvas({
   };
   const backgroundScale = display.backgroundCrop?.scale ?? 1;
   const particleCount = display.particleCount ?? 34;
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat", "--board-editor-zoom": editorZoom } as React.CSSProperties} onPointerDown={placePanel} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top }); }}>
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat", "--board-editor-zoom": editorZoom } as React.CSSProperties} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
     {display.backgroundImage && <div className="direct-board-background"><img src={display.backgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${display.backgroundCrop?.x ?? 50}% ${display.backgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
@@ -2314,6 +2393,7 @@ function DirectBoardCanvas({
         height: `${panel.height ?? 18}%`,
         zIndex: index + 2,
         fontFamily: panel.fontFamily ?? display.fontFamily ?? "Montserrat",
+        "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? "#d9a657" : "#f5f2eb"),
         "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
         "--donor-name-size": `${panel.fontSize ?? display.nameSize ?? 28}px`,
         "--donor-divider-color": panel.donorDividerColor ?? "#d9a657",
@@ -2323,7 +2403,7 @@ function DirectBoardCanvas({
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
-        {panel.type === "heading" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
+        {panel.type === "heading" && <EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "supporters-heading" && <EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "donors" && <div className={`direct-donor-grid columns-${panel.columns ?? program.columns}`}>{donors.map((donor) => <div
           className={`direct-donor-name donor-custom highlight-${donor.highlight ?? "none"} animation-${donor.animation ?? "none"}`}
@@ -2629,6 +2709,7 @@ function MediaCropEditor({
   const mediaStyle = {
     transform: `translate(-50%, -50%) translate(${draftCrop.x}%, ${draftCrop.y}%) rotate(${draftCrop.rotation ?? 0}deg) scale(${draftCrop.scale})`
   };
+
 
   const removeMedia = () => {
     void deleteLanternMedia(display.backgroundMediaId);
@@ -4388,15 +4469,26 @@ function ScheduleCalendarView({
   };
   const quickActions = (entry: ScheduleEntry) => <div className="schedule-quick-actions" aria-label={`Actions for ${entry.name}`}>
     <button type="button" title="Preview on display" onClick={(event) => { event.stopPropagation(); setPreviewEntry(entry); }}><Eye size={13} /></button>
-    <button type="button" title="Edit" onClick={(event) => { event.stopPropagation(); setSelectedId(entry.id); }}><Pencil size={13} /></button>
+    <button type="button" title="Edit" onClick={(event) => { event.stopPropagation(); openEditor(entry.id, event); }}><Pencil size={13} /></button>
     <button type="button" title="Duplicate" onClick={(event) => { event.stopPropagation(); duplicateEntry(entry); }}><Plus size={13} /></button>
     <button type="button" title={entry.active ? "Disable" : "Enable"} onClick={(event) => { event.stopPropagation(); patchEntry(entry.id, { active: !entry.active }); }}>{entry.active ? <Power size={13} /> : <Play size={13} />}</button>
     <button type="button" className="danger" title="Delete" onClick={(event) => { event.stopPropagation(); removeEntry(entry.id); }}><Trash2 size={13} /></button>
   </div>;
+  const openEditorAt = (id: string, originX?: number, originY?: number) => {
+    if (!compact && originX !== undefined && originY !== undefined) {
+      const editorWidth = 352;
+      const gap = 16;
+      const x = originX + gap + editorWidth <= window.innerWidth - 8
+        ? originX + gap
+        : Math.max(8, originX - editorWidth - gap);
+      setEditorPosition({ x, y: clamp(originY - 24, 70, Math.max(70, window.innerHeight - 150)) });
+    }
+    setSelectedId(id);
+  };
+  const openEditor = (id: string, event: React.MouseEvent<HTMLElement>) => openEditorAt(id, event.clientX, event.clientY);
   const openContextMenu = (event: React.MouseEvent, entry: ScheduleEntry) => {
     event.preventDefault();
     event.stopPropagation();
-    setSelectedId(entry.id);
     setContextMenu({ id: entry.id, x: event.clientX, y: event.clientY });
   };
   const openCalendarContextMenu = (event: React.MouseEvent, date: Date) => {
@@ -4436,7 +4528,7 @@ function ScheduleCalendarView({
             const conflict = conflictFor(entry, date);
             const live = today && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes;
             const offline = displayIsOffline(entry);
-            return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={() => setSelectedId(entry.id)} onContextMenu={(event) => openContextMenu(event, entry)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}${offline ? ", target display offline" : ""}`} title="Drag to move. Drag the top or bottom edge to resize.">
+            return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={(event) => openEditor(entry.id, event)} onContextMenu={(event) => openContextMenu(event, entry)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}${offline ? ", target display offline" : ""}`} title="Drag to move. Drag the top or bottom edge to resize.">
               <span className="calendar-resize-handle top" onPointerDown={(event) => beginDrag(event, entry, date, "resize-start")} />
               <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small>{offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
               <span className="calendar-resize-handle bottom" onPointerDown={(event) => beginDrag(event, entry, date, "resize-end")} />
@@ -4444,8 +4536,8 @@ function ScheduleCalendarView({
           })}</div>; })}
         </div></div>
       </div>}
-      {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={() => setSelectedId(entry.id)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{offline ? <WifiOff size={10} /> : conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
-      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={() => setSelectedId(entry.id)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Conflicts on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
+      {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{offline ? <WifiOff size={10} /> : conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
+      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Conflicts on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
     </div>
     {selected && createPortal(<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
       <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - 150)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2 id="schedule-event-editor-title">Edit event</h2></div><button type="button" className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><X size={17} /></button></header>

@@ -90,7 +90,9 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       stencil: true
     });
     const scene = new Scene(engine);
-    scene.clearColor = new Color4(0.015, 0.045, 0.075, 1);
+    scene.clearColor = viewMode === "3d"
+      ? new Color4(0.004, 0.01, 0.022, 1)
+      : new Color4(0.015, 0.045, 0.075, 1);
 
     const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
     const isPortrait = screen.orientation === "Portrait";
@@ -167,8 +169,20 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       camera.setTarget(Vector3.Zero());
       camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
       const frameInset = screen.showFrame === false ? 0 : 0.2;
-      const halfWidth = (panelWidth + frameInset) / 2;
-      const halfHeight = (panelHeight + frameInset) / 2;
+      const fitPadding = 1.035;
+      let halfWidth = ((panelWidth + frameInset) / 2) * fitPadding;
+      let halfHeight = ((panelHeight + frameInset) / 2) * fitPadding;
+      const viewportWidth = Math.max(1, engine.getRenderWidth());
+      const viewportHeight = Math.max(1, engine.getRenderHeight());
+      const viewportAspect = viewportWidth / viewportHeight;
+      const boardAspect = halfWidth / halfHeight;
+      // Preserve the physical board proportions and contain the whole frame
+      // inside whatever shape the dashboard tile happens to have.
+      if (viewportAspect > boardAspect) {
+        halfWidth = halfHeight * viewportAspect;
+      } else {
+        halfHeight = halfWidth / viewportAspect;
+      }
       camera.orthoLeft = -halfWidth;
       camera.orthoRight = halfWidth;
       camera.orthoTop = halfHeight;
@@ -555,6 +569,7 @@ function drawComposableBoard(
     const centerX = left + contentWidth / 2;
     const centerY = y + panelHeight / 2;
     const font = panel.fontFamily ?? screen?.fontFamily ?? "Montserrat";
+    const panelTextColor = panel.textColor;
     const requestedSize = panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? screen?.nameSize ?? 28 : 24);
     const fontUnit = Math.max(8, requestedSize * height / 900);
     context.save();
@@ -564,22 +579,14 @@ function drawComposableBoard(
 
     if (panel.type === "heading") {
       context.textAlign = "center";
-      context.fillStyle = gold;
-      context.font = `600 ${Math.round(fontUnit * 0.56)}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.eyebrow ?? "", centerX, y + panelHeight * 0.23, contentWidth * 0.75, Math.round(fontUnit * 0.56), 9);
-      context.fillStyle = ivory;
+      context.fillStyle = panelTextColor ?? ivory;
       context.font = `600 ${Math.round(fontUnit)}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.title, centerX, y + panelHeight * 0.56, contentWidth * 0.92, Math.round(fontUnit), 12);
-      if (panel.body) {
-        context.fillStyle = muted;
-        context.font = `400 ${Math.round(fontUnit * 0.44)}px ${font}, Inter, sans-serif`;
-        fitText(context, panel.body, centerX, y + panelHeight * 0.78, contentWidth * 0.78, Math.round(fontUnit * 0.44), 8);
-      }
+      fitText(context, panel.title, centerX, centerY + fontUnit * 0.36, contentWidth * 0.92, Math.round(fontUnit), 12);
     }
 
     if (panel.type === "supporters-heading") {
       context.textAlign = "center";
-      context.fillStyle = gold;
+      context.fillStyle = panelTextColor ?? gold;
       context.font = `700 ${Math.round(fontUnit)}px ${font}, Inter, sans-serif`;
       fitText(context, panel.title, centerX, centerY + fontUnit * 0.36, contentWidth * 0.9, Math.round(fontUnit), 8);
     }
@@ -601,7 +608,7 @@ function drawComposableBoard(
         context.save();
         drawDonorHighlight(context, donor, x, baseline, cellWidth * 0.88, baseSize * scale, gold);
         applyDonorCanvasEffect(context, donor, animationTime);
-        context.fillStyle = donor.nameColor || ivory;
+        context.fillStyle = panelTextColor || donor.nameColor || ivory;
         context.font = `500 ${Math.round(baseSize * scale)}px ${donorFont(donor, font)}, Inter, sans-serif`;
         fitText(context, donor.name, x, baseline, cellWidth * 0.88, Math.round(baseSize * scale), 9);
         if (screen?.showIcons) drawDonorIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, donor, screen, donor.accentColor || gold, Math.max(7, baseSize * 0.35));
@@ -636,13 +643,13 @@ function drawComposableBoard(
       const textWidth = contentWidth - imageWidth - (imageWidth ? contentWidth * 0.04 : 0);
       context.textAlign = imageWidth ? "left" : "center";
       const textX = imageWidth ? textLeft : centerX;
-      context.fillStyle = teal;
+      context.fillStyle = panelTextColor ?? teal;
       context.font = `700 ${Math.max(10, Math.round(panelHeight * 0.1 * scale))}px ${font}, Inter, sans-serif`;
       context.fillText(panel.eyebrow ?? "", textX, y + panelHeight * 0.28);
-      context.fillStyle = ivory;
+      context.fillStyle = panelTextColor ?? ivory;
       context.font = `650 ${Math.max(16, Math.round(panelHeight * 0.19 * scale))}px ${font}, Inter, sans-serif`;
       fitText(context, panel.title, textX, y + panelHeight * 0.52, textWidth * 0.96, Math.round(panelHeight * 0.19 * scale), 12);
-      context.fillStyle = muted;
+      context.fillStyle = panelTextColor ?? muted;
       context.font = `400 ${Math.max(10, Math.round(panelHeight * 0.095 * scale))}px ${font}, Inter, sans-serif`;
       const lines = wrapLines(context, panel.body ?? "", textWidth * 0.94, 2);
       lines.forEach((line, lineIndex) => context.fillText(line, textX, y + panelHeight * (0.72 + lineIndex * 0.13)));
@@ -650,7 +657,7 @@ function drawComposableBoard(
 
     if (panel.type === "footer") {
       context.textAlign = "center";
-      context.fillStyle = gold;
+      context.fillStyle = panelTextColor ?? gold;
       context.font = `600 ${Math.max(10, Math.round(panelHeight * 0.22 * scale))}px ${font}, Inter, sans-serif`;
       fitText(context, `♡   ${panel.title}   ♡`, centerX, centerY + panelHeight * 0.08, contentWidth * 0.92, Math.round(panelHeight * 0.22 * scale), 9);
     }

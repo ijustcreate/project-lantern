@@ -135,6 +135,7 @@ export interface BoardPanel {
   imageFit?: "cover" | "contain";
   fontFamily?: DisplayProfile["fontFamily"];
   fontSize?: number;
+  textColor?: string;
   /** Preserved only to migrate boards created before the supporters heading was its own panel. */
   donorHeadingSize?: number;
   /** Preserved only to migrate boards created before the donor list used the panel font size. */

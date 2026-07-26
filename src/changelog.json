@@ -1,5 +1,113 @@
 [
   {
+    "id": "DEV-0053",
+    "title": "Make the How to use walkthrough visual and animated",
+    "summary": "Replace the static decorative slide art with contextual Recognition OS screenshots, sequenced motion, focus callouts, and screenshot thumbnails in the quick guide so operators can learn from the actual interface.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 12:53 PM",
+    "areas": [
+      "Learning center",
+      "Presentation",
+      "Quick guide",
+      "Accessibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "public/assets/help/dashboard.png",
+      "public/assets/help/donors.png",
+      "public/assets/help/board-editor.png",
+      "public/assets/help/schedule.png",
+      "public/assets/help/announcements.png",
+      "public/assets/help/broadcast.png"
+    ],
+    "tests": "npm run build; in-app browser verified presentation opens, Next advances to the correct screenshot slide, all six quick-guide thumbnails render, and no console errors were reported"
+  },
+  {
+    "id": "DEV-0052",
+    "title": "Restore proportional dashboard previews",
+    "summary": "Dashboard 2D previews now contain the full portrait or landscape board without stretching, while 3D mode uses a darker stage and a soft depth-morph transition.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 12:43 PM",
+    "areas": [
+      "Dashboard",
+      "Display preview",
+      "3D camera"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css",
+      ".lantern/bugs/BUG-0008/catalog.json"
+    ],
+    "tests": "npm run build; in-app browser verification at 1280x720 for portrait and landscape 2D containment plus Display 1 2D-to-3D transition"
+  },
+  {
+    "id": "DEV-0051",
+    "title": "Add bug users and split discussion tabs",
+    "summary": "Added password-free local user profiles to the Bugs catalogue with Felix as the default, a persistent current-user dropdown, and an Add new user option. Split bug discussion into User comments and AI comments, attribute new comments to the selected user, and keep Codex work entries in the AI tab.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 12:38 PM",
+    "areas": [
+      "Bugs",
+      "Users",
+      "Comments"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified Felix is selected by default, opened BUG-0003, switched between User comments and AI comments, confirmed Codex entries appear under AI comments, and found 0 console errors or warnings"
+  },
+  {
+    "id": "DEV-0050",
+    "title": "Add multi-status bug filtering",
+    "summary": "Changed the Bugs catalogue status pills into independent multi-select toggles, allowing any combination of Open, In progress, Ready for test, Verified, and Closed. All now clears the selection and restores the complete catalogue.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 5:01 AM",
+    "areas": [
+      "Bugs",
+      "Filtering"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright selected Open, In progress, and Ready for test together and confirmed the combined results; browser console 0 errors and 0 warnings"
+  },
+  {
+    "id": "DEV-0049",
+    "title": "Keep schedule editors clear of selected events",
+    "summary": "Schedule event editors now open beside the event you select, preserving the clicked card in view; context menus no longer open the editor underneath the pointer.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 5:00 AM",
+    "areas": [
+      "Scheduling",
+      "Calendar"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx vite build passed"
+  },
+  {
+    "id": "DEV-0048",
+    "title": "Refine Board Editor panel workflow",
+    "summary": "Separated board and panel inspector states, simplified headings, added per-panel font colors, removed display assignment controls, and fixed toolbar and Add panel layout.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 4:14 AM",
+    "areas": [
+      "Board Editor",
+      "Display renderer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; Playwright Board Editor interaction and visual verification; git diff --check"
+  },
+  {
     "id": "DEV-0047",
     "title": "Panel editing reflects on the board",
     "summary": "Separated the supporters label from donor names, made font size apply to the selected panel, removed the ineffective visual-style control, and dismisses the Add panel menu when clicking away.",
