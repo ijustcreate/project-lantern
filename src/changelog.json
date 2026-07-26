@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0035",
+    "title": "Improve schedule calendar editing",
+    "summary": "Add a live current-time marker, content-aware event styling, and a draggable, dismissible event inspector.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 6:53 PM",
+    "areas": [
+      "Schedule calendar"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0034",
     "title": "Reorganize announcements and add custom walk-on assets",
     "summary": "The announcement composer now has a multiline Details field, top saved-announcement dropdown, Optional enhancements before Delivery, image upload inside enhancements, and no Draft pill. Walk-on characters support image, OBJ, GLB, and GLTF assets with configurable walk-in, wait, and return motion plus an animated Fox example.",
