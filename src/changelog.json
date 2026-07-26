@@ -1,5 +1,143 @@
 [
   {
+    "id": "DEV-0034",
+    "title": "Reorganize announcements and add custom walk-on assets",
+    "summary": "The announcement composer now has a multiline Details field, top saved-announcement dropdown, Optional enhancements before Delivery, image upload inside enhancements, and no Draft pill. Walk-on characters support image, OBJ, GLB, and GLTF assets with configurable walk-in, wait, and return motion plus an animated Fox example.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 6:17 PM",
+    "areas": [
+      "Announcements",
+      "3D display",
+      "Asset loading"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "package.json",
+      "package-lock.json"
+    ],
+    "tests": "npm run build; Playwright verified layout order, saved dropdown actions, custom character controls, animated Fox loading and motion, and zero console errors"
+  },
+  {
+    "id": "DEV-0033",
+    "title": "Schedule announcements from Delivery",
+    "summary": "The Announcements live preview now has a top display selector, and Delivery can schedule the current announcement with calendar/time inputs, weekly repetition, chosen weekdays, and an optional date range that is added directly to the Schedule calendar.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 6:10 PM",
+    "areas": [
+      "Announcements",
+      "Schedule",
+      "Live preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; Playwright verified display switching, delivery date/time controls, repeat/date-range controls, calendar event creation, and zero console errors"
+  },
+  {
+    "id": "DEV-0032",
+    "title": "Make announcement previews editable in 2D and 3D",
+    "summary": "Announcements now preview on a shared edge-to-edge monitor surface with 2D/3D inspection, pan and zoom, synchronized edit toggles, and draggable text, timer, and image placement in both the composer and pop-out demo.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 6:05 PM",
+    "areas": [
+      "Announcements",
+      "Display preview",
+      "Pop-out display"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; Playwright verified main and pop-out editing, field synchronization, draggable placement, 2D/3D, pan/zoom, edge-to-edge output, and zero console errors"
+  },
+  {
+    "id": "DEV-0031",
+    "title": "Remove chalkboard scan-line texture",
+    "summary": "Removed the faint full-screen horizontal chalk strokes from the chalkboard donor display while preserving its dark board treatment.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 5:58 PM",
+    "areas": [
+      "Donor display"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0030",
+    "title": "Add borderless TV presentation mode",
+    "summary": "Display popouts can now enter browser fullscreen without navigation chrome, and native display windows launch borderless and fullscreen for TV output.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 5:58 PM",
+    "areas": [
+      "Display output",
+      "Desktop app"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src-tauri/src/lib.rs"
+    ],
+    "tests": "npx vite build (passed; 2,068 modules); cargo check unavailable because Cargo is not installed"
+  },
+  {
+    "id": "DEV-0029",
+    "title": "Make board fit output edge-to-edge",
+    "summary": "Fit board to screen now uses a flat orthographic viewport so the board has no tilt and fills the popup or display from corner to corner.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 5:57 PM",
+    "areas": [
+      "Display output",
+      "Board renderer"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npx vite build (passed; 2,068 modules); npm run build blocked by unrelated App.tsx FixedAnnouncementComposition prop type error"
+  },
+  {
+    "id": "DEV-0028",
+    "title": "Restore standalone Go Live studio",
+    "summary": "Returned Go Live to the left menu directly below Announcements and restored the complete live-production workspace as its own page, while keeping Announcements focused on messages and scheduling.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 5:56 PM",
+    "areas": [
+      "Navigation",
+      "Go Live",
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      ".lantern/bugs/BUG-0004/catalog.json",
+      ".lantern/bugs/BUG-0004/report.md"
+    ],
+    "tests": "npm run build; Playwright navigation and live-studio control snapshot"
+  },
+  {
+    "id": "DEV-0027",
+    "title": "Add donor panel typography and divider controls",
+    "summary": "Donor list panels now have independent supporter-heading and donor-name size controls, plus divider thickness, visibility, and color controls shared by the editor preview and live renderer.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 5:50 PM",
+    "areas": [
+      "Board Editor",
+      "Display renderer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; Playwright verified independent computed font sizes, divider thickness/opacity/color updates, live display rendering, and zero console errors"
+  },
+  {
     "id": "DEV-0026",
     "title": "Restore live presentation and stable announcement previews",
     "summary": "Restored the live presentation workspace beside announcement scheduling and rendered announcements on a fixed-aspect design canvas that scales uniformly in previews and live output.",
@@ -46,6 +184,51 @@
       "src/styles.css"
     ],
     "tests": "npm run build; Playwright desktop and 390px mobile checks"
+  },
+  {
+    "id": "DEV-0023",
+    "title": "Clean up Board Editor header spacing",
+    "summary": "Removed the panel and donor count metadata and gave the desktop selector toolbar enough height so the editing helper sits clearly below the controls without clipping.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 1:50 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; desktop visual check at 1280x720; DOM bounds confirmed selector bottom 134px and helper top 201px with no overlap"
+  },
+  {
+    "id": "DEV-0022",
+    "title": "Remove Board Editor ideas sideboard",
+    "summary": "The Board Editor no longer renders the Ideas & shortcuts drawer or its collapsed affordance, allowing the editor workspace to use the reclaimed horizontal space.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 1:43 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; browser DOM and screenshot verification confirmed no Ideas drawer or Ideas & shortcuts heading on Board Editor"
+  },
+  {
+    "id": "DEV-0021",
+    "title": "Move particle settings into floating editor",
+    "summary": "The Board Editor keeps its compact particle toggle and now opens all existing particle controls in a draggable, closable popup grouped by appearance, motion, and timing, preventing the inspector from becoming a long scroll area.",
+    "author": "Codex",
+    "createdAt": "Jul 25, 2026, 1:36 PM",
+    "areas": [
+      "Board Editor",
+      "Particles"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; browser visual and DOM verification of launcher, popup controls, overlay, and close action"
   },
   {
     "id": "DEV-0020",

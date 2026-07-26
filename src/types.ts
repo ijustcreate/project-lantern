@@ -138,6 +138,11 @@ export interface BoardPanel {
   imageFit?: "cover" | "contain";
   fontFamily?: DisplayProfile["fontFamily"];
   fontSize?: number;
+  donorHeadingSize?: number;
+  donorNameSize?: number;
+  donorDividerColor?: string;
+  donorDividerThickness?: number;
+  donorDividerOpacity?: number;
 }
 
 export interface ScheduleEntry {
@@ -150,6 +155,7 @@ export interface ScheduleEntry {
   days: number[];
   recurrence?: "once" | "weekly";
   scheduleDate?: string;
+  scheduleEndDate?: string;
   startTime: string;
   endTime: string;
   message?: string;
@@ -174,6 +180,11 @@ export interface Announcement {
   imageX?: number;
   imageY?: number;
   imageWidth?: number;
+  layoutX?: number;
+  layoutY?: number;
+  layoutWidth?: number;
+  timerX?: number;
+  timerY?: number;
   targets?: ScreenId[];
   target: TargetScreen;
   priority: "Normal" | "Elevated" | "Urgent";
@@ -187,7 +198,15 @@ export interface Announcement {
   timerTrackColor: string;
   finishSfx: "off" | "ding" | "chime";
   sfxVolume: number;
-  character: "off" | "inspector";
+  character: "off" | "inspector" | "custom";
+  characterAssetUrl?: string;
+  characterAssetName?: string;
+  characterAssetKind?: "image" | "model";
+  characterPlayAnimation?: boolean;
+  characterStartX?: number;
+  characterStopX?: number;
+  characterWalkSeconds?: number;
+  characterWaitSeconds?: number;
   startSoundUrl?: string;
   endSoundUrl?: string;
 }

@@ -384,7 +384,11 @@ fn open_display(
     .inner_size(width, height)
     .position(x, y)
     .resizable(true)
-    .decorations(true)
+    // Display windows are intended for TVs and signage, not operator input.
+    // Keep the control-center window decorated, but make each output window
+    // a borderless native fullscreen surface on its selected monitor.
+    .decorations(false)
+    .fullscreen(true)
     .build()
     .map(|_| ())
     .map_err(|error| error.to_string())

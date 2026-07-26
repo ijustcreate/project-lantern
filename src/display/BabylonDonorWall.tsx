@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { Camera } from "@babylonjs/core/Cameras/camera";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
@@ -11,12 +12,15 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import QRCode from "qrcode";
+import "@babylonjs/loaders/glTF";
+import "@babylonjs/loaders/OBJ";
 import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import "@babylonjs/core/Meshes/Builders/tubeBuilder";
-import type { DisplayProfile, Donor, LanternState, ScreenId } from "../types";
+import type { Announcement, DisplayProfile, Donor, LanternState, ScreenId } from "../types";
 
 interface BabylonDonorWallProps {
   state: LanternState;
@@ -26,7 +30,8 @@ interface BabylonDonorWallProps {
   viewMode?: "2d" | "3d";
   resetKey?: number;
   previewProgramId?: string;
-  announcementCharacter?: "off" | "inspector";
+  announcementCharacter?: Announcement["character"];
+  announcementCharacterAsset?: Announcement;
   announcementActive?: boolean;
   onFps?: (fps: number) => void;
 }
@@ -34,7 +39,7 @@ interface BabylonDonorWallProps {
 const backgroundMediaCache = new Map<string, HTMLImageElement | HTMLVideoElement>();
 const donorIconImageCache = new Map<string, HTMLImageElement>();
 
-export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), onFps }: BabylonDonorWallProps) {
+export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), onFps }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previousAnnouncementActive = useRef(announcementActive);
   const sceneStateKey = useMemo(
@@ -56,12 +61,22 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
         schedules: state.schedules,
         theme: state.theme,
         screen: renderScreen,
-        announcementCharacter,
+          announcementCharacter,
+          announcementCharacterAsset: announcementCharacterAsset ? {
+            characterAssetUrl: announcementCharacterAsset.characterAssetUrl,
+            characterAssetName: announcementCharacterAsset.characterAssetName,
+            characterAssetKind: announcementCharacterAsset.characterAssetKind,
+            characterPlayAnimation: announcementCharacterAsset.characterPlayAnimation,
+            characterStartX: announcementCharacterAsset.characterStartX,
+            characterStopX: announcementCharacterAsset.characterStopX,
+            characterWalkSeconds: announcementCharacterAsset.characterWalkSeconds,
+            characterWaitSeconds: announcementCharacterAsset.characterWaitSeconds
+          } : null,
         announcementActive,
         previewProgramId
       });
     },
-    [state.revision, state.donors, state.board, state.boardPrograms, state.schedules, state.theme, state.screens, screenId, announcementCharacter, announcementActive, previewProgramId]
+    [state.revision, state.donors, state.board, state.boardPrograms, state.schedules, state.theme, state.screens, screenId, announcementCharacter, announcementCharacterAsset, announcementActive, previewProgramId]
   );
 
   useEffect(() => {
@@ -131,17 +146,25 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     const resizeCamera = () => {
       engine.resize();
       if (!fitToScreen) {
+        camera.mode = Camera.PERSPECTIVE_CAMERA;
         camera.radius = defaultCameraRadius;
         return;
       }
+
+      // A perspective camera can only move closer to the board, so its frame
+      // remains trapezoidal and leaves a safety margin around the edges. Fit
+      // mode is an output mode: make the board a flat, exact viewport surface.
       camera.alpha = Math.PI / 2;
       camera.beta = Math.PI / 2;
       camera.setTarget(Vector3.Zero());
-      const aspect = Math.max(0.25, canvas.clientWidth / Math.max(1, canvas.clientHeight));
-      const halfVerticalFov = camera.fov / 2;
-      const verticalDistance = panelHeight / 2 / Math.tan(halfVerticalFov);
-      const horizontalDistance = panelWidth / 2 / (Math.tan(halfVerticalFov) * aspect);
-      camera.radius = Math.max(verticalDistance, horizontalDistance) * (screen.showFrame === false ? 1 : 1.025);
+      camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+      const frameInset = screen.showFrame === false ? 0 : 0.2;
+      const halfWidth = (panelWidth + frameInset) / 2;
+      const halfHeight = (panelHeight + frameInset) / 2;
+      camera.orthoLeft = -halfWidth;
+      camera.orthoRight = halfWidth;
+      camera.orthoTop = halfHeight;
+      camera.orthoBottom = -halfHeight;
     };
     resizeCamera();
 
@@ -197,6 +220,9 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     }
     if (screen.style === "donor-wall" && announcementCharacter === "inspector" && (announcementActive || previousAnnouncementActive.current)) {
       addToyInspector(scene, isPortrait, panelWidth, panelHeight, announcementActive);
+    }
+    if (screen.style === "donor-wall" && announcementCharacter === "custom" && announcementCharacterAsset.characterAssetUrl && (announcementActive || previousAnnouncementActive.current)) {
+      void addCustomAnnouncementCharacter(scene, isPortrait, panelWidth, panelHeight, announcementActive, announcementCharacterAsset);
     }
     previousAnnouncementActive.current = announcementActive;
 
@@ -351,8 +377,7 @@ function drawMuseumBoard(
   if (screen?.backgroundImage) drawImageBackground(context, width, height, screen);
 
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
-  else if (chalkboard) drawChalkTexture(context, width, height);
-  else drawBoardStars(context, width, height, screen, animationTime);
+  else if (!chalkboard) drawBoardStars(context, width, height, screen, animationTime);
   if (screen?.donorScrollEnabled) {
     drawScrollingDonorBoard(context, width, height, donors, state, isPortrait, scale, activeProgram, screen, animationTime);
     return;
@@ -554,11 +579,15 @@ function drawComposableBoard(
 
     if (panel.type === "donors") {
       const columns = panel.columns ?? program.columns;
-      const titleHeight = Math.min(panelHeight * 0.18, height * 0.04);
+      const donorHeadingSize = panel.donorHeadingSize ?? Math.round(requestedSize * 0.62);
+      const donorNameSize = panel.donorNameSize ?? requestedSize;
+      const headingFontUnit = Math.max(8, donorHeadingSize * height / 900);
+      const nameFontUnit = Math.max(8, donorNameSize * height / 900);
+      const titleHeight = Math.min(panelHeight * 0.3, Math.max(height * 0.04, headingFontUnit * 1.5));
       context.textAlign = "center";
       context.fillStyle = gold;
-      context.font = `700 ${Math.round(fontUnit * 0.6)}px ${font}, Inter, sans-serif`;
-      fitText(context, panel.title, centerX, y + titleHeight * 0.72, contentWidth * 0.8, Math.round(fontUnit * 0.6), 9);
+      context.font = `700 ${Math.round(headingFontUnit)}px ${font}, Inter, sans-serif`;
+      fitText(context, panel.title, centerX, y + (titleHeight + headingFontUnit * 0.72) / 2, contentWidth * 0.8, Math.round(headingFontUnit), 8);
       const rows = Math.max(1, Math.ceil(donors.length / columns));
       const listTop = y + titleHeight;
       const rowHeight = (panelHeight - titleHeight) / rows;
@@ -569,7 +598,7 @@ function drawComposableBoard(
         const cellWidth = contentWidth / columns;
         const x = left + cellWidth * (column + 0.5);
         const baseline = listTop + rowHeight * (row + (showSubtext && (donor.subtext || donor.note) ? 0.47 : 0.58));
-        const baseSize = Math.min(fontUnit, Math.max(9, rowHeight * (showSubtext ? 0.34 : 0.48)));
+        const baseSize = Math.min(nameFontUnit, Math.max(9, rowHeight * (showSubtext ? 0.34 : 0.48)));
         context.save();
         drawDonorHighlight(context, donor, x, baseline, cellWidth * 0.88, baseSize * scale, gold);
         applyDonorCanvasEffect(context, donor, animationTime);
@@ -583,12 +612,18 @@ function drawComposableBoard(
           fitText(context, donor.subtext || donor.note, x, baseline + rowHeight * 0.28, cellWidth * 0.84, Math.round(baseSize * 0.48), 7);
         }
         context.restore();
-        context.strokeStyle = "rgba(217, 166, 87, 0.2)";
-        context.lineWidth = 1;
-        context.beginPath();
-        context.moveTo(left + cellWidth * column + cellWidth * 0.08, listTop + rowHeight * (row + 0.94));
-        context.lineTo(left + cellWidth * (column + 1) - cellWidth * 0.08, listTop + rowHeight * (row + 0.94));
-        context.stroke();
+        const dividerThickness = panel.donorDividerThickness ?? 1;
+        if (dividerThickness > 0 && (panel.donorDividerOpacity ?? 18) > 0) {
+          context.save();
+          context.strokeStyle = panel.donorDividerColor ?? gold;
+          context.globalAlpha = (panel.donorDividerOpacity ?? 18) / 100;
+          context.lineWidth = dividerThickness * scale;
+          context.beginPath();
+          context.moveTo(left + cellWidth * column + cellWidth * 0.08, listTop + rowHeight * (row + 0.94));
+          context.lineTo(left + cellWidth * (column + 1) - cellWidth * 0.08, listTop + rowHeight * (row + 0.94));
+          context.stroke();
+          context.restore();
+        }
       });
     }
 
@@ -1098,20 +1133,6 @@ function drawHeart(context: CanvasRenderingContext2D, x: number, y: number, size
   context.bezierCurveTo(x + size, y - size * 1.2, x + size * 1.8, y - size * 0.2, x, y + size);
   context.stroke();
   context.restore();
-}
-
-function drawChalkTexture(context: CanvasRenderingContext2D, width: number, height: number) {
-  context.globalAlpha = 0.08;
-  context.strokeStyle = "#d5d0c2";
-  context.lineWidth = 2;
-  for (let index = 0; index < 80; index += 1) {
-    const y = (index / 80) * height;
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(width, y + Math.sin(index * 1.4) * 10);
-    context.stroke();
-  }
-  context.globalAlpha = 1;
 }
 
 function drawGraphiteTexture(context: CanvasRenderingContext2D, width: number, height: number) {
@@ -1839,6 +1860,87 @@ function addToyInspector(scene: Scene, isPortrait: boolean, panelWidth: number, 
     root.position.y += Math.sin(progress * Math.PI * 10) * 0.0018;
     root.rotation.y = Math.sin(progress * Math.PI * 10) * 0.08;
     if (!announcementActive && progress >= 1) root.setEnabled(false);
+  });
+}
+
+async function addCustomAnnouncementCharacter(scene: Scene, isPortrait: boolean, panelWidth: number, panelHeight: number, announcementActive: boolean, announcement: Announcement) {
+  const assetUrl = announcement.characterAssetUrl;
+  if (!assetUrl) return;
+  const root = new TransformNode("custom-announcement-character", scene);
+  const startX = panelWidth * ((announcement.characterStartX ?? -18) / 100);
+  const stopX = panelWidth * ((announcement.characterStopX ?? 18) / 100);
+  const floorY = -panelHeight * (isPortrait ? .36 : .39);
+  root.position = new Vector3(startX, floorY, -.5);
+
+  let animationGroup: { start: (loop?: boolean) => unknown; pause: () => unknown; play: (loop?: boolean) => unknown } | undefined;
+  if (announcement.characterAssetKind === "image") {
+    const plane = MeshBuilder.CreatePlane("custom-character-image", { width: isPortrait ? 1.15 : 1.35, height: isPortrait ? 1.75 : 2.05 }, scene);
+    const material = new StandardMaterial("custom-character-image-material", scene);
+    material.diffuseTexture = new Texture(assetUrl, scene, false, false);
+    material.diffuseTexture.hasAlpha = true;
+    material.useAlphaFromDiffuseTexture = true;
+    material.backFaceCulling = false;
+    material.emissiveColor = new Color3(.3, .3, .3);
+    plane.material = material;
+    plane.position.y = (isPortrait ? .84 : .98);
+    plane.parent = root;
+  } else {
+    try {
+      const extension = announcement.characterAssetName?.match(/\.(glb|gltf|obj)$/i)?.[0]?.toLowerCase() ?? ".glb";
+      const result = await SceneLoader.ImportMeshAsync(null, "", assetUrl, scene, undefined, extension);
+      result.meshes.filter((mesh) => !mesh.parent).forEach((mesh) => { mesh.parent = root; });
+      const visible = result.meshes.find((mesh) => mesh.getTotalVertices() > 0);
+      if (visible) {
+        const bounds = visible.getHierarchyBoundingVectors(true);
+        const height = Math.max(.001, bounds.max.y - bounds.min.y);
+        const targetHeight = isPortrait ? 1.7 : 1.95;
+        root.scaling.setAll(targetHeight / height);
+        root.position.y = floorY - bounds.min.y * root.scaling.y;
+      }
+      const selectedAnimation = result.animationGroups.find((group) => /walk/i.test(group.name)) ?? result.animationGroups[0];
+      if (selectedAnimation && announcement.characterPlayAnimation !== false) {
+        selectedAnimation.start(true);
+        animationGroup = selectedAnimation;
+      }
+    } catch (error) {
+      console.warn("Unable to load custom announcement character", error);
+      root.dispose();
+      return;
+    }
+  }
+
+  if (!announcementActive) {
+    root.position.x = startX;
+    animationGroup?.pause();
+    return;
+  }
+  const started = performance.now();
+  const walkMs = Math.max(1, announcement.characterWalkSeconds ?? 2) * 1000;
+  const waitMs = Math.max(0, announcement.characterWaitSeconds ?? 4) * 1000;
+  let waiting = false;
+  let leaving = false;
+  scene.onBeforeRenderObservable.add(() => {
+    const elapsed = performance.now() - started;
+    if (elapsed <= walkMs) {
+      const progress = 1 - Math.pow(1 - elapsed / walkMs, 3);
+      root.position.x = startX + (stopX - startX) * progress;
+      return;
+    }
+    if (elapsed <= walkMs + waitMs) {
+      root.position.x = stopX;
+      if (!waiting) {
+        animationGroup?.pause();
+        waiting = true;
+      }
+      return;
+    }
+    if (!leaving) {
+      animationGroup?.play(true);
+      leaving = true;
+    }
+    const exitProgress = Math.min(1, (elapsed - walkMs - waitMs) / walkMs);
+    root.position.x = stopX + (startX - stopX) * exitProgress;
+    if (exitProgress >= 1) animationGroup?.pause();
   });
 }
 

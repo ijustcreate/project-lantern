@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   BadgeCheck,
   BookOpen,
+  Box,
   Bug,
   Camera,
   CalendarDays,
@@ -17,6 +18,7 @@ import {
   ExternalLink,
   GripVertical,
   Move,
+  Move3d,
   Glasses,
   Circle,
   Download,
@@ -43,6 +45,7 @@ import {
   Radio,
   RefreshCcw,
   RotateCcw,
+  Rotate3d,
   Save,
   Search,
   ScanFace,
@@ -62,7 +65,9 @@ import {
   VolumeX,
   Wifi,
   WifiOff,
-  X
+  X,
+  ZoomIn,
+  ZoomOut
 } from "lucide-react";
 import { BabylonDonorWall } from "./display/BabylonDonorWall";
 import { ChromaVideo } from "./components/ChromaVideo";
@@ -97,7 +102,7 @@ import type {
 import { invoke } from "@tauri-apps/api/core";
 import codeChangelog from "./changelog.json";
 
-type View = "dashboard" | "donors" | "theme" | "schedule" | "announcements" | "screens" | "revisions" | "bugs" | "settings";
+type View = "dashboard" | "donors" | "theme" | "schedule" | "announcements" | "live" | "screens" | "revisions" | "bugs" | "settings";
 
 const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -105,6 +110,7 @@ const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }>
   { id: "theme", label: "Board Editor", icon: Palette },
   { id: "schedule", label: "Schedule", icon: CalendarDays },
   { id: "announcements", label: "Announcements", icon: Megaphone },
+  { id: "live", label: "Go Live", icon: Radio },
   { id: "screens", label: "Screens", icon: Monitor },
   { id: "revisions", label: "Revisions", icon: History },
   { id: "bugs", label: "Bugs", icon: Bug },
@@ -230,6 +236,10 @@ function ControlCenter() {
     });
 
     const channel = createHostChannel((message) => {
+      if (message.type === "state-update") {
+        setState(message.state);
+      }
+
       if (message.type === "display-heartbeat") {
         setState((current) => applyHeartbeat(current, message));
       }
@@ -506,7 +516,7 @@ function ControlCenter() {
           </div>
         </header>
         <nav className="mobile-primary-nav" aria-label="Primary navigation">
-          {navItems.filter((item) => ["dashboard", "donors", "theme", "schedule", "announcements", "settings"].includes(item.id)).map((item) => {
+          {navItems.filter((item) => ["dashboard", "donors", "theme", "schedule", "announcements", "live", "settings"].includes(item.id)).map((item) => {
             const Icon = item.icon;
             return <button type="button" key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><Icon size={17} /><span>{item.label}</span></button>;
           })}
@@ -551,7 +561,18 @@ function ControlCenter() {
           }}
         />}
         {view === "announcements" && (
-          <AnnouncementsView state={state} updateState={updateState} toggleAnnouncement={toggleAnnouncement} startLive={startLive} startLiveStream={startLiveStream} stopLive={stopLive} />
+          <AnnouncementsView state={state} updateState={updateState} toggleAnnouncement={toggleAnnouncement} />
+        )}
+        {view === "live" && (
+          <section className="comms-workspace go-live-workspace">
+            <LivePreviewPanel
+              state={state}
+              patchLive={(patch) => updateState((current) => ({ ...current, live: { ...current.live, ...patch } }))}
+              startLive={startLive}
+              startLiveStream={startLiveStream}
+              stopLive={stopLive}
+            />
+          </section>
         )}
         {view === "screens" && <ScreensView state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} />}
         {view === "revisions" && <RevisionsView state={state} updateState={updateState} />}
@@ -1827,12 +1848,26 @@ function ThemeStudio({
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
+  const [particleEditorOpen, setParticleEditorOpen] = useState(false);
+  const [particleEditorPosition, setParticleEditorPosition] = useState(() => ({
+    x: Math.max(16, window.innerWidth - 450),
+    y: 130
+  }));
+  const particleEditorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const panels = selectedProgram?.panels?.length ? selectedProgram.panels : selectedProgram ? defaultBoardPanels(selectedProgram) : [];
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
   const donorPageSize = 8;
   const donorPageCount = Math.max(1, Math.ceil(state.donors.length / donorPageSize));
   const donorPageItems = state.donors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
+  const moveParticleEditor = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = particleEditorDragRef.current;
+    if (!drag) return;
+    setParticleEditorPosition({
+      x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 410)),
+      y: clamp(drag.y + event.clientY - drag.pointerY, 72, Math.max(72, window.innerHeight - 120))
+    });
+  };
 
   useEffect(() => {
     if (!selectedProgram || selectedProgram.panels?.length) return;
@@ -2064,8 +2099,19 @@ function ThemeStudio({
                 }} /></label>)}
               </div>
               <LabeledSelect label="Panel font" info="Typeface used only by this panel." value={selectedPanel.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} />
-              <Slider label="Panel font size" info="Changes text size without changing the panel box." value={selectedPanel.fontSize ?? 24} min={10} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} />
+              {selectedPanel.type !== "donors" && <Slider label="Panel font size" info="Changes text size without changing the panel box." value={selectedPanel.fontSize ?? 24} min={10} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} />}
               {selectedPanel.type === "donors" && <>
+                <div className="donor-panel-type-controls">
+                  <Slider label="Supporters heading size" info="Changes only the “Our supporters” heading." value={selectedPanel.donorHeadingSize ?? Math.round((selectedPanel.fontSize ?? display.nameSize ?? 28) * .62)} min={8} max={48} onChange={(donorHeadingSize) => patchPanel(selectedPanel.id, { donorHeadingSize })} />
+                  <Slider label="Donor name size" info="Changes only donor names; crowded rows still shrink safely on the live display." value={selectedPanel.donorNameSize ?? selectedPanel.fontSize ?? display.nameSize ?? 28} min={8} max={72} onChange={(donorNameSize) => patchPanel(selectedPanel.id, { donorNameSize })} />
+                </div>
+                <div className="donor-divider-controls">
+                  <div className="two-col">
+                    <Slider label="Line thickness" info="Sets the thickness of the lines between donor names. Choose 0 to hide them." value={selectedPanel.donorDividerThickness ?? 1} min={0} max={6} onChange={(donorDividerThickness) => patchPanel(selectedPanel.id, { donorDividerThickness })} />
+                    <Slider label="Line visibility" info="Sets how faint or strong the divider lines appear." value={selectedPanel.donorDividerOpacity ?? 18} min={0} max={100} onChange={(donorDividerOpacity) => patchPanel(selectedPanel.id, { donorDividerOpacity })} />
+                  </div>
+                  <ColorOverrideField label="Line color" value={selectedPanel.donorDividerColor} fallback="#D9A657" onChange={(donorDividerColor) => patchPanel(selectedPanel.id, { donorDividerColor })} />
+                </div>
                 <div className="field"><span>Columns</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1 column"], ["2", "2 columns"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as 1 | 2 })} /></div>
                 <div className="mini-actions"><button type="button" onClick={() => patchProgram({ donorIds: state.donors.filter((donor) => donor.active).map((donor) => donor.id) })}>Use active</button><button type="button" onClick={() => patchProgram({ donorIds: [] })}>Clear</button></div>
                 <div className="board-donor-picker compact-picker">{donorPageItems.map((donor) => <label key={donor.id}><input type="checkbox" checked={selectedProgram.donorIds.includes(donor.id)} onChange={(event) => toggleProgramDonor(donor.id, event.target.checked)} /><span>{donor.name}</span></label>)}</div>
@@ -2097,25 +2143,44 @@ function ThemeStudio({
                 <Slider label="Shadow distance" info="Sets how far the text appears lifted from the board." value={display.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchDisplay({ textShadowDistance })} />
               </>}
               <label className="switch-row"><input type="checkbox" checked={display.showIcons ?? false} onChange={(event) => patchDisplay({ showIcons: event.target.checked })} /><span>Show donor icons</span></label>
-              <label className="switch-row"><input type="checkbox" checked={display.particleAnimationEnabled ?? false} onChange={(event) => patchDisplay({ particleAnimationEnabled: event.target.checked })} /><span>Animate board particles</span></label>
-              {display.particleAnimationEnabled && <div className="particle-motion-controls">
-                <LabeledSelect label="Particle colors" info="Warm uses white and gold; primary uses classic red, yellow, and blue." value={display.particleColorStyle ?? "warm"} options={["warm", "primary"]} optionLabels={{ warm: "White + warm gold", primary: "Primary colors" }} onChange={(particleColorStyle) => patchDisplay({ particleColorStyle: particleColorStyle as DisplayProfile["particleColorStyle"] })} />
-                <LabeledSelect label="Drift direction" info="Sets the overall air-current direction." value={display.particleDriftDirection ?? "natural"} options={["natural", "left", "right", "up", "down", "wander"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right", up: "Float up", down: "Fall down", wander: "Random wander" }} onChange={(particleDriftDirection) => patchDisplay({ particleDriftDirection: particleDriftDirection as DisplayProfile["particleDriftDirection"] })} />
-                <Slider label="Drift speed" info="How quickly the dust moves across the board." value={display.particleDriftSpeed ?? 4} min={1} max={10} onChange={(particleDriftSpeed) => patchDisplay({ particleDriftSpeed })} />
-                <Slider label="Gravity" info="How strongly particles settle toward the bottom of the board." value={display.particleGravity ?? 3} min={0} max={10} onChange={(particleGravity) => patchDisplay({ particleGravity })} />
-                <Slider label="Particle count" info="How many particles are visible." value={display.particleCount ?? 34} min={4} max={120} onChange={(particleCount) => patchDisplay({ particleCount })} />
-                <Slider label="Particle size" info="Average particle size." value={display.particleSize ?? 4} min={1} max={12} onChange={(particleSize) => patchDisplay({ particleSize })} />
-                <Slider label="Dispersion" info="How widely particles are scattered across the board." value={display.particleSpread ?? 100} min={10} max={100} onChange={(particleSpread) => patchDisplay({ particleSpread })} />
-                <Slider label="Wander" info="How far particles deviate from their main direction." value={display.particleWander ?? 5} min={0} max={10} onChange={(particleWander) => patchDisplay({ particleWander })} />
-                <Slider label="Lifetime" info="Base time before each particle fades and restarts." value={display.particleLifetime ?? 12} min={2} max={30} onChange={(particleLifetime) => patchDisplay({ particleLifetime })} />
-                <Slider label="Lifetime range" info="Adds random variation around the base lifetime." value={display.particleLifetimeRange ?? 4} min={0} max={20} onChange={(particleLifetimeRange) => patchDisplay({ particleLifetimeRange })} />
-              </div>}
+              <div className="particle-editor-launch">
+                <label className="switch-row"><input type="checkbox" checked={display.particleAnimationEnabled ?? false} onChange={(event) => { patchDisplay({ particleAnimationEnabled: event.target.checked }); if (!event.target.checked) setParticleEditorOpen(false); }} /><span>Animate board particles</span></label>
+                <button type="button" className="command-button secondary compact" disabled={!display.particleAnimationEnabled} onClick={() => setParticleEditorOpen(true)}><SlidersHorizontal size={15} /> Adjust particles</button>
+              </div>
               <p className="field-note">Donor subtext is controlled per name in Displays &gt; Assigned names.</p>
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.active} onChange={(event) => patchProgram({ active: event.target.checked })} /><span>Available to schedules</span></label>
             </div></details>
           </div>
         </aside>
       </div>
+      {particleEditorOpen && display.particleAnimationEnabled && createPortal(<aside className="particle-editor-popup" style={{ left: particleEditorPosition.x, top: particleEditorPosition.y }} aria-label="Particle settings">
+        <header className="particle-editor-popup-header" onPointerDown={(event) => {
+          if ((event.target as Element).closest("button")) return;
+          particleEditorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...particleEditorPosition };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }} onPointerMove={moveParticleEditor} onPointerUp={() => { particleEditorDragRef.current = null; }} onPointerCancel={() => { particleEditorDragRef.current = null; }}>
+          <div><p className="eyebrow">Board effects</p><h2>Adjust particles</h2></div>
+          <button type="button" className="icon-button" onClick={() => setParticleEditorOpen(false)} title="Close particle settings"><X size={17} /></button>
+        </header>
+        <div className="particle-editor-popup-body">
+          <section className="particle-settings-group">
+            <h3>Appearance</h3>
+            <LabeledSelect label="Particle colors" info="Warm uses white and gold; primary uses classic red, yellow, and blue." value={display.particleColorStyle ?? "warm"} options={["warm", "primary"]} optionLabels={{ warm: "White + warm gold", primary: "Primary colors" }} onChange={(particleColorStyle) => patchDisplay({ particleColorStyle: particleColorStyle as DisplayProfile["particleColorStyle"] })} />
+            <div className="two-col"><Slider label="Particle count" info="How many particles are visible." value={display.particleCount ?? 34} min={4} max={120} onChange={(particleCount) => patchDisplay({ particleCount })} /><Slider label="Particle size" info="Average particle size." value={display.particleSize ?? 4} min={1} max={12} onChange={(particleSize) => patchDisplay({ particleSize })} /></div>
+            <Slider label="Dispersion" info="How widely particles are scattered across the board." value={display.particleSpread ?? 100} min={10} max={100} onChange={(particleSpread) => patchDisplay({ particleSpread })} />
+          </section>
+          <section className="particle-settings-group">
+            <h3>Motion</h3>
+            <LabeledSelect label="Drift direction" info="Sets the overall air-current direction." value={display.particleDriftDirection ?? "natural"} options={["natural", "left", "right", "up", "down", "wander"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right", up: "Float up", down: "Fall down", wander: "Random wander" }} onChange={(particleDriftDirection) => patchDisplay({ particleDriftDirection: particleDriftDirection as DisplayProfile["particleDriftDirection"] })} />
+            <div className="two-col"><Slider label="Drift speed" info="How quickly the dust moves across the board." value={display.particleDriftSpeed ?? 4} min={1} max={10} onChange={(particleDriftSpeed) => patchDisplay({ particleDriftSpeed })} /><Slider label="Gravity" info="How strongly particles settle toward the bottom of the board." value={display.particleGravity ?? 3} min={0} max={10} onChange={(particleGravity) => patchDisplay({ particleGravity })} /></div>
+            <Slider label="Wander" info="How far particles deviate from their main direction." value={display.particleWander ?? 5} min={0} max={10} onChange={(particleWander) => patchDisplay({ particleWander })} />
+          </section>
+          <section className="particle-settings-group">
+            <h3>Timing</h3>
+            <div className="two-col"><Slider label="Lifetime" info="Base time before each particle fades and restarts." value={display.particleLifetime ?? 12} min={2} max={30} onChange={(particleLifetime) => patchDisplay({ particleLifetime })} /><Slider label="Lifetime range" info="Adds random variation around the base lifetime." value={display.particleLifetimeRange ?? 4} min={0} max={20} onChange={(particleLifetimeRange) => patchDisplay({ particleLifetimeRange })} /></div>
+          </section>
+        </div>
+      </aside>, document.body)}
     </section>
   );
 }
@@ -2214,7 +2279,20 @@ function DirectBoardCanvas({
       } as React.CSSProperties} />;
     })}</div>}
     <div className="direct-board-inner">
-      {panels.map((panel, index) => <section key={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{ left: `${panel.x ?? 5}%`, top: `${panel.y ?? index * 20 + 5}%`, width: `${panel.width ?? 90}%`, height: `${panel.height ?? 18}%`, zIndex: index + 2, fontFamily: panel.fontFamily ?? display.fontFamily ?? "Montserrat", "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px` } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id); }}>
+      {panels.map((panel, index) => <section key={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{
+        left: `${panel.x ?? 5}%`,
+        top: `${panel.y ?? index * 20 + 5}%`,
+        width: `${panel.width ?? 90}%`,
+        height: `${panel.height ?? 18}%`,
+        zIndex: index + 2,
+        fontFamily: panel.fontFamily ?? display.fontFamily ?? "Montserrat",
+        "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
+        "--donor-heading-size": `${panel.donorHeadingSize ?? Math.round((panel.fontSize ?? display.nameSize ?? 28) * .62)}px`,
+        "--donor-name-size": `${panel.donorNameSize ?? panel.fontSize ?? display.nameSize ?? 28}px`,
+        "--donor-divider-color": panel.donorDividerColor ?? "#d9a657",
+        "--donor-divider-thickness": `${panel.donorDividerThickness ?? 1}px`,
+        "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
+      } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id); }}>
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
@@ -2585,25 +2663,25 @@ function MediaCropEditor({
 function AnnouncementsView({
   state,
   updateState,
-  toggleAnnouncement,
-  startLive,
-  startLiveStream,
-  stopLive
+  toggleAnnouncement
 }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
   toggleAnnouncement: () => void;
-  startLive: () => void;
-  startLiveStream: (stream: MediaStream, detail: string) => Promise<void>;
-  stopLive: () => void;
 }) {
-  const [mode, setMode] = useState<"announcement" | "live">("announcement");
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(() => state.savedAnnouncements.some((item) => item.id === state.announcement.id) ? state.announcement.id : null);
   const [scheduleAnnouncementId, setScheduleAnnouncementId] = useState<string | null>(null);
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [scheduleEndDate, setScheduleEndDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().slice(0, 10);
+  });
   const [scheduleTime, setScheduleTime] = useState("09:00");
   const [scheduleRecurrence, setScheduleRecurrence] = useState<"once" | "weekly">("once");
   const [scheduleDays, setScheduleDays] = useState<number[]>([new Date().getDay()]);
+  const [deliveryScheduleOpen, setDeliveryScheduleOpen] = useState(false);
+  const [scheduleHasEndDate, setScheduleHasEndDate] = useState(false);
   const [previewScreenId, setPreviewScreenId] = useState<ScreenId>(() => state.announcement.target === "all" ? firstDisplayId(state) : state.announcement.target);
   const previewScreen = state.screens[previewScreenId] ?? Object.values(state.screens)[0];
   const selectedTargets = state.announcement.targets?.length ? state.announcement.targets : state.announcement.target === "all" ? Object.keys(state.screens) : [state.announcement.target];
@@ -2614,9 +2692,6 @@ function AnnouncementsView({
     updateState((current) => ({ ...current, announcement: { ...current.announcement, ...patch } }));
   };
 
-  const patchLive = (patch: Partial<LanternState["live"]>) => {
-    updateState((current) => ({ ...current, live: { ...current.live, ...patch } }));
-  };
   const toggleAnnouncementTarget = (screenId: ScreenId) => {
     const targets = selectedTargets.includes(screenId) ? selectedTargets.filter((id) => id !== screenId) : [...selectedTargets, screenId];
     if (!targets.length) return;
@@ -2722,6 +2797,44 @@ function AnnouncementsView({
     setScheduleAnnouncementId(null);
   };
 
+  const scheduleCurrentAnnouncement = () => {
+    if (!scheduleDate || !scheduleTime || (scheduleRecurrence === "weekly" && !scheduleDays.length)) return;
+    const announcementId = state.announcement.id || `announcement-${Date.now()}`;
+    const { active: _active, startedAt: _startedAt, ...saved } = { ...state.announcement, id: announcementId };
+    const startMinutes = timeToMinutes(scheduleTime);
+    const duration = Math.max(1, state.announcement.durationMinutes || 30);
+    const endTime = minutesToTime(Math.min(1439, startMinutes + duration));
+    const dateDay = dateFromInputValue(scheduleDate).getDay();
+    updateState((current) => {
+      const savedAnnouncements = current.savedAnnouncements.some((item) => item.id === announcementId)
+        ? current.savedAnnouncements.map((item) => item.id === announcementId ? saved : item)
+        : [...current.savedAnnouncements, saved];
+      return {
+        ...current,
+        announcement: { ...current.announcement, id: announcementId },
+        savedAnnouncements,
+        schedules: [...current.schedules, {
+          id: `schedule-${Date.now()}`,
+          name: saved.title || "Scheduled announcement",
+          target: saved.target,
+          boardId: current.boardPrograms[0]?.id ?? "",
+          contentType: "announcement",
+          announcementId,
+          recurrence: scheduleRecurrence,
+          scheduleDate,
+          scheduleEndDate: scheduleRecurrence === "weekly" && scheduleHasEndDate ? scheduleEndDate : undefined,
+          days: scheduleRecurrence === "once" ? [dateDay] : scheduleDays,
+          startTime: scheduleTime,
+          endTime,
+          color: "#a95777",
+          active: true
+        }]
+      };
+    });
+    setSelectedSavedId(announcementId);
+    setDeliveryScheduleOpen(false);
+  };
+
   const openAnnouncementDemo = () => {
     const isPortrait = previewScreen.orientation === "Portrait";
     const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
@@ -2735,43 +2848,98 @@ function AnnouncementsView({
 
   return (
     <section className="comms-workspace">
-      <div className="workspace-tabbar"><EditorTabs value={mode} options={[["announcement", "Announcements & scheduling"], ["live", "Live presentation"]]} onChange={(value) => setMode(value as typeof mode)} /><span>Compose scheduled messages or preview and broadcast a live presentation.</span></div>
-      {mode === "announcement" ? <div className="announcement-deck">
+      <div className="workspace-tabbar"><span>Compose, save, schedule, and broadcast messages to your displays.</span></div>
+      <div className="announcement-deck">
         <div className="form-panel announcement-form">
-          <div className="panel-heading composer-heading"><div><p className="eyebrow">Message composer</p><h2>Create an announcement <InfoDot text="Short messages that temporarily appear on selected displays." /></h2><small>Write the message, choose where it appears, then preview or send it.</small></div><span className={state.announcement.active ? "state-dot active" : "state-dot"}>{state.announcement.active ? "Broadcasting" : "Draft"}</span></div>
+          <div className="panel-heading composer-heading"><div><p className="eyebrow">Message composer</p><h2>Create an announcement <InfoDot text="Short messages that temporarily appear on selected displays." /></h2><small>Write the message, choose where it appears, then preview or send it.</small></div>{state.announcement.active && <span className="state-dot active">Broadcasting</span>}</div>
           <section className="composer-section primary-section">
             <header><span>1</span><div><strong>Message</strong><small>Keep it short enough to read at a glance.</small></div></header>
             <div className="composer-message-grid"><LabeledInput label="Headline" info="Large headline shown on the announcement." value={state.announcement.title} onChange={(value) => patchAnnouncement({ title: value })} /><LabeledInput label="Supporting message" info="Supporting text below the headline." value={state.announcement.message} onChange={(value) => patchAnnouncement({ message: value })} /></div>
-            <LabeledInput label="Details" info="Optional smaller text displayed in a bordered detail panel." value={state.announcement.details ?? ""} onChange={(details) => patchAnnouncement({ details })} />
-            <div className="announcement-color-row"><ColorControl label="Text color" value={state.announcement.textColor ?? "#10131f"} onChange={(textColor) => patchAnnouncement({ textColor })} /><ColorControl label="Background" value={state.announcement.backgroundColor ?? "#f3efe0"} onChange={(backgroundColor) => patchAnnouncement({ backgroundColor })} /><label className="image-upload announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image / PNG"}</span><input type="file" accept="image/*,.png" onChange={(event) => readImageFile(event.target.files?.[0], (imageUrl) => patchAnnouncement({ imageUrl, imageX: 72, imageY: 50, imageWidth: 22 }))} /></label>{state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined })}><Trash2 size={15} /></button>}</div>
+            <label className="field announcement-details-field"><span>Details <InfoDot text="Optional smaller text displayed in a bordered detail panel." /></span><textarea rows={4} value={state.announcement.details ?? ""} onChange={(event) => patchAnnouncement({ details: event.target.value })} placeholder="Add supporting details…" /></label>
+            <div className="announcement-color-row"><ColorControl label="Text color" value={state.announcement.textColor ?? "#10131f"} onChange={(textColor) => patchAnnouncement({ textColor })} /><ColorControl label="Background" value={state.announcement.backgroundColor ?? "#f3efe0"} onChange={(backgroundColor) => patchAnnouncement({ backgroundColor })} /></div>
             {state.announcement.imageUrl && <div className="three-col compact-image-controls"><Slider label="Image X" info="Move the announcement image horizontally." value={state.announcement.imageX ?? 72} min={0} max={100} onChange={(imageX) => patchAnnouncement({ imageX })} /><Slider label="Image Y" info="Move the announcement image vertically." value={state.announcement.imageY ?? 50} min={0} max={100} onChange={(imageY) => patchAnnouncement({ imageY })} /><Slider label="Image size" info="Adjust the announcement image width." value={state.announcement.imageWidth ?? 22} min={5} max={70} onChange={(imageWidth) => patchAnnouncement({ imageWidth })} /></div>}
           </section>
-          <section className="composer-section">
-            <header><span>2</span><div><strong>Delivery</strong><small>Choose the audience, layout, and how long it stays visible.</small></div></header>
+          <section className="composer-section delivery-section">
+            <header><span>3</span><div><strong>Delivery</strong><small>Choose the audience, layout, schedule, and how long it stays visible.</small></div></header>
             <div className="announcement-target-picker"><span>Send to</span>{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={selectedTargets.includes(screen.id)} onChange={() => toggleAnnouncementTarget(screen.id)} />{screen.label}</label>)}</div>
-            <div className="two-col"><LabeledSelect label="Layout" info="The announcement layout used on the display." value={state.announcement.style} options={["Ribbon", "Temporary Card", "Lower Third"]} onChange={(value) => patchAnnouncement({ style: value as LanternState["announcement"]["style"] })} /><label className="field duration-field"><span>Show for <InfoDot text="Use 0 to keep it visible until someone ends it manually." /></span><div className="duration-input"><input aria-label="Announcement duration in minutes" type="number" min={0} max={1440} value={state.announcement.durationMinutes} onChange={(event) => patchAnnouncement({ durationMinutes: Number(event.target.value) || 0 })} /><b>min</b></div></label></div>
+            <div className="two-col"><LabeledSelect label="Layout" info="The announcement layout used on the display." value={state.announcement.style} options={["Ribbon", "Temporary Card", "Lower Third"]} onChange={(value) => patchAnnouncement({ style: value as LanternState["announcement"]["style"], layoutX: undefined, layoutY: undefined, layoutWidth: undefined })} /><label className="field duration-field"><span>Show for <InfoDot text="Use 0 to keep it visible until someone ends it manually." /></span><div className="duration-input"><input aria-label="Announcement duration in minutes" type="number" min={0} max={1440} value={state.announcement.durationMinutes} onChange={(event) => patchAnnouncement({ durationMinutes: Number(event.target.value) || 0 })} /><b>min</b></div></label></div>
+            <div className={`announcement-delivery-schedule${deliveryScheduleOpen ? " open" : ""}`}>
+              <div className="announcement-delivery-schedule-head">
+                <div><CalendarDays size={17} /><span><strong>When should it play?</strong><small>Add this announcement directly to the Schedule calendar.</small></span></div>
+                <button type="button" className="command-button secondary compact" onClick={() => setDeliveryScheduleOpen((current) => !current)}>{deliveryScheduleOpen ? "Hide" : "Choose date"}</button>
+              </div>
+              {deliveryScheduleOpen && <div className="announcement-delivery-schedule-fields">
+                <div className="two-col">
+                  <label className="field calendar-input-field"><span>Play date</span><div><CalendarDays size={15} /><input type="date" aria-label="Announcement play date" value={scheduleDate} min={toDateInputValue(new Date())} onChange={(event) => setScheduleDate(event.target.value)} /></div></label>
+                  <label className="field calendar-input-field"><span>Start time</span><div><Clock3 size={15} /><input type="time" aria-label="Announcement start time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></div></label>
+                </div>
+                <label className="switch-row"><input type="checkbox" checked={scheduleRecurrence === "weekly"} onChange={(event) => setScheduleRecurrence(event.target.checked ? "weekly" : "once")} /><span>Repeat every week</span></label>
+                {scheduleRecurrence === "weekly" && <>
+                  <div className="field"><span>Repeat on</span><div className="schedule-day-picker">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => <button type="button" key={day} className={scheduleDays.includes(index) ? "active" : ""} onClick={() => setScheduleDays((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])}>{day}</button>)}</div></div>
+                  <label className="switch-row"><input type="checkbox" checked={scheduleHasEndDate} onChange={(event) => setScheduleHasEndDate(event.target.checked)} /><span>Use a date range</span></label>
+                  {scheduleHasEndDate && <div className="two-col announcement-date-range">
+                    <label className="field calendar-input-field"><span>Range starts</span><div><CalendarDays size={15} /><input type="date" aria-label="Announcement range start" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></div></label>
+                    <label className="field calendar-input-field"><span>Range ends</span><div><CalendarDays size={15} /><input type="date" aria-label="Announcement range end" value={scheduleEndDate} min={scheduleDate} onChange={(event) => setScheduleEndDate(event.target.value)} /></div></label>
+                  </div>}
+                </>}
+                <button type="button" className="command-button primary announcement-add-schedule" disabled={!scheduleDate || !scheduleTime || (scheduleRecurrence === "weekly" && (!scheduleDays.length || (scheduleHasEndDate && scheduleEndDate < scheduleDate)))} onClick={scheduleCurrentAnnouncement}><CalendarDays size={16} /> Add to schedule</button>
+              </div>}
+            </div>
+            <div className="announcement-placement-controls">
+              <div className="placement-control-heading"><span>Text box position</span><button type="button" onClick={() => patchAnnouncement({ layoutX: undefined, layoutY: undefined, layoutWidth: undefined })}><RotateCcw size={13} /> Use layout default</button></div>
+              <div className="three-col">
+                <Slider label="Text X" info="Horizontal center of the announcement text box." value={state.announcement.layoutX ?? 50} min={5} max={95} onChange={(layoutX) => patchAnnouncement({ layoutX })} />
+                <Slider label="Text Y" info="Vertical center of the announcement text box." value={state.announcement.layoutY ?? (state.announcement.style === "Temporary Card" ? 50 : 88)} min={5} max={95} onChange={(layoutY) => patchAnnouncement({ layoutY })} />
+                <Slider label="Text width" info="Width of the draggable announcement text box." value={state.announcement.layoutWidth ?? (state.announcement.style === "Ribbon" ? 90 : 78)} min={20} max={96} onChange={(layoutWidth) => patchAnnouncement({ layoutWidth })} />
+              </div>
+            </div>
           </section>
           <details className="composer-section optional-section">
-            <summary><span><Sparkles size={15} /></span><div><strong>Optional enhancements</strong><small>Countdown, sounds, and walk-on character</small></div><ChevronDown size={16} /></summary>
+            <summary><span>2</span><div><strong>Optional enhancements</strong><small>Image, countdown, sounds, and walk-on character</small></div><ChevronDown size={16} /></summary>
             <div className="optional-section-body">
+              <div className="optional-image-control">
+                <div><ImagePlus size={18} /><span><strong>Announcement image</strong><small>Add an optional PNG, JPG, GIF, or WebP to the message.</small></span></div>
+                <label className="image-upload announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => readImageFile(event.target.files?.[0], (imageUrl) => patchAnnouncement({ imageUrl, imageX: 72, imageY: 50, imageWidth: 22 }))} /></label>
+                {state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined })} title="Remove announcement image"><Trash2 size={15} /></button>}
+              </div>
               <div className="announcement-timer-controls">
                 <LabeledSelect label="Countdown" info="Add a live countdown to the announcement." value={state.announcement.timerStyle} options={["off", "digital", "progress", "circular"]} optionLabels={{ off: "Off", digital: "Digital clock", progress: "Progress bar", circular: "Circular timer" }} onChange={(value) => patchAnnouncement({ timerStyle: value as LanternState["announcement"]["timerStyle"] })} />
-                {state.announcement.timerStyle !== "off" && <><LabeledSelect label="Timer position" info="Keep the timer beside the announcement or pin it to a screen corner." value={state.announcement.timerPosition} options={["announcement-right", "top-left", "top-right", "bottom-left", "bottom-right"]} optionLabels={{ "announcement-right": "Announcement right", "top-left": "Top left", "top-right": "Top right", "bottom-left": "Bottom left", "bottom-right": "Bottom right" }} onChange={(value) => patchAnnouncement({ timerPosition: value as LanternState["announcement"]["timerPosition"] })} /><ColorControl label="Timer color" value={state.announcement.timerAccentColor} onChange={(timerAccentColor) => patchAnnouncement({ timerAccentColor })} /><ColorControl label="Timer track" value={state.announcement.timerTrackColor} onChange={(timerTrackColor) => patchAnnouncement({ timerTrackColor })} /></>}
+                {state.announcement.timerStyle !== "off" && <><LabeledSelect label="Timer position" info="Keep the timer beside the announcement or pin it to a screen corner." value={state.announcement.timerPosition} options={["announcement-right", "top-left", "top-right", "bottom-left", "bottom-right"]} optionLabels={{ "announcement-right": "Announcement right", "top-left": "Top left", "top-right": "Top right", "bottom-left": "Bottom left", "bottom-right": "Bottom right" }} onChange={(value) => patchAnnouncement({ timerPosition: value as LanternState["announcement"]["timerPosition"], timerX: undefined, timerY: undefined })} /><ColorControl label="Timer color" value={state.announcement.timerAccentColor} onChange={(timerAccentColor) => patchAnnouncement({ timerAccentColor })} /><ColorControl label="Timer track" value={state.announcement.timerTrackColor} onChange={(timerTrackColor) => patchAnnouncement({ timerTrackColor })} /></>}
               </div>
-              <div className="announcement-character-control"><div><strong>Walk-on character</strong><span>The inspector walks in when this announcement starts and leaves when it ends.</span></div><label className="switch-row" title="Show the inspector only while this announcement is live"><input type="checkbox" checked={state.announcement.character === "inspector"} onChange={(event) => patchAnnouncement({ character: event.target.checked ? "inspector" : "off" })} /><span>{state.announcement.character === "inspector" ? "On" : "Off"}</span></label></div>
+              {state.announcement.timerStyle !== "off" && state.announcement.timerPosition !== "announcement-right" && <div className="announcement-placement-controls">
+                <div className="placement-control-heading"><span>Timer position</span><button type="button" onClick={() => patchAnnouncement({ timerX: undefined, timerY: undefined })}><RotateCcw size={13} /> Use corner default</button></div>
+                <div className="two-col">
+                  <Slider label="Timer X" info="Horizontal center of the floating timer." value={state.announcement.timerX ?? (state.announcement.timerPosition.endsWith("left") ? 17 : 83)} min={4} max={96} onChange={(timerX) => patchAnnouncement({ timerX })} />
+                  <Slider label="Timer Y" info="Vertical center of the floating timer." value={state.announcement.timerY ?? (state.announcement.timerPosition.startsWith("top") ? 15 : 84)} min={4} max={96} onChange={(timerY) => patchAnnouncement({ timerY })} />
+                </div>
+              </div>}
+              <div className="announcement-character-editor">
+                <div className="announcement-character-heading"><div><strong>Walk-on character</strong><span>Choose an image or 3D asset, then set its walk-in, wait, and exit path.</span></div><LabeledSelect label="Character" info="OBJ files are static. GLB and GLTF can include animation clips." value={state.announcement.character} options={["off", "inspector", "custom"]} optionLabels={{ off: "Off", inspector: "Built-in inspector", custom: "Custom image or 3D model" }} onChange={(value) => patchAnnouncement({ character: value as LanternState["announcement"]["character"] })} /></div>
+                {state.announcement.character === "custom" && <>
+                  <div className="character-asset-actions">
+                    <label className="command-button secondary compact image-upload-button"><Upload size={15} /> {state.announcement.characterAssetName ? "Replace asset" : "Choose image or 3D file"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,.glb,.gltf,.obj" onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => patchAnnouncement({ characterAssetUrl: String(reader.result), characterAssetName: file.name, characterAssetKind: file.type.startsWith("image/") ? "image" : "model", characterPlayAnimation: /\.(glb|gltf)$/i.test(file.name) });
+                      reader.readAsDataURL(file);
+                    }} /></label>
+                    <button type="button" className="command-button secondary compact" onClick={() => patchAnnouncement({ characterAssetUrl: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb", characterAssetName: "Khronos animated Fox.glb", characterAssetKind: "model", characterPlayAnimation: true })}><Box size={15} /> Use animated Fox example</button>
+                  </div>
+                  {state.announcement.characterAssetName && <div className="character-asset-status"><strong>{state.announcement.characterAssetName}</strong><span>{state.announcement.characterAssetKind === "image" ? "Image character" : /\.(obj)$/i.test(state.announcement.characterAssetName) ? "Static OBJ model" : "Animated 3D model"}</span></div>}
+                  {state.announcement.characterAssetKind === "model" && !/\.obj$/i.test(state.announcement.characterAssetName ?? "") && <label className="switch-row"><input type="checkbox" checked={state.announcement.characterPlayAnimation ?? true} onChange={(event) => patchAnnouncement({ characterPlayAnimation: event.target.checked })} /><span>Play embedded walk animation while moving</span></label>}
+                  <div className="two-col"><Slider label="Start off-screen" info="Starting horizontal position before the character enters." value={state.announcement.characterStartX ?? -18} min={-40} max={20} onChange={(characterStartX) => patchAnnouncement({ characterStartX })} /><Slider label="Stop point" info="Horizontal position where the character waits." value={state.announcement.characterStopX ?? 18} min={0} max={80} onChange={(characterStopX) => patchAnnouncement({ characterStopX })} /></div>
+                  <div className="two-col"><Slider label="Walk time" info="Seconds used to move in and back out." value={state.announcement.characterWalkSeconds ?? 2} min={1} max={10} onChange={(characterWalkSeconds) => patchAnnouncement({ characterWalkSeconds })} /><Slider label="Wait time" info="Seconds the character waits at the stop point." value={state.announcement.characterWaitSeconds ?? 4} min={0} max={30} onChange={(characterWaitSeconds) => patchAnnouncement({ characterWaitSeconds })} /></div>
+                  <p className="character-example-credit">Example: Khronos glTF Fox with Survey, Walk, and Run clips. Model CC0; rigging, animation, and glTF conversion credited under CC BY 4.0.</p>
+                </>}
+              </div>
               <div className="announcement-sfx-controls"><LabeledSelect label="Finish sound" info="Optional built-in sound played when the countdown ends." value={state.announcement.finishSfx} options={["off", "ding", "chime"]} optionLabels={{ off: "Off", ding: "Ding", chime: "Chime" }} onChange={(value) => patchAnnouncement({ finishSfx: value as LanternState["announcement"]["finishSfx"] })} /><Slider label="Sound volume" info="Volume for the built-in ding or chime." value={state.announcement.sfxVolume} onChange={(sfxVolume) => patchAnnouncement({ sfxVolume })} /><button type="button" className="command-button secondary compact preview-sfx-button" disabled={state.announcement.finishSfx === "off"} onClick={() => playAnnouncementSfx(state.announcement)}><Volume2 size={15} /> Test sound</button></div>
               <div className="sound-pickers"><SoundPicker label="Sound at start" value={state.announcement.startSoundUrl} onChange={(value) => patchAnnouncement({ startSoundUrl: value })} /><SoundPicker label="Sound at finish" value={state.announcement.endSoundUrl} onChange={(value) => patchAnnouncement({ endSoundUrl: value })} /></div>
             </div>
           </details>
           <div className="announcement-actions composer-actions"><div><small>{previewLabel} · {state.announcement.durationMinutes ? `${state.announcement.durationMinutes} minutes` : "Manual end"}</small></div><button type="button" className="command-button secondary" onClick={openAnnouncementDemo}><ExternalLink size={17} /> Preview</button><button className={state.announcement.active ? "command-button danger" : "command-button primary"} onClick={toggleAnnouncement}><Megaphone size={18} />{state.announcement.active ? "End announcement" : "Send announcement"}</button></div>
-          <section className="saved-announcement-panel" aria-label="Saved announcements">
-            <div className="saved-announcement-head">
-              <div><p className="eyebrow">Announcement library</p><h3>Saved announcements <span>{state.savedAnnouncements.length}</span></h3></div>
-              <div className="announcement-library-actions">
-                <button type="button" className="command-button secondary compact" onClick={newAnnouncement}><Plus size={15} /> New</button>
-                <button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button>
-              </div>
-            </div>
+          <details className="saved-announcement-panel" aria-label="Saved announcements">
+            <summary><span><Save size={15} /> Saved announcements</span><strong>{state.savedAnnouncements.find((item) => item.id === selectedSavedId)?.title ?? `${state.savedAnnouncements.length} created`}</strong><div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={(event) => { event.preventDefault(); newAnnouncement(); }}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={(event) => { event.preventDefault(); saveAnnouncement(); }}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div><ChevronDown size={15} /></summary>
             <div className="saved-announcement-list">
               {state.savedAnnouncements.map((item) => <article key={item.id} className={selectedSavedId === item.id ? "saved-announcement-card selected" : "saved-announcement-card"} onClick={() => loadSavedAnnouncement(item.id)}>
                 <div><strong>{item.title || "Untitled announcement"}</strong><p>{item.message || "No message"}</p><small>{targetOptionLabels(state)[item.target]} · {item.durationMinutes ? `${item.durationMinutes} min` : "Manual"}</small></div>
@@ -2784,20 +2952,17 @@ function AnnouncementsView({
               </article>)}
               {!state.savedAnnouncements.length && <div className="saved-announcement-empty"><Megaphone size={20} /><span>No saved announcements yet. Finish this draft and choose Save draft.</span></div>}
             </div>
-          </section>
+          </details>
         </div>
         <div className="announcement-preview-card">
-          <div className="announcement-preview-tools"><div>{selectedTargets.map((id) => state.screens[id]).filter(Boolean).map((screen) => <button key={screen.id} className={previewScreen.id === screen.id ? "active" : ""} onClick={() => setPreviewScreenId(screen.id)}>{screen.label}</button>)}</div><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div>
+          <div className="announcement-preview-tools"><label className="announcement-preview-display-select"><Monitor size={15} /><span>Preview display</span><select aria-label="Preview display" value={previewScreen.id} onChange={(event) => setPreviewScreenId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div>
           <p className="eyebrow">Live preview · {previewLabel}</p>
           <div className="announcement-preview-stage">
-            <div className={`announcement-display-preview ${orientationClass(previewScreen)}`} aria-label={`Announcement preview on ${previewScreen.label}`}>
-              <BabylonDonorWall state={state} screenId={previewScreen.id} />
-              <FixedAnnouncementComposition screen={previewScreen} announcement={state.announcement} onImagePositionChange={(imageX, imageY) => patchAnnouncement({ imageX, imageY })} />
-            </div>
+            <AnnouncementMonitorSurface state={state} screen={previewScreen} announcement={state.announcement} onPatch={patchAnnouncement} />
           </div>
           <div className="preview-meta"><span><Monitor size={15} />{previewScreen.label}</span><span><History size={15} />{state.announcement.durationMinutes ? `${state.announcement.durationMinutes} min` : "Manual"}</span></div>
         </div>
-      </div> : <LivePreviewPanel state={state} patchLive={patchLive} startLive={startLive} startLiveStream={startLiveStream} stopLive={stopLive} />}
+      </div>
       {scheduleAnnouncementId && createPortal(<div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setScheduleAnnouncementId(null); }}>
         <section className="editor-modal announcement-schedule-modal" role="dialog" aria-modal="true" aria-labelledby="announcement-schedule-title">
           <div className="editor-modal-head"><div><p className="eyebrow">Add to calendar</p><h2 id="announcement-schedule-title">{state.savedAnnouncements.find((item) => item.id === scheduleAnnouncementId)?.title}</h2></div><button className="icon-button" onClick={() => setScheduleAnnouncementId(null)}><X size={18} /></button></div>
@@ -3358,18 +3523,95 @@ function LivePreviewPanel({
   );
 }
 
+function AnnouncementMonitorSurface({
+  state,
+  screen,
+  announcement,
+  onPatch,
+  startedAt,
+  playOnComplete = false,
+  demo = false
+}: {
+  state: LanternState;
+  screen: DisplayProfile;
+  announcement: LanternState["announcement"];
+  onPatch?: (patch: Partial<LanternState["announcement"]>) => void;
+  startedAt?: string;
+  playOnComplete?: boolean;
+  demo?: boolean;
+}) {
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [editing, setEditing] = useState(false);
+  const [view, setView] = useState({ x: 0, y: 0, zoom: 1, rotateX: -4, rotateY: 12 });
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; view: typeof view; pan: boolean } | null>(null);
+  const resetView = () => setView({ x: 0, y: 0, zoom: 1, rotateX: -4, rotateY: 12 });
+  const setMode = (mode: "2d" | "3d") => {
+    setViewMode(mode);
+    resetView();
+  };
+  const beginViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest(".monitor-view-controls, .announcement-edit-handle, [contenteditable='true'], .announcement-image.editable")) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, view, pan: viewMode === "2d" || event.shiftKey || event.button === 1 };
+  };
+  const moveViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (drag.pan) {
+      setView({ ...drag.view, x: drag.view.x + dx, y: drag.view.y + dy });
+    } else {
+      setView({ ...drag.view, rotateX: clamp(drag.view.rotateX - dy * .22, -65, 65), rotateY: clamp(drag.view.rotateY + dx * .28, -75, 75) });
+    }
+  };
+  const endViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const transform = viewMode === "3d"
+    ? `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom}) rotateX(${view.rotateX}deg) rotateY(${view.rotateY}deg)`
+    : `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})`;
+
+  return <div className={`announcement-monitor${demo ? " demo" : ""} mode-${viewMode}${editing ? " editing" : ""}`}>
+    <div className="monitor-view-controls">
+      {onPatch && <button type="button" className={editing ? "active edit-toggle" : "edit-toggle"} onClick={() => setEditing((current) => !current)}><Pencil size={14} /> {editing ? "Finish editing" : "Edit"}</button>}
+      <button type="button" className={viewMode === "2d" ? "active" : ""} onClick={() => setMode("2d")}><Monitor size={14} /> 2D</button>
+      <button type="button" className={viewMode === "3d" ? "active" : ""} onClick={() => setMode("3d")}><Rotate3d size={14} /> 3D</button>
+      <button type="button" onClick={() => setView((current) => ({ ...current, zoom: clamp(current.zoom - .12, .45, 2.5) }))} title="Zoom out"><ZoomOut size={14} /></button>
+      <span>{Math.round(view.zoom * 100)}%</span>
+      <button type="button" onClick={() => setView((current) => ({ ...current, zoom: clamp(current.zoom + .12, .45, 2.5) }))} title="Zoom in"><ZoomIn size={14} /></button>
+      <button type="button" onClick={resetView} title="Reset view"><RotateCcw size={14} /></button>
+    </div>
+    <div className="announcement-monitor-viewport" onPointerDown={beginViewDrag} onPointerMove={moveViewDrag} onPointerUp={endViewDrag} onPointerCancel={endViewDrag} onWheel={(event) => {
+      event.preventDefault();
+      setView((current) => ({ ...current, zoom: clamp(current.zoom + (event.deltaY < 0 ? .1 : -.1), .45, 2.5) }));
+    }}>
+      <div className={`announcement-monitor-surface ${orientationClass(screen)}`} style={{ transform }}>
+        <BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" announcementCharacter={announcement.character} announcementActive announcementCharacterAsset={announcement} />
+        <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} editing={editing} onPatch={onPatch} />
+      </div>
+    </div>
+    <div className="monitor-view-hint">{editing ? <><Move size={13} /> Drag the text box, timer, or image · click text to edit</> : viewMode === "3d" ? <><Move3d size={13} /> Drag to orbit · Shift-drag to pan · wheel to zoom</> : <><Move size={13} /> Drag to pan · wheel to zoom</>}</div>
+  </div>;
+}
+
 function FixedAnnouncementComposition({
   screen,
   announcement,
   startedAt,
   playOnComplete = false,
-  onImagePositionChange
+  editing = false,
+  onPatch
 }: {
   screen: DisplayProfile;
   announcement: LanternState["announcement"];
   startedAt?: string;
   playOnComplete?: boolean;
-  onImagePositionChange?: (x: number, y: number) => void;
+  editing?: boolean;
+  onPatch?: (patch: Partial<LanternState["announcement"]>) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const portrait = screen.orientation === "Portrait";
@@ -3390,9 +3632,9 @@ function FixedAnnouncementComposition({
     return () => observer.disconnect();
   }, [designHeight, designWidth]);
 
-  return <div ref={hostRef} className={`fixed-announcement-composition${onImagePositionChange ? " editable" : ""}`}>
+  return <div ref={hostRef} className={`fixed-announcement-composition${editing ? " editable" : ""}`}>
     <div className={`announcement-fixed-canvas ${portrait ? "portrait" : "landscape"}`} style={{ width: designWidth, height: designHeight, transform: `translate(-50%, -50%) scale(${scale})` }}>
-      <AnnouncementLayer announcement={announcement} preview startedAt={startedAt} playOnComplete={playOnComplete} onImagePositionChange={onImagePositionChange} />
+      <AnnouncementLayer announcement={announcement} preview startedAt={startedAt} playOnComplete={playOnComplete} editing={editing} onPatch={onPatch} />
     </div>
   </div>;
 }
@@ -3402,34 +3644,63 @@ function AnnouncementLayer({
   preview = false,
   startedAt,
   playOnComplete = false,
-  onImagePositionChange
+  editing = false,
+  onPatch
 }: {
   announcement: LanternState["announcement"];
   preview?: boolean;
   startedAt?: string;
   playOnComplete?: boolean;
-  onImagePositionChange?: (x: number, y: number) => void;
+  editing?: boolean;
+  onPatch?: (patch: Partial<LanternState["announcement"]>) => void;
 }) {
   const timerInAnnouncement = announcement.timerStyle !== "off" && announcement.timerPosition === "announcement-right";
   const overlayClass = preview ? "announcement-display-overlay" : "announcement-overlay";
   const styleClass = announcement.style.toLowerCase().replace(/\s/g, "-");
+  const defaultLayoutY = announcement.style === "Temporary Card" ? 50 : 88;
+  const hasCustomLayout = announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
+  const overlayStyle = {
+    color: announcement.textColor ?? undefined,
+    background: announcement.backgroundColor ?? undefined,
+    ...(hasCustomLayout ? {
+      top: `${announcement.layoutY ?? defaultLayoutY}%`,
+      left: `${announcement.layoutX ?? 50}%`,
+      right: "auto",
+      bottom: "auto",
+      width: `${announcement.layoutWidth ?? (announcement.style === "Ribbon" ? 90 : 78)}%`,
+      transform: "translate(-50%, -50%)"
+    } : {})
+  } as React.CSSProperties;
+  const dragPosition = (event: React.PointerEvent<HTMLElement>, kind: "layout" | "image") => {
+    if (!editing || !onPatch || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const bounds = event.currentTarget.closest(".announcement-fixed-canvas")?.getBoundingClientRect();
+    if (!bounds) return;
+    const x = clamp((event.clientX - bounds.left) / bounds.width * 100, 0, 100);
+    const y = clamp((event.clientY - bounds.top) / bounds.height * 100, 0, 100);
+    onPatch(kind === "layout" ? { layoutX: x, layoutY: y } : { imageX: x, imageY: y });
+  };
+  const editableText = (field: "title" | "message" | "details") => ({
+    contentEditable: editing,
+    suppressContentEditableWarning: true,
+    onBlur: (event: React.FocusEvent<HTMLElement>) => onPatch?.({ [field]: event.currentTarget.textContent ?? "" })
+  });
 
   return <>
-    <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}`} style={{ color: announcement.textColor ?? undefined, background: announcement.backgroundColor ?? undefined }}>
-      <strong>{announcement.title || "Announcement title"}</strong>
-      <span>{announcement.message || "Your message appears here."}</span>
-      {announcement.details && <small className="announcement-details">{announcement.details}</small>}
-      {announcement.imageUrl && <img className={`announcement-image${onImagePositionChange ? " editable" : ""}`} src={announcement.imageUrl} alt="" draggable={false} onPointerDown={(event) => {
-        if (!onImagePositionChange) return;
+    <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}${hasCustomLayout ? " custom-position" : ""}${editing ? " announcement-editable-element" : ""}`} style={overlayStyle}>
+      {editing && <button type="button" className="announcement-edit-handle text-handle" title="Drag announcement text box" onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-      }} onPointerMove={(event) => {
-        if (!onImagePositionChange || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
-        const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
-        if (bounds) onImagePositionChange(clamp((event.clientX - bounds.left) / bounds.width * 100, 0, 100), clamp((event.clientY - bounds.top) / bounds.height * 100, 0, 100));
-      }} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }} />}
+      }} onPointerMove={(event) => dragPosition(event, "layout")}><Move size={20} /></button>}
+      <strong {...editableText("title")}>{announcement.title || "Announcement title"}</strong>
+      <span {...editableText("message")}>{announcement.message || "Your message appears here."}</span>
+      {announcement.details && <small className="announcement-details" {...editableText("details")}>{announcement.details}</small>}
+      {announcement.imageUrl && <img className={`announcement-image${editing ? " editable announcement-editable-element" : ""}`} src={announcement.imageUrl} alt="" draggable={false} onPointerDown={(event) => {
+        if (!editing || !onPatch) return;
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }} onPointerMove={(event) => dragPosition(event, "image")} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }} />}
       {timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className="inside-announcement" />}
     </div>
-    {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${announcement.timerPosition}`} />}
+    {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${announcement.timerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
   </>;
 }
 
@@ -3437,12 +3708,16 @@ function AnnouncementCountdown({
   announcement,
   startedAt,
   playOnComplete,
-  className
+  className,
+  editing = false,
+  onPatch
 }: {
   announcement: LanternState["announcement"];
   startedAt?: string;
   playOnComplete: boolean;
   className: string;
+  editing?: boolean;
+  onPatch?: (patch: Partial<LanternState["announcement"]>) => void;
 }) {
   const [now, setNow] = useState(Date.now());
   const playedRef = useRef(false);
@@ -3456,8 +3731,28 @@ function AnnouncementCountdown({
     "--timer-accent": announcement.timerAccentColor,
     "--timer-track": announcement.timerTrackColor,
     "--timer-progress": `${Math.max(0, Math.min(1, progress)) * 360}deg`,
-    "--timer-progress-percent": `${Math.max(0, Math.min(1, progress)) * 100}%`
+    "--timer-progress-percent": `${Math.max(0, Math.min(1, progress)) * 100}%`,
+    ...(announcement.timerX !== undefined || announcement.timerY !== undefined ? {
+      left: `${announcement.timerX ?? (announcement.timerPosition.endsWith("left") ? 17 : 83)}%`,
+      top: `${announcement.timerY ?? (announcement.timerPosition.startsWith("top") ? 15 : 84)}%`,
+      right: "auto",
+      bottom: "auto",
+      transform: "translate(-50%, -50%)"
+    } : {})
   } as React.CSSProperties;
+  const dragTimer = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!editing || !onPatch || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const bounds = event.currentTarget.closest(".announcement-fixed-canvas")?.getBoundingClientRect();
+    if (!bounds) return;
+    onPatch({
+      timerX: clamp((event.clientX - bounds.left) / bounds.width * 100, 0, 100),
+      timerY: clamp((event.clientY - bounds.top) / bounds.height * 100, 0, 100)
+    });
+  };
+  const handle = editing && <button type="button" className="announcement-edit-handle timer-handle" title="Drag timer" onPointerDown={(event) => {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }} onPointerMove={dragTimer}><Move size={18} /></button>;
 
   useEffect(() => {
     setNow(Date.now());
@@ -3476,14 +3771,14 @@ function AnnouncementCountdown({
   if (announcement.timerStyle === "off") return null;
 
   if (announcement.timerStyle === "progress") {
-    return <div className={`announcement-countdown progress-countdown ${className}`} style={timerStyle} aria-label={`${formatted} remaining`}><small>Time left</small><div className="countdown-progress-track"><i /></div><strong>{formatted}</strong></div>;
+    return <div className={`announcement-countdown progress-countdown ${className}${editing ? " announcement-editable-element" : ""}`} style={timerStyle} aria-label={`${formatted} remaining`}>{handle}<small>Time left</small><div className="countdown-progress-track"><i /></div><strong>{formatted}</strong></div>;
   }
 
   if (announcement.timerStyle === "circular") {
-    return <div className={`announcement-countdown circular-countdown ${className}`} style={timerStyle} aria-label={`${formatted} remaining`}><div className="countdown-dial"><strong>{formatted}</strong></div><small>Time left</small></div>;
+    return <div className={`announcement-countdown circular-countdown ${className}${editing ? " announcement-editable-element" : ""}`} style={timerStyle} aria-label={`${formatted} remaining`}>{handle}<div className="countdown-dial"><strong>{formatted}</strong></div><small>Time left</small></div>;
   }
 
-  return <div className={`announcement-countdown digital-countdown ${className}`} style={timerStyle} aria-label={`${formatted} remaining`}><small>Time left</small><strong>{formatted}</strong></div>;
+  return <div className={`announcement-countdown digital-countdown ${className}${editing ? " announcement-editable-element" : ""}`} style={timerStyle} aria-label={`${formatted} remaining`}>{handle}<small>Time left</small><strong>{formatted}</strong></div>;
 }
 
 function formatCountdown(seconds: number) {
@@ -4383,7 +4678,10 @@ function isSameCalendarDate(left: Date, right: Date) { return left.getFullYear()
 function toDateInputValue(value: Date) { return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`; }
 function dateFromInputValue(value: string) { const [year, month, day] = value.split("-").map(Number); return new Date(year, month - 1, day); }
 function entryOccursOnDate(entry: ScheduleEntry, date: Date) {
-  if (entry.recurrence === "once" || entry.scheduleDate) return entry.scheduleDate ? entry.scheduleDate === toDateInputValue(date) : false;
+  if (entry.recurrence === "once") return entry.scheduleDate ? entry.scheduleDate === toDateInputValue(date) : false;
+  const value = toDateInputValue(date);
+  if (entry.scheduleDate && value < entry.scheduleDate) return false;
+  if (entry.scheduleEndDate && value > entry.scheduleEndDate) return false;
   return entry.days.includes(date.getDay());
 }
 function scheduleTargetsConflict(left: TargetScreen, right: TargetScreen) { return left === "all" || right === "all" || left === right; }
@@ -4517,6 +4815,13 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
   const [demoStartedAt, setDemoStartedAt] = useState(() => new Date().toISOString());
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
+  const patchAnnouncement = (patch: Partial<LanternState["announcement"]>) => {
+    setState((current) => {
+      const next = { ...current, announcement: { ...current.announcement, ...patch } };
+      publishState(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -4532,9 +4837,8 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
 
   return (
     <div className={`display-shell announcement-demo-shell ${orientationClass(screen)}`}>
-      <BabylonDonorWall state={state} screenId={screen.id} />
+      <AnnouncementMonitorSurface state={state} screen={screen} announcement={state.announcement} onPatch={patchAnnouncement} startedAt={demoStartedAt} playOnComplete demo />
       <div className="display-chrome"><span>Announcement demo</span><span>{screen.label}</span></div>
-      <FixedAnnouncementComposition screen={screen} announcement={state.announcement} startedAt={demoStartedAt} playOnComplete />
       <div className="announcement-demo-toolbar">
         <span><Clock3 size={15} /> Demo preview</span>
         <button type="button" onClick={() => setDemoStartedAt(new Date().toISOString())}><RotateCcw size={15} /> Restart timer</button>
@@ -4550,7 +4854,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const [fps, setFps] = useState(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [identify, setIdentify] = useState(false);
-  const [fitToScreen, setFitToScreen] = useState(false);
+  const [fitToScreen, setFitToScreen] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const [displayMenu, setDisplayMenu] = useState<{ x: number; y: number } | null>(null);
   const [scheduleNow, setScheduleNow] = useState(() => new Date());
@@ -4636,7 +4940,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       } else {
-        await document.documentElement.requestFullscreen();
+        await document.documentElement.requestFullscreen({ navigationUI: "hide" });
       }
     } catch {
       setFitToScreen(true);
@@ -4662,7 +4966,9 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         screenId={screenId}
         onFps={setFps}
         fitToScreen={fitToScreen}
+        viewMode="2d"
         announcementCharacter={(showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement)?.character ?? "off"}
+        announcementCharacterAsset={showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement}
         announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
       />
       {showAnnouncement && (
@@ -4705,7 +5011,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
           </button>
           <button type="button" onClick={() => void toggleFullscreen()}>
             {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
-            <span>{isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}</span>
+            <span>{isFullscreen ? "Exit TV presentation" : "Present on TV (no borders)"}</span>
           </button>
           <button type="button" onClick={() => { showIdentity(); setDisplayMenu(null); }}>
             <Radio size={17} />
@@ -4990,8 +5296,10 @@ function titleFor(view: View) {
       return "Board Editor";
     case "schedule":
       return "Schedule";
-    case "announcements":
-      return "Announcements";
+      case "announcements":
+        return "Announcements";
+      case "live":
+        return "Go Live";
     case "screens":
       return "Displays";
     case "revisions":
@@ -5012,10 +5320,10 @@ interface ResolvedScheduledAnnouncement {
 }
 
 function scheduleMatchesDate(entry: ScheduleEntry, now: Date) {
-  if (entry.recurrence === "once" && entry.scheduleDate) {
-    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    return entry.scheduleDate === localDate;
-  }
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (entry.recurrence === "once" && entry.scheduleDate) return entry.scheduleDate === localDate;
+  if (entry.scheduleDate && localDate < entry.scheduleDate) return false;
+  if (entry.scheduleEndDate && localDate > entry.scheduleEndDate) return false;
   return entry.days.includes(now.getDay());
 }
 
