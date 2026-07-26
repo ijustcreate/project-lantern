@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0054",
+    "title": "Load How-to screenshots from the deployment base",
+    "summary": "Made packaged walkthrough screenshots resolve through the configured Vite base path so they load on the project-lantern GitHub Pages site as well as locally.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 1:16 PM",
+    "areas": [
+      "Learning center",
+      "Deployment"
+    ],
+    "files": [
+      "src/App.tsx",
+      ".lantern/bugs/BUG-0009/catalog.json"
+    ],
+    "tests": "npm run build; live GitHub Pages verification after deployment"
+  },
+  {
     "id": "DEV-0053",
     "title": "Make the How to use walkthrough visual and animated",
     "summary": "Replace the static decorative slide art with contextual Recognition OS screenshots, sequenced motion, focus callouts, and screenshot thumbnails in the quick guide so operators can learn from the actual interface.",

@@ -1011,7 +1011,7 @@ const helpSlides = [
     copy: "Project Lantern keeps donor content, screen layouts, schedules, and live announcements together in one control center.",
     points: ["Build the content", "Preview the result", "Publish to your displays"],
     accent: "01",
-    image: "/assets/help/dashboard.png",
+    image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
     imageAlt: "Recognition OS dashboard showing display previews and publishing controls",
     callout: "Your control center"
   },
@@ -1021,7 +1021,7 @@ const helpSlides = [
     copy: "Open Screens to name each display, choose its orientation, and confirm that it is attached. The Dashboard status pills show what is ready at a glance.",
     points: ["Open display windows", "Confirm each screen says Attached", "Select a screen before editing"],
     accent: "02",
-    image: "/assets/help/dashboard.png",
+    image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
     imageAlt: "Dashboard showing the connected display cards and screen controls",
     callout: "Check display status here"
   },
@@ -1031,7 +1031,7 @@ const helpSlides = [
     copy: "Use Donors to create recognition profiles. Add a name, giving details, group, optional story, and a visual treatment for special recognition.",
     points: ["Choose Add donor", "Complete the guided setup", "Keep Active enabled to show the donor"],
     accent: "03",
-    image: "/assets/help/donors.png",
+    image: `${import.meta.env.BASE_URL}assets/help/donors.png`,
     imageAlt: "Donors workspace showing recognition profiles and donor tools",
     callout: "Add and manage profiles"
   },
@@ -1041,7 +1041,7 @@ const helpSlides = [
     copy: "In Board Editor, select a display and arrange headings, donor lists, messages, stories, and footers. The canvas is your live layout preview.",
     points: ["Choose the target display", "Add and reorder panels", "Adjust colors, type, and background media"],
     accent: "04",
-    image: "/assets/help/board-editor.png",
+    image: `${import.meta.env.BASE_URL}assets/help/board-editor.png`,
     imageAlt: "Board Editor with layout controls and a live recognition board preview",
     callout: "Design with a live preview"
   },
@@ -1051,7 +1051,7 @@ const helpSlides = [
     copy: "Schedule lets you place boards and saved announcements on a calendar. Set the target screen, start time, and duration, then check for overlaps.",
     points: ["Create a schedule entry", "Pick a board or announcement", "Review conflicts before publishing"],
     accent: "05",
-    image: "/assets/help/schedule.png",
+    image: `${import.meta.env.BASE_URL}assets/help/schedule.png`,
     imageAlt: "Schedule workspace showing the recognition content calendar",
     callout: "Plan content by time"
   },
@@ -1061,7 +1061,7 @@ const helpSlides = [
     copy: "Publish sends the current revision to your displays. Announcements can temporarily take over a screen, while Broadcast / Stream supports camera, screen-share, and presentation content.",
     points: ["Preview before publishing", "Use Announcements for time-sensitive messages", "Use Restore to return to the donor wall"],
     accent: "06",
-    image: "/assets/help/announcements.png",
+    image: `${import.meta.env.BASE_URL}assets/help/announcements.png`,
     imageAlt: "Announcements workspace with message controls and a display preview",
     callout: "Preview before going live"
   },
@@ -1071,7 +1071,7 @@ const helpSlides = [
     copy: "Prepare content early, verify every target display, publish once, and watch the screen status. Revisions give you a safe record of recent changes.",
     points: ["Edit → preview → publish", "Check legibility from viewing distance", "Use Revisions when you need to roll back"],
     accent: "07",
-    image: "/assets/help/broadcast.png",
+    image: `${import.meta.env.BASE_URL}assets/help/broadcast.png`,
     imageAlt: "Broadcast and Stream workspace for live presentation content",
     callout: "Present with confidence"
   }
