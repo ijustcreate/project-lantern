@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0062",
+    "title": "Align dashboard and Board Editor previews",
+    "summary": "Fixed dashboard donor text alignment and effect sizing, then made Board Editor typography respond to panel bounds so the same board stays centered, legible, and unclipped in both views.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 7:54 PM",
+    "areas": [
+      "Dashboard",
+      "Board Editor",
+      "Display rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx",
+      ".lantern/bugs/BUG-0003/catalog.json"
+    ],
+    "tests": "npm run build; in-app browser portrait and landscape dashboard visual check; Display 1 Edit parity check; zero console errors"
+  },
+  {
     "id": "DEV-0061",
     "title": "Rebuild broadcast camera manipulation",
     "summary": "Makes camera frames directly editable, gives custom polygons movable and insertable points, and consolidates source and broadcast controls where operators expect them.",

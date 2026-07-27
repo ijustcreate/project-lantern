@@ -597,6 +597,7 @@ function drawComposableBoard(
       const rows = Math.max(1, Math.ceil(donors.length / columns));
       const listTop = y;
       const rowHeight = panelHeight / rows;
+      context.textAlign = "center";
       donors.forEach((donor, index) => {
         const showSubtext = donorSubtextVisible(screen, donor.id);
         const column = index % columns;
@@ -606,11 +607,11 @@ function drawComposableBoard(
         const baseline = listTop + rowHeight * (row + (showSubtext && (donor.subtext || donor.note) ? 0.47 : 0.58));
         const baseSize = Math.min(nameFontUnit, Math.max(9, rowHeight * (showSubtext ? 0.34 : 0.48)));
         context.save();
-        drawDonorHighlight(context, donor, x, baseline, cellWidth * 0.88, baseSize * scale, gold);
+        drawDonorHighlight(context, donor, x, baseline, cellWidth * 0.72, baseSize * scale, gold);
         applyDonorCanvasEffect(context, donor, animationTime);
         context.fillStyle = panelTextColor || donor.nameColor || ivory;
         context.font = `500 ${Math.round(baseSize * scale)}px ${donorFont(donor, font)}, Inter, sans-serif`;
-        fitText(context, donor.name, x, baseline, cellWidth * 0.88, Math.round(baseSize * scale), 9);
+        fitText(context, donor.name, x, baseline, cellWidth * 0.72, Math.round(baseSize * scale), 7);
         if (screen?.showIcons) drawDonorIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, donor, screen, donor.accentColor || gold, Math.max(7, baseSize * 0.35));
         if (showSubtext && (donor.subtext || donor.note)) {
           context.fillStyle = "rgba(245, 242, 235, 0.6)";
@@ -1666,7 +1667,16 @@ function fitText(
   minSize: number
 ) {
   let size = initialSize;
-  while (size > minSize && context.measureText(text).width > maxWidth) {
+  const styledContext = context as StyledTextContext;
+  const textStyle = styledContext.__lanternTextStyle;
+  const effectInset = textStyle
+    ? Math.max(
+        textStyle.finish === "cut-brass" ? initialSize * 0.045 : 0,
+        textStyle.shadowEnabled ? textStyle.shadowDistance + initialSize * 0.025 : 0
+      )
+    : 0;
+  const safeWidth = Math.max(1, maxWidth - effectInset * 2);
+  while (size > minSize && context.measureText(text).width > safeWidth) {
     size -= 1;
     context.font = context.font.replace(/[\d.]+px/, `${size}px`);
   }
@@ -1693,29 +1703,25 @@ function drawStyledText(context: CanvasRenderingContext2D, text: string, x: numb
   const fontSize = Number.parseFloat(context.font) || 16;
   if (style.shadowEnabled) {
     const radians = style.shadowAngle * Math.PI / 180;
-    context.shadowColor = `rgba(0, 0, 0, ${Math.min(.9, .15 + style.shadowStrength / 125)})`;
-    context.shadowBlur = 1 + style.shadowStrength / 18;
-    context.shadowOffsetX = Math.cos(radians) * style.shadowDistance;
-    context.shadowOffsetY = Math.sin(radians) * style.shadowDistance;
+    context.shadowColor = `rgba(0, 0, 0, ${Math.min(.66, .1 + style.shadowStrength / 155)})`;
+    context.shadowBlur = Math.max(1, fontSize * (.006 + style.shadowStrength / 12000));
+    context.shadowOffsetX = Math.cos(radians) * Math.min(style.shadowDistance, fontSize * .08);
+    context.shadowOffsetY = Math.sin(radians) * Math.min(style.shadowDistance, fontSize * .08);
   }
   if (style.finish === "cut-brass") {
     const originalFill = context.fillStyle;
     context.lineJoin = "round";
-    context.lineWidth = Math.max(1.5, fontSize * .055);
-    context.strokeStyle = "#5e3d13";
+    context.lineWidth = Math.max(1, fontSize * .018);
+    context.strokeStyle = "#76511f";
     context.strokeText(text, x, y);
     const gradient = context.createLinearGradient(x, y - fontSize, x, y + 4);
-    gradient.addColorStop(0, "#fff1a6");
-    gradient.addColorStop(.24, "#d7a943");
-    gradient.addColorStop(.58, "#8d5f1f");
-    gradient.addColorStop(.82, "#e5bd5a");
-    gradient.addColorStop(1, "#6b4517");
+    gradient.addColorStop(0, "#ffe9a0");
+    gradient.addColorStop(.3, "#e0b85d");
+    gradient.addColorStop(.62, "#b17c2e");
+    gradient.addColorStop(.84, "#e4c16d");
+    gradient.addColorStop(1, "#956625");
     context.fillStyle = gradient;
     context.fillText(text, x, y);
-    context.shadowColor = "transparent";
-    context.lineWidth = Math.max(.8, fontSize * .018);
-    context.strokeStyle = "rgba(255, 244, 174, .72)";
-    context.strokeText(text, x - .7, y - .8);
     context.fillStyle = originalFill;
   } else {
     context.fillText(text, x, y);

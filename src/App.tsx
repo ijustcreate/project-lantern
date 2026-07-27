@@ -2477,7 +2477,16 @@ function DirectBoardCanvas({
   };
   const backgroundScale = display.backgroundCrop?.scale ?? 1;
   const particleCount = display.particleCount ?? 34;
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{ fontFamily: display.fontFamily ?? "Montserrat", "--board-editor-zoom": editorZoom } as React.CSSProperties} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
+  const shadowRadians = (display.textShadowAngle ?? 135) * Math.PI / 180;
+  const shadowDistance = display.textShadowDistance ?? 5;
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${display.textFinish === "cut-brass" ? " finish-cut-brass" : ""}${display.textShadowEnabled ? " text-shadow-enabled" : ""}`} style={{
+    fontFamily: display.fontFamily ?? "Montserrat",
+    "--board-editor-zoom": editorZoom,
+    "--board-text-shadow-x": `${Math.cos(shadowRadians) * shadowDistance}px`,
+    "--board-text-shadow-y": `${Math.sin(shadowRadians) * shadowDistance}px`,
+    "--board-text-shadow-blur": `${1 + (display.textShadowStrength ?? 55) / 28}px`,
+    "--board-text-shadow-alpha": Math.min(.62, .1 + (display.textShadowStrength ?? 55) / 165)
+  } as React.CSSProperties} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
     {display.backgroundImage && <div className="direct-board-background"><img src={display.backgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${display.backgroundCrop?.x ?? 50}% ${display.backgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
