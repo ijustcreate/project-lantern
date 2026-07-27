@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Activity,
@@ -3208,6 +3208,13 @@ interface LiveRecording {
   createdAt: string;
 }
 
+const livePolygonClip = (frame: LanternState["live"]["frame"]) => {
+  const points = frame.polygonPoints?.length
+    ? frame.polygonPoints
+    : [{ x: 12, y: 4 }, { x: 88, y: 4 }, { x: 100, y: 50 }, { x: 86, y: 96 }, { x: 14, y: 96 }, { x: 0, y: 50 }];
+  return `polygon(${points.map((point) => `${point.x}% ${point.y}%`).join(", ")})`;
+};
+
 function DirectLiveStage({
   screen,
   live,
@@ -3224,34 +3231,54 @@ function DirectLiveStage({
   onFrameChange: (frame: LanternState["live"]["frame"]) => void;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const dragRef = useRef<{
-    kind: "move" | "resize" | "crop";
+    kind: "move" | "resize" | "crop" | "point";
     edge?: string;
+    pointIndex?: number;
     pointerId: number;
     x: number;
     y: number;
     frame: LanternState["live"]["frame"];
   } | null>(null);
 
-  const beginDrag = (event: React.PointerEvent<HTMLDivElement>, kind: "move" | "resize" | "crop", edge = "se") => {
+  const polygonPoints = live.frame.polygonPoints?.length
+    ? live.frame.polygonPoints
+    : [{ x: 12, y: 4 }, { x: 88, y: 4 }, { x: 100, y: 50 }, { x: 86, y: 96 }, { x: 14, y: 96 }, { x: 0, y: 50 }];
+  const polygonClip = `polygon(${polygonPoints.map((point) => `${point.x}% ${point.y}%`).join(", ")})`;
+
+  const beginDrag = (event: React.PointerEvent<HTMLElement>, kind: "move" | "resize" | "crop" | "point", edge = "se", pointIndex?: number) => {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { kind, edge, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame: structuredClone(live.frame) };
+    dragRef.current = { kind, edge, pointIndex, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame: structuredClone(live.frame) };
   };
 
-  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+  const moveDrag = (event: React.PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     const stage = stageRef.current;
     if (!drag || !stage || drag.pointerId !== event.pointerId) return;
     const bounds = stage.getBoundingClientRect();
     const dx = ((event.clientX - drag.x) / bounds.width) * 100;
     const dy = ((event.clientY - drag.y) / bounds.height) * 100;
-    if (drag.kind === "move") {
+    if (drag.kind === "point") {
+      const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
+      if (!frameBounds || drag.pointIndex === undefined) return;
+      const points = drag.frame.polygonPoints?.length ? drag.frame.polygonPoints : polygonPoints;
+      onFrameChange({
+        ...drag.frame,
+        polygonPoints: points.map((point, index) => index === drag.pointIndex ? {
+          x: clamp(((event.clientX - frameBounds.left) / frameBounds.width) * 100, 0, 100),
+          y: clamp(((event.clientY - frameBounds.top) / frameBounds.height) * 100, 0, 100)
+        } : point)
+      });
+    } else if (drag.kind === "move") {
       onFrameChange({ ...drag.frame, x: clamp(drag.frame.x + dx, 0, 100 - drag.frame.width), y: clamp(drag.frame.y + dy, 0, 100 - drag.frame.height) });
     } else if (drag.kind === "resize") {
       let { x, y, width, height } = drag.frame;
       const edge = drag.edge ?? "se";
+      const isCorner = edge.length === 2;
+      const uniform = isCorner || ((drag.frame.maskShape === "circle" || drag.frame.maskShape === "polygon") && event.shiftKey);
       if (edge.includes("e")) width = clamp(drag.frame.width + dx, 10, 100 - x);
       if (edge.includes("s")) height = clamp(drag.frame.height + dy, 10, 100 - y);
       if (edge.includes("w")) {
@@ -3262,13 +3289,46 @@ function DirectLiveStage({
         y = clamp(drag.frame.y + dy, 0, drag.frame.y + drag.frame.height - 10);
         height = drag.frame.height + drag.frame.y - y;
       }
-      onFrameChange({ ...drag.frame, x, y, width, height });
+      if (uniform) {
+        const aspect = drag.frame.width / Math.max(1, drag.frame.height);
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          height = clamp(width / aspect, 10, 100 - y);
+          if (edge.includes("n")) y = drag.frame.y + drag.frame.height - height;
+        } else {
+          width = clamp(height * aspect, 10, 100 - x);
+          if (edge.includes("w")) x = drag.frame.x + drag.frame.width - width;
+        }
+      }
+      const maskShape = drag.frame.maskShape === "square" && !isCorner ? "rectangle" : drag.frame.maskShape;
+      onFrameChange({ ...drag.frame, x, y, width, height, maskShape });
     } else {
       onFrameChange({ ...drag.frame, crop: { ...drag.frame.crop, x: clamp(drag.frame.crop.x + dx, -50, 50), y: clamp(drag.frame.crop.y + dy, -50, 50) } });
     }
   };
 
-  const finishDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+  const deletePolygonPoint = (index: number) => {
+    if (polygonPoints.length <= 3) {
+      if (!window.confirm("A polygon needs at least three points. Delete this point and remove the custom polygon?")) return;
+      onFrameChange({ ...live.frame, maskShape: "rectangle", polygonPoints: undefined });
+      setSelectedPoint(null);
+      return;
+    }
+    onFrameChange({ ...live.frame, polygonPoints: polygonPoints.filter((_, pointIndex) => pointIndex !== index) });
+    setSelectedPoint(null);
+  };
+
+  useEffect(() => {
+    if (selectedPoint === null || live.frame.maskShape !== "polygon") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      event.preventDefault();
+      deletePolygonPoint(selectedPoint);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  const finishDrag = (event: React.PointerEvent<HTMLElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
     dragRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -3296,16 +3356,52 @@ function DirectLiveStage({
       <div ref={stageRef} className={`direct-live-stage ${orientationClass(screen)}`}>
         <div className="direct-stage-board"><span>{screen.label}</span></div>
         <div
-          className={`direct-live-frame ${mode === "crop" ? "crop-mode" : ""} mask-${live.frame.maskShape ?? "rectangle"}`}
+          className={`direct-live-frame ${mode === "crop" ? "crop-mode" : ""}`}
           style={{ left: `${live.frame.x}%`, top: `${live.frame.y}%`, width: `${live.frame.width}%`, height: `${live.frame.height}%`, transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${live.frame.mirrorX ? -1 : 1}, ${live.frame.mirrorY ? -1 : 1})` }}
           onPointerDown={(event) => beginDrag(event, mode === "crop" ? "crop" : "move")}
           onPointerMove={moveDrag}
           onPointerUp={finishDrag}
           onPointerCancel={finishDrag}
         >
-          {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
-          <div className="lower-third preview"><strong>{live.title}</strong><span>{live.lowerThird}</span></div>
+          <div className={`direct-live-content mask-${live.frame.maskShape ?? "rectangle"}`} style={live.frame.maskShape === "polygon" ? { clipPath: polygonClip } : undefined}>
+            {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
+            <div className="lower-third preview"><strong>{live.title}</strong><span>{live.lowerThird}</span></div>
+          </div>
           {mode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}`} onPointerDown={(event) => beginDrag(event, "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
+          {mode === "frame" && live.frame.maskShape === "polygon" && <div className="polygon-editor" aria-label="Custom polygon points">
+            {polygonPoints.map((point, index) => {
+              const next = polygonPoints[(index + 1) % polygonPoints.length];
+              return <Fragment key={`polygon-${index}`}>
+                <button
+                  type="button"
+                  className={selectedPoint === index ? "polygon-point selected" : "polygon-point"}
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                  aria-label={`Polygon point ${index + 1}`}
+                  title="Drag point · Delete key removes it"
+                  onClick={(event) => { event.stopPropagation(); setSelectedPoint(index); }}
+                  onPointerDown={(event) => { setSelectedPoint(index); beginDrag(event, "point", "", index); }}
+                  onPointerMove={moveDrag}
+                  onPointerUp={finishDrag}
+                  onPointerCancel={finishDrag}
+                />
+                <button
+                  type="button"
+                  className="polygon-edge-insert"
+                  style={{ left: `${(point.x + next.x) / 2}%`, top: `${(point.y + next.y) / 2}%` }}
+                  aria-label={`Add point after point ${index + 1}`}
+                  title="Add a point here"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const nextPoints = [...polygonPoints];
+                    nextPoints.splice(index + 1, 0, { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 });
+                    onFrameChange({ ...live.frame, polygonPoints: nextPoints });
+                    setSelectedPoint(index + 1);
+                  }}
+                />
+              </Fragment>;
+            })}
+          </div>}
           <span className="direct-frame-size">{Math.round(live.frame.width)} × {Math.round(live.frame.height)}</span>
         </div>
       </div>
@@ -3603,7 +3699,7 @@ function LivePreviewPanel({
             <button type="button" className="icon-button" onClick={() => previewWindow.close()} title="Close preview"><X size={18} /></button>
           </header>
           <div className={`live-preview-box popout-preview ${orientationClass(previewScreen)}`}>
-            <div className={`live-positioned-preview mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
+            <div className={`live-positioned-preview mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
               {state.live.source !== "demo" && previewStream ? (
                 <ChromaVideo stream={previewStream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
               ) : state.live.source !== "demo" ? (
@@ -3626,7 +3722,16 @@ function LivePreviewPanel({
 
   return (
     <div className="form-panel live-setup-panel">
-      <div className="live-panel-heading"><div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div><button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button></div>
+      <div className="live-panel-heading">
+        <div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div>
+        <div className="live-heading-actions">
+          <button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
+          <button className={state.live.active ? "command-button danger compact" : "command-button primary compact"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
+            {state.live.active ? <Square size={17} /> : <Play size={17} />}
+            {state.live.active ? "End broadcast" : "Start broadcast"}
+          </button>
+        </div>
+      </div>
       <div className="live-studio-workspace">
       <section className="live-program-monitor" aria-label="Broadcast preview">
         <div className="live-program-monitor-head">
@@ -3648,6 +3753,16 @@ function LivePreviewPanel({
         <LabeledSelect label="Camera" info="Camera used for preview and live mode." value={state.live.videoDeviceId ?? ""} options={cameraOptions.options} optionLabels={cameraOptions.labels} onChange={(value) => patchLive({ videoDeviceId: value || undefined })} />
         <LabeledSelect label="Microphone" info="Microphone used for live mode when the browser allows it." value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} />
       </div>
+      <section className={previewError || popupBlocked ? "source-connection-card error" : previewStream ? "source-connection-card ready" : "source-connection-card"}>
+        <div className="source-connection-status">
+          {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}
+          <div><strong>{previewBusy ? "Waiting for permission…" : previewStream ? "Video source connected" : state.live.source === "demo" ? "Test feed selected" : "Video source not connected"}</strong><span>{previewError ?? (popupBlocked ? "The browser blocked the preview window. Allow pop-ups, then try again." : previewStream ? "The selected source is ready for preview and broadcast." : state.live.source === "camera" ? "Start the camera to connect this source." : state.live.source === "screen" ? "Start sharing to choose a screen or window." : "The generated feed is ready without a camera.")}</span></div>
+        </div>
+        {state.live.source !== "demo" && <button type="button" className={previewStream ? "command-button danger compact" : "command-button primary compact"} disabled={previewBusy} onClick={previewStream ? stopPreviewStream : () => void startPreview(state.live.source)}>
+          {previewStream ? <Square size={15} /> : <Camera size={15} />}
+          {previewBusy ? "Connecting…" : previewStream ? (state.live.source === "camera" ? "Stop camera" : "Stop sharing") : previewError ? (state.live.source === "camera" ? "Try camera again" : "Try sharing again") : (state.live.source === "camera" ? "Start camera" : "Start sharing")}
+        </button>}
+      </section>
       </div>}
       {liveTab === "frame" && <div className="live-frame-tab live-tab-panel">
         <div className="live-toolbox direct-frame-controls">
@@ -3663,7 +3778,12 @@ function LivePreviewPanel({
             <Slider label="Crop horizontal" info="Pan the source left or right." value={state.live.frame.crop.x} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, x: value } } })} />
             <Slider label="Crop vertical" info="Pan the source up or down." value={state.live.frame.crop.y} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, y: value } } })} />
           </div>
-          <div className="live-transform-controls"><LabeledSelect label="Mask" info="Choose the visible shape of the live source." value={state.live.frame.maskShape ?? "rectangle"} options={["rectangle", "square", "circle", "polygon"]} optionLabels={{ rectangle: "Rectangle", square: "Square", circle: "Circle", polygon: "Custom polygon" }} onChange={(value) => patchLive({ frame: { ...state.live.frame, maskShape: value as NonNullable<LanternState["live"]["frame"]["maskShape"]> } })} /><Slider label="Rotate" info="Rotate the live source within its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip</span></label></div>
+          <div className="live-transform-controls"><LabeledSelect label="Mask" info="Choose the visible shape of the live source." value={state.live.frame.maskShape ?? "rectangle"} options={["rectangle", "square", "circle", "polygon"]} optionLabels={{ rectangle: "Rectangle", square: "Square", circle: "Circle", polygon: "Custom polygon" }} onChange={(value) => {
+            const maskShape = value as NonNullable<LanternState["live"]["frame"]["maskShape"]>;
+            const size = maskShape === "square" ? Math.min(state.live.frame.width, state.live.frame.height, 100 - state.live.frame.x, 100 - state.live.frame.y) : null;
+            patchLive({ frame: { ...state.live.frame, maskShape, width: size ?? state.live.frame.width, height: size ?? state.live.frame.height, polygonPoints: maskShape === "polygon" ? (state.live.frame.polygonPoints?.length ? state.live.frame.polygonPoints : undefined) : state.live.frame.polygonPoints } });
+          }} /><Slider label="Rotate" info="Rotate the live source within its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip</span></label></div>
+          {(state.live.frame.maskShape === "circle" || state.live.frame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
         </div>
       </div>}
       {liveTab === "effects" && <div className="live-toolbox live-tab-panel effects-tab">
@@ -3700,14 +3820,6 @@ function LivePreviewPanel({
       </div>}
       </aside>
       </div>
-      {(previewError || popupBlocked || (state.live.source !== "demo" && !previewStream)) && <div className={previewError || popupBlocked ? "preview-readiness error" : "preview-readiness"}>
-        {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}
-        <div>
-          <strong>{previewBusy ? "Waiting for permission..." : previewStream ? "Video source ready" : state.live.source === "demo" ? "Test feed selected" : "Video source not connected"}</strong>
-          <span>{previewError ?? (popupBlocked ? "The browser blocked the preview window. Allow pop-ups for 127.0.0.1, then try again." : previewStream ? "Camera or shared-window video is available to the preview." : "Open preview to choose a webcam, shared window, or generated test feed.")}</span>
-        </div>
-        {state.live.source === "camera" && !previewStream && !previewBusy && <button type="button" className="command-button secondary compact" onClick={() => void startPreview("camera")}><Camera size={15} />Try camera again</button>}
-      </div>}
       <section className="recording-panel">
         <div className="recording-command">
           <button type="button" className={recording ? "command-button danger" : "command-button secondary"} onClick={recording ? stopRecording : startRecording}>
@@ -3726,22 +3838,6 @@ function LivePreviewPanel({
           </article>)}
         </div>}
       </section>
-      <div className="button-row">
-        <button className="command-button secondary" onClick={handleOpenPreview} disabled={previewBusy}>
-          <PictureInPicture2 size={18} />
-          {previewBusy ? "Connecting..." : "Open preview"}
-        </button>
-        <button className={state.live.active ? "command-button danger" : "command-button primary"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
-          {state.live.active ? <Square size={18} /> : <Play size={18} />}
-          {state.live.active ? "End broadcast" : "Start broadcast"}
-        </button>
-        <div className="mic-meter">
-          <Mic size={16} />
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
       {previewPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>
@@ -5283,7 +5379,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         </div>
       )}
       {showLive && (
-        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
+        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
           <ChromaVideo stream={stream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
           <div className="lower-third">
             <strong>{state.live.title}</strong>

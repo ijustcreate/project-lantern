@@ -225,6 +225,7 @@ export interface LiveVideoFrame {
   mirrorX?: boolean;
   mirrorY?: boolean;
   maskShape?: "rectangle" | "square" | "circle" | "polygon";
+  polygonPoints?: Array<{ x: number; y: number }>;
 }
 
 export interface ChromaKeySettings {
