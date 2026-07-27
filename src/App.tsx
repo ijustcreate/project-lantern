@@ -23,6 +23,7 @@ import {
   Glasses,
   Circle,
   Download,
+  Eraser,
   History,
   Image as ImageIcon,
   ImagePlus,
@@ -37,6 +38,7 @@ import {
   Monitor,
   Music2,
   Palette,
+  Paintbrush,
   Pencil,
   PictureInPicture2,
   Play,
@@ -54,6 +56,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Square,
+  ArrowUpRight,
   Star,
   PartyPopper,
   Trash2,
@@ -526,7 +529,10 @@ function ControlCenter() {
             addDisplay={addDisplay}
             deleteDisplay={deleteDisplay}
             identifyDisplay={identifyDisplay}
-            editDisplay={(screenId) => openDisplayEditor(screenId, "setup")}
+            editDisplay={(screenId) => {
+              setSelectedDisplayId(screenId);
+              setView("theme");
+            }}
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room")}
           />
         )}
@@ -635,6 +641,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
   const [knownBugTags, setKnownBugTags] = useState<string[]>(() => readWebBugs().flatMap((bug) => bug.tags));
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingAttachment, setEditingAttachment] = useState<number | null>(null);
   const [position, setPosition] = useState({ x: Math.max(20, window.innerWidth - 650), y: Math.max(20, window.innerHeight - 720) });
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
@@ -765,15 +772,87 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         />
         <div className="bug-attachments-head"><div><strong>Attached evidence <InfoDot text="A screenshot, GIF, video, or small log file can show the exact problem. Please avoid including passwords, private donor information, or anything sensitive." /></strong><small>Capture a region, paste an image, or add files.</small></div><div className="bug-evidence-actions"><button className="command-button secondary compact" onClick={() => void captureSnip()} title="Capture a screen region"><Camera size={15} /> Capture</button><label className="command-button secondary compact"><ImagePlus size={15} /> Add files<input type="file" multiple accept="image/*,video/*,.mov,.mpeg,.mpg,.mp4,.webm,.txt,.log,.json,.zip" onChange={(event) => event.target.files && void addFiles(event.target.files)} /></label></div></div>
         <div className="bug-thumbnails">
-          {attachments.map((attachment, index) => <figure key={`${attachment.name}-${index}`}><div>{attachment.dataUrl.startsWith("data:image/") ? <img src={attachment.dataUrl} alt="" /> : <span><Upload size={22} /></span>}<button onClick={() => setAttachments((current) => current.filter((_, item) => item !== index))} title="Remove"><X size={13} /></button></div><figcaption>{attachment.name}</figcaption></figure>)}
+          {attachments.map((attachment, index) => <figure key={`${attachment.name}-${index}`}><div>{attachment.dataUrl.startsWith("data:image/") ? <img src={attachment.dataUrl} alt="" /> : <span><Upload size={22} /></span>}<button className="bug-attachment-remove" onClick={() => setAttachments((current) => current.filter((_, item) => item !== index))} title="Remove attachment"><X size={13} /></button>{attachment.dataUrl.startsWith("data:image/") && <button className="bug-attachment-edit" onClick={() => setEditingAttachment(index)} title="Annotate image" aria-label={`Annotate ${attachment.name}`}><Pencil size={13} /></button>}</div><figcaption>{attachment.name}</figcaption></figure>)}
           {!attachments.length && <div className="bug-empty-attachments"><Camera size={22} /><span>Screenshots will appear here</span></div>}
         </div>
         <div className="bug-diagnostics-note"><Activity size={16} /><span>App state, version, platform, recent client errors, and application logs are included automatically for Codex. <InfoDot text="This technical information helps reproduce the problem. You do not need to understand it or collect it yourself." /></span></div>
       </div>
       <footer className="bug-report-footer"><span>{status}</span><div><button className="command-button secondary" onClick={onClose}>Cancel</button><button className="command-button primary" disabled={saving} onClick={() => void submit()}><Send size={16} /> {saving ? "Saving…" : "Save report"}</button></div></footer>
+      {editingAttachment !== null && attachments[editingAttachment] && <ImageAnnotationEditor attachment={attachments[editingAttachment]} onClose={() => setEditingAttachment(null)} onSave={(dataUrl) => { setAttachments((current) => current.map((item, index) => index === editingAttachment ? { ...item, dataUrl } : item)); setEditingAttachment(null); setStatus("Annotation saved to the attachment."); }} />}
     </section>,
     document.body
   );
+}
+
+type AnnotationTool = "pen" | "rectangle" | "arrow" | "eraser";
+
+function ImageAnnotationEditor({ attachment, onClose, onSave }: { attachment: BugAttachment; onClose: () => void; onSave: (dataUrl: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const dragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+  const drawingRef = useRef<{ x: number; y: number; snapshot?: ImageData } | null>(null);
+  const [tool, setTool] = useState<AnnotationTool>("pen");
+  const [color, setColor] = useState("#ff3b5c");
+  const [thickness, setThickness] = useState(6);
+  const [ready, setReady] = useState(false);
+  const [position, setPosition] = useState({ x: Math.max(8, (window.innerWidth - Math.min(900, window.innerWidth - 16)) / 2), y: Math.max(8, (window.innerHeight - Math.min(720, window.innerHeight - 16)) / 2) });
+
+  useEffect(() => {
+    const image = new Image();
+    image.onload = () => {
+      imageRef.current = image;
+      if (!canvasRef.current) return;
+      canvasRef.current.width = image.naturalWidth;
+      canvasRef.current.height = image.naturalHeight;
+      setReady(true);
+    };
+    image.src = attachment.dataUrl;
+  }, [attachment.dataUrl]);
+
+  const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return { x: (event.clientX - bounds.left) * event.currentTarget.width / bounds.width, y: (event.clientY - bounds.top) * event.currentTarget.height / bounds.height };
+  };
+  const configure = (context: CanvasRenderingContext2D) => {
+    context.lineCap = "round"; context.lineJoin = "round"; context.lineWidth = thickness; context.strokeStyle = color;
+    context.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
+  };
+  const drawArrow = (context: CanvasRenderingContext2D, from: { x: number; y: number }, to: { x: number; y: number }) => {
+    const angle = Math.atan2(to.y - from.y, to.x - from.x);
+    const head = Math.max(14, thickness * 3);
+    context.beginPath(); context.moveTo(from.x, from.y); context.lineTo(to.x, to.y);
+    context.moveTo(to.x, to.y); context.lineTo(to.x - head * Math.cos(angle - Math.PI / 6), to.y - head * Math.sin(angle - Math.PI / 6));
+    context.moveTo(to.x, to.y); context.lineTo(to.x - head * Math.cos(angle + Math.PI / 6), to.y - head * Math.sin(angle + Math.PI / 6)); context.stroke();
+  };
+  const save = () => {
+    const image = imageRef.current; const annotations = canvasRef.current;
+    if (!image || !annotations) return;
+    const output = document.createElement("canvas"); output.width = annotations.width; output.height = annotations.height;
+    const context = output.getContext("2d"); if (!context) return;
+    context.drawImage(image, 0, 0, output.width, output.height); context.drawImage(annotations, 0, 0);
+    onSave(output.toDataURL("image/png"));
+  };
+
+  return createPortal(<div className="annotation-editor" style={{ left: position.x, top: position.y }} role="dialog" aria-modal="true" aria-label={`Annotate ${attachment.name}`}>
+    <header onPointerDown={(event) => { if ((event.target as Element).closest("button, input")) return; dragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...position }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = dragRef.current; if (!drag) return; setPosition({ x: Math.max(8, Math.min(window.innerWidth - 280, drag.x + event.clientX - drag.pointerX)), y: Math.max(8, Math.min(window.innerHeight - 70, drag.y + event.clientY - drag.pointerY)) }); }} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }}>
+      <div><strong>Annotate screenshot</strong><small>{attachment.name} · drag this bar to move</small></div><button className="icon-button" onClick={onClose} title="Close annotation editor"><X size={17} /></button>
+    </header>
+    <div className="annotation-toolbar" role="toolbar" aria-label="Annotation tools">
+      <button className={tool === "pen" ? "active" : ""} onClick={() => setTool("pen")}><Paintbrush size={16} /><span>Pen</span></button>
+      <button className={tool === "rectangle" ? "active" : ""} onClick={() => setTool("rectangle")}><Square size={16} /><span>Box</span></button>
+      <button className={tool === "arrow" ? "active" : ""} onClick={() => setTool("arrow")}><ArrowUpRight size={16} /><span>Arrow</span></button>
+      <button className={tool === "eraser" ? "active" : ""} onClick={() => setTool("eraser")}><Eraser size={16} /><span>Eraser</span></button>
+      <label title="Annotation color"><span>Color</span><input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+      <label className="annotation-thickness"><span>Thickness</span><input type="range" min="2" max="30" value={thickness} onChange={(event) => setThickness(Number(event.target.value))} /><b>{thickness}px</b></label>
+      <button className="annotation-clear" onClick={() => { const canvas = canvasRef.current; if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height); }}><RotateCcw size={15} /><span>Clear</span></button>
+    </div>
+    <div className="annotation-stage"><div className="annotation-canvas-wrap"><img src={attachment.dataUrl} alt="" draggable={false} /><canvas ref={canvasRef} className={ready ? "" : "loading"}
+      onPointerDown={(event) => { const context = event.currentTarget.getContext("2d"); if (!context) return; const start = point(event); configure(context); drawingRef.current = { ...start, snapshot: tool === "rectangle" || tool === "arrow" ? context.getImageData(0, 0, event.currentTarget.width, event.currentTarget.height) : undefined }; if (tool === "pen" || tool === "eraser") { context.beginPath(); context.moveTo(start.x, start.y); } event.currentTarget.setPointerCapture(event.pointerId); }}
+      onPointerMove={(event) => { const drawing = drawingRef.current; const context = event.currentTarget.getContext("2d"); if (!drawing || !context) return; const current = point(event); configure(context); if (tool === "pen" || tool === "eraser") { context.lineTo(current.x, current.y); context.stroke(); } else if (drawing.snapshot) { context.putImageData(drawing.snapshot, 0, 0); configure(context); if (tool === "rectangle") context.strokeRect(drawing.x, drawing.y, current.x - drawing.x, current.y - drawing.y); else drawArrow(context, drawing, current); } }}
+      onPointerUp={(event) => { drawingRef.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={() => { drawingRef.current = null; }}
+    /></div></div>
+    <footer><span>Draw directly on the image. The attachment changes only when you save.</span><div><button className="command-button secondary" onClick={onClose}>Cancel</button><button className="command-button primary" onClick={save} disabled={!ready}><Save size={16} /> Save annotation</button></div></footer>
+  </div>, document.body);
 }
 
 function BugTagInput({ tags, available, onChange }: { tags: string[]; available: string[]; onChange: (tags: string[]) => void }) {
@@ -1956,7 +2035,7 @@ function ThemeStudio({
   updateState: (updater: (current: LanternState) => LanternState) => void;
 }) {
   const display = state.screens[selectedDisplayId] ?? Object.values(state.screens)[0];
-  const [selectedProgramId, setSelectedProgramId] = useState(() => display.boardProgramId ?? state.boardPrograms[0]?.id ?? "");
+  const [selectedProgramId, setSelectedProgramId] = useState(() => resolveDisplayedBoardProgramId(state, display.id));
   const [selectedPanelId, setSelectedPanelId] = useState("");
   const [newPanelType, setNewPanelType] = useState<BoardPanelType>("message");
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
@@ -2034,9 +2113,9 @@ function ThemeStudio({
   }, [selectedProgram?.id, selectedProgram?.panels]);
 
   useEffect(() => {
-    const assignedProgramId = display.boardProgramId ?? state.boardPrograms[0]?.id;
-    if (assignedProgramId && state.boardPrograms.some((program) => program.id === assignedProgramId)) {
-      setSelectedProgramId(assignedProgramId);
+    const displayedProgramId = resolveDisplayedBoardProgramId(state, display.id);
+    if (displayedProgramId) {
+      setSelectedProgramId(displayedProgramId);
     }
   }, [display.id]);
 
@@ -3548,8 +3627,16 @@ function LivePreviewPanel({
   return (
     <div className="form-panel live-setup-panel">
       <div className="live-panel-heading"><div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div><button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button></div>
+      <div className="live-studio-workspace">
+      <section className="live-program-monitor" aria-label="Broadcast preview">
+        <div className="live-program-monitor-head">
+          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>{state.live.active ? "Program output" : "Preview"}</strong><span>{previewScreen.label}</span></div>
+          <span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span>
+        </div>
+        <div className="persistent-live-preview"><DirectLiveStage screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} onFrameChange={(frame) => patchLive({ frame })} /></div>
+      </section>
+      <aside className="live-inspector" aria-label="Broadcast controls">
       <EditorTabs value={liveTab} options={[["setup", "Source"], ["frame", "Frame & crop"], ["effects", "Effects"]]} onChange={(value) => setLiveTab(value as typeof liveTab)} />
-      {liveTab !== "frame" && <div className="persistent-live-preview"><DirectLiveStage screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} onFrameChange={(frame) => patchLive({ frame })} /></div>}
       {liveTab === "setup" && <div className="live-tab-panel setup-tab">
       <LabeledInput label="Title" info="The live presentation title shown on the lower third." value={state.live.title} onChange={(value) => patchLive({ title: value })} />
       <LabeledInput label="Lower third" info="The smaller caption shown under the title." value={state.live.lowerThird} onChange={(value) => patchLive({ lowerThird: value })} />
@@ -3563,7 +3650,6 @@ function LivePreviewPanel({
       </div>
       </div>}
       {liveTab === "frame" && <div className="live-frame-tab live-tab-panel">
-        <DirectLiveStage screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} onFrameChange={(frame) => patchLive({ frame })} />
         <div className="live-toolbox direct-frame-controls">
           <div className="direct-control-heading"><h3>Direct manipulation</h3><SegmentedControl value={directMode} options={[["frame", "Move & resize"], ["crop", "Pan & zoom"]]} onChange={(value) => setDirectMode(value as typeof directMode)} /></div>
           <div className="four-col">
@@ -3612,6 +3698,8 @@ function LivePreviewPanel({
           <label className="switch-row"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span>Mouth-driven puppet preview</span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
         </section>
       </div>}
+      </aside>
+      </div>
       {(previewError || popupBlocked || (state.live.source !== "demo" && !previewStream)) && <div className={previewError || popupBlocked ? "preview-readiness error" : "preview-readiness"}>
         {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}
         <div>
@@ -5555,6 +5643,10 @@ function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now 
   const assignedId = state.screens[screenId]?.boardProgramId;
   return state.boardPrograms.find((candidate) => candidate.id === assignedId)
     ?? state.boardPrograms[0];
+}
+
+function resolveDisplayedBoardProgramId(state: LanternState, screenId: ScreenId, now = new Date()) {
+  return resolveActiveBoardProgram(state, screenId, now)?.id ?? "";
 }
 
 function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedScheduledAnnouncement | null {

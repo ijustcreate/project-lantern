@@ -1,5 +1,53 @@
 [
   {
+    "id": "DEV-0060",
+    "title": "Redesign the broadcast studio",
+    "summary": "Reorganized Broadcast / Stream into a single-screen program monitor with a contextual control inspector, compact transport controls, and popout-style recording history so the primary output and actions stay visible together.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 5:43 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Studio UI"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; in-app browser visual check at 1244x720; verified Source and Frame & crop inspector states; verified no browser console errors"
+  },
+  {
+    "id": "DEV-0059",
+    "title": "Open active display templates in Board Editor",
+    "summary": "Dashboard display Edit actions now bypass the deprecated screen setup view and open the Board editor with the template currently rendered by the selected display, including an active scheduled board.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 5:14 PM",
+    "areas": [
+      "Dashboard",
+      "Board editor",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; in-app browser: Dashboard > Display 1 > Edit opened Board Editor with active scheduled Community Spotlight board selected"
+  },
+  {
+    "id": "DEV-0058",
+    "title": "Annotate attached screenshots",
+    "summary": "Added a lower-right edit affordance to image evidence and a movable annotation editor with pen, outlined rectangle, arrow, eraser, color, thickness, clear, and save-over controls so reporters can mark up screenshots before submitting.",
+    "author": "Codex",
+    "createdAt": "Jul 26, 2026, 1:47 PM",
+    "areas": [
+      "Bug reporting",
+      "Attached evidence"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; in-app browser uploaded the supplied PNG, confirmed the edit button, opened the movable editor, verified all tools and canvas sizing, drew a pen stroke, saved it over the attachment, and confirmed no browser console errors"
+  },
+  {
     "id": "DEV-0056",
     "title": "Clarify dashboard display status",
     "summary": "Display cards now identify their schedule-resolved active board and any currently running scheduled message, while redundant display launch controls were removed from the top header to reduce crowding.",
