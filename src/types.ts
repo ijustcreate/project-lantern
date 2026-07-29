@@ -170,6 +170,7 @@ export interface RecognitionSettings {
   tiers: string[];
   categories: string[];
   tags: string[];
+  appearance: "dark" | "light";
 }
 
 export interface Announcement {

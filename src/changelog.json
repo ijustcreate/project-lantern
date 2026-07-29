@@ -1,5 +1,39 @@
 [
   {
+    "id": "DEV-0070",
+    "title": "Show board images in dashboard previews",
+    "summary": "Updated the dashboard and live display renderer to preload and draw saved image panels with their contain or cover setting, matching the Board Editor layout.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 1:31 PM",
+    "areas": [
+      "Dashboard",
+      "Board previews"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; verified shared image assets and origin access; deployed-origin browser verification pending publication"
+  },
+  {
+    "id": "DEV-0069",
+    "title": "Add a light portal theme",
+    "summary": "Added a persistent Dark and Light appearance control in Settings. The brighter palette applies only to the management site, while museum boards retain their saved design colors.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 1:31 PM",
+    "areas": [
+      "Settings",
+      "Site appearance"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/sampleData.ts",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; browser verification of Settings toggle, light palette, persistence state, and unchanged embedded board colors"
+  },
+  {
     "id": "DEV-0068",
     "title": "Polish the Board Editor",
     "summary": "Made board editing clearer and more reliable with the larger museum logo, explicit shared-save confirmation, cleaner image controls, overlap-aware move handles, configurable footer icons, working donor icons, and saved donor row/column layouts.",

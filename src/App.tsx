@@ -35,6 +35,7 @@ import {
   Megaphone,
   Mic,
   Minimize2,
+  Moon,
   Monitor,
   Music2,
   Palette,
@@ -58,6 +59,7 @@ import {
   Square,
   ArrowUpRight,
   Star,
+  Sun,
   PartyPopper,
   Trash2,
   Upload,
@@ -452,7 +454,7 @@ function ControlCenter() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell theme-${state.recognitionSettings.appearance}`}>
       <aside className="sidebar">
         <div className="sidebar-aurora" aria-hidden="true" />
         <button className="brand-lockup" onClick={() => setView("dashboard")} title="Return to Dashboard" aria-label="Children's Museum of Stockton — return to Dashboard">
@@ -5185,6 +5187,17 @@ function RecognitionSettingsView({ state, updateState }: { state: LanternState; 
 
   return (
     <section className="settings-workspace">
+      <section className="appearance-settings" aria-labelledby="appearance-heading">
+        <div>
+          <p className="eyebrow">Site appearance</p>
+          <h2 id="appearance-heading">Choose the control portal theme</h2>
+          <span>This changes the editor and dashboard only. Museum board designs keep their saved colors.</span>
+        </div>
+        <div className="appearance-toggle" role="group" aria-label="Site color theme">
+          <button type="button" className={state.recognitionSettings.appearance !== "light" ? "active" : ""} aria-pressed={state.recognitionSettings.appearance !== "light"} onClick={() => updateState((current) => ({ ...current, recognitionSettings: { ...current.recognitionSettings, appearance: "dark" } }))}><Moon size={18} /><span><b>Dark</b><small>Current theme</small></span></button>
+          <button type="button" className={state.recognitionSettings.appearance === "light" ? "active" : ""} aria-pressed={state.recognitionSettings.appearance === "light"} onClick={() => updateState((current) => ({ ...current, recognitionSettings: { ...current.recognitionSettings, appearance: "light" } }))}><Sun size={18} /><span><b>Light</b><small>Bright and familiar</small></span></button>
+        </div>
+      </section>
       <div className="settings-intro">
         <div>
           <p className="eyebrow">Recognition controls</p>

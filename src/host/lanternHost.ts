@@ -429,7 +429,8 @@ export function normalizeState(state: LanternState): LanternState {
     recognitionSettings: {
       tiers: state.recognitionSettings?.tiers?.length ? state.recognitionSettings.tiers : initialState.recognitionSettings.tiers,
       categories: state.recognitionSettings?.categories?.length ? state.recognitionSettings.categories : initialState.recognitionSettings.categories,
-      tags: [...new Set([...(state.recognitionSettings?.tags ?? initialState.recognitionSettings.tags), ...(state.donors ?? initialState.donors).flatMap((donor) => donor.tags ?? [])])].sort()
+      tags: [...new Set([...(state.recognitionSettings?.tags ?? initialState.recognitionSettings.tags), ...(state.donors ?? initialState.donors).flatMap((donor) => donor.tags ?? [])])].sort(),
+      appearance: state.recognitionSettings?.appearance === "light" ? "light" : "dark"
     },
     announcement: {
       ...initialState.announcement,

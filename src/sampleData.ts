@@ -27,7 +27,8 @@ export const initialState: LanternState = {
   recognitionSettings: {
     tiers: ["Founder", "Champion", "Patron", "Friend"],
     categories: ["Family", "Corporate", "Community", "Legacy"],
-    tags: ["(test)", "Supporter", "Education", "Community", "Annual", "Legacy", "Custom icon"]
+    tags: ["(test)", "Supporter", "Education", "Community", "Annual", "Legacy", "Custom icon"],
+    appearance: "dark"
   },
   theme: {
     material: "Walnut",

@@ -7856,6 +7856,124 @@ textarea:focus-visible,
 .header-operation-button:hover { border-color: rgba(78,220,255,.4); color: #fff; background: rgba(78,220,255,.08); }
 .brand-lockup { width: 100%; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .brand-lockup:hover strong { color: #fff; }
+
+/* Portal appearance: this intentionally stops at the control UI so display artwork keeps its saved palette. */
+.appearance-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(20, 22, 47, .78);
+  box-shadow: var(--card-shadow);
+}
+
+.appearance-settings h2 { margin: 4px 0 5px; font-size: 18px; }
+.appearance-settings > div:first-child > span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.appearance-toggle { display: grid; grid-template-columns: repeat(2, minmax(132px, 1fr)); gap: 8px; }
+.appearance-toggle button {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(7, 10, 27, .58);
+  text-align: left;
+}
+.appearance-toggle button span,
+.appearance-toggle button b,
+.appearance-toggle button small { display: block; }
+.appearance-toggle button b { color: var(--ink); font-size: 12px; }
+.appearance-toggle button small { margin-top: 2px; font-size: 9px; }
+.appearance-toggle button.active { border-color: var(--cyan); color: var(--cyan); background: rgba(78, 220, 255, .09); box-shadow: 0 0 0 3px rgba(78, 220, 255, .08); }
+
+.app-shell.theme-light {
+  color-scheme: light;
+  color: #172033;
+  --ink: #172033;
+  --muted: #647089;
+  --navy: #f4f7fb;
+  --panel: #ffffff;
+  --panel-2: #f1f5fa;
+  --line: rgba(36, 54, 83, .14);
+  --line-bright: rgba(0, 133, 173, .3);
+  --teal: #007f82;
+  --cyan: #007fa7;
+  --violet: #6544c2;
+  --magenta: #b7359d;
+  --coral: #c84968;
+  --gold: #9b6500;
+  --success: #168456;
+  --danger: #c43f57;
+  --shadow: 0 24px 70px rgba(43, 57, 78, .12);
+  --card-shadow: 0 12px 30px rgba(44, 62, 88, .1);
+  background:
+    radial-gradient(circle at 79% 7%, rgba(124, 95, 211, .11), transparent 27%),
+    radial-gradient(circle at 43% 106%, rgba(0, 156, 181, .09), transparent 32%),
+    linear-gradient(135deg, #f8faff 0%, #f1f5fb 48%, #eef3f9 100%);
+}
+
+.theme-light .sidebar { border-right-color: rgba(39, 59, 90, .14); background: rgba(255, 255, 255, .88); box-shadow: 10px 0 30px rgba(50, 68, 94, .06); }
+.theme-light .sidebar-aurora { opacity: .18; }
+.theme-light .museum-brand-image { border-color: rgba(39, 105, 140, .2); background: #f8fafc; box-shadow: 0 8px 22px rgba(51, 68, 91, .1); }
+.theme-light .nav-item { color: #626d82; }
+.theme-light .nav-item:hover { color: #26334a; background: rgba(0, 127, 167, .07); }
+.theme-light .nav-item.active { border-color: rgba(0, 127, 167, .35); color: #172033; background: linear-gradient(90deg, rgba(0, 127, 167, .13), rgba(101, 68, 194, .08)); box-shadow: inset 3px 0 #008aae; }
+.theme-light .nav-icon { color: #526077; background: rgba(50, 72, 103, .06); }
+.theme-light .nav-item.active .nav-icon { color: #007fa7; background: rgba(0, 127, 167, .1); }
+.theme-light .system-card { border-color: rgba(29, 129, 100, .18); color: #2d574b; background: rgba(225, 246, 239, .84); }
+.theme-light .main-panel { background: transparent; }
+.theme-light .topbar { border-bottom-color: rgba(42, 61, 91, .12); background: rgba(248, 250, 254, .78); }
+.theme-light .topbar h1,
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light strong { color: #172033; }
+.theme-light .eyebrow { color: #007999; }
+.theme-light .command-button.secondary,
+.theme-light .icon-button,
+.theme-light .header-operation-button,
+.theme-light .segmented,
+.theme-light .segmented button { border-color: rgba(48, 67, 98, .16); color: #34425a; background: rgba(255, 255, 255, .8); }
+.theme-light .command-button.secondary:hover,
+.theme-light .icon-button:hover,
+.theme-light .header-operation-button:hover { border-color: rgba(0, 127, 167, .36); background: #fff; }
+.theme-light input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
+.theme-light select,
+.theme-light textarea,
+.theme-light .builder-select,
+.theme-light .builder-select select { border-color: rgba(47, 66, 96, .18); color: #1f2a3d; background-color: #fff; }
+.theme-light input::placeholder,
+.theme-light textarea::placeholder { color: #8a94a6; }
+.theme-light .settings-intro,
+.theme-light .appearance-settings,
+.theme-light .vocabulary-panel,
+.theme-light .metric-card,
+.theme-light .screen-card,
+.theme-light .panel,
+.theme-light .control-group,
+.theme-light .board-panel-inspector,
+.theme-light .direct-board-stage { border-color: rgba(45, 64, 94, .13); background: rgba(255, 255, 255, .88); box-shadow: var(--card-shadow); }
+.theme-light .appearance-toggle button { color: #647089; background: #f6f8fc; }
+.theme-light .appearance-toggle button.active { border-color: #007fa7; color: #007fa7; background: #e8f5f8; box-shadow: 0 0 0 3px rgba(0, 127, 167, .08); }
+.theme-light .vocabulary-row,
+.theme-light .vocabulary-add,
+.theme-light .settings-summary-strip { border-color: rgba(45, 64, 94, .12); background: #f5f7fb; }
+.theme-light .board-selection-empty,
+.theme-light .inspector-block,
+.theme-light .donor-divider-controls { border-color: rgba(45, 64, 94, .12); background: rgba(244, 247, 251, .84); }
+.theme-light .mobile-primary-nav { border-color: rgba(45, 64, 94, .14); background: rgba(255, 255, 255, .96); }
+
+@media (max-width: 760px) {
+  .appearance-settings { align-items: stretch; flex-direction: column; }
+  .appearance-toggle { grid-template-columns: 1fr 1fr; }
+}
 .placeholder-action:disabled { opacity: .62; cursor: help; }
 .placeholder-action:disabled:hover { transform: none; box-shadow: none; }
 .announcement-character-control { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; border: 1px solid rgba(148,158,220,.16); border-radius: 10px; background: rgba(255,255,255,.025); }

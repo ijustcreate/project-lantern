@@ -37,6 +37,7 @@ interface BabylonDonorWallProps {
 
 const backgroundMediaCache = new Map<string, HTMLImageElement | HTMLVideoElement>();
 const donorIconImageCache = new Map<string, HTMLImageElement>();
+const boardPanelImageCache = new Map<string, HTMLImageElement>();
 
 export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), onFps }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -192,6 +193,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
     let redrawPanel: (animationTime?: number) => void = () => undefined;
     prepareBackgroundMedia(screen, () => redrawPanel());
+    prepareBoardPanelImages(state, () => redrawPanel());
     const panelTexture = makePanelTexture(scene, state, screenId, screen, previewProgramId);
     const texture = panelTexture.texture;
     texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
@@ -657,6 +659,10 @@ function drawComposableBoard(
       lines.forEach((line, lineIndex) => context.fillText(line, textX, y + panelHeight * (0.72 + lineIndex * 0.13)));
     }
 
+    if (panel.type === "image") {
+      drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain");
+    }
+
     if (panel.type === "footer") {
       context.textAlign = "center";
       context.fillStyle = panelTextColor ?? gold;
@@ -667,6 +673,44 @@ function drawComposableBoard(
 
     context.restore();
   });
+}
+
+function prepareBoardPanelImages(state: LanternState, onReady: () => void) {
+  state.boardPrograms.flatMap((program) => program.panels ?? []).forEach((panel) => {
+    const source = panel.type === "image" ? panel.imageUrl : undefined;
+    if (!source) return;
+    const cached = boardPanelImageCache.get(source);
+    if (cached) {
+      if (cached.complete && cached.naturalWidth > 0) onReady();
+      else cached.addEventListener("load", onReady, { once: true });
+      return;
+    }
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.addEventListener("load", onReady, { once: true });
+    image.src = source;
+    boardPanelImageCache.set(source, image);
+  });
+}
+
+function drawBoardPanelImage(
+  context: CanvasRenderingContext2D,
+  source: string | undefined,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fit: "cover" | "contain"
+) {
+  if (!source) return;
+  const image = boardPanelImageCache.get(source);
+  if (!image?.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) return;
+  const scale = fit === "cover"
+    ? Math.max(width / image.naturalWidth, height / image.naturalHeight)
+    : Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function drawPortraitBoard(
