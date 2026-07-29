@@ -441,12 +441,8 @@ function ControlCenter() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-aurora" aria-hidden="true" />
-        <button className="brand-lockup" onClick={() => setView("dashboard")} title="Return to Dashboard" aria-label="Project Lantern — return to Dashboard">
-          <div className="brand-mark"><Sparkles size={20} /></div>
-          <div>
-            <strong>Project Lantern</strong>
-            <span>Recognition OS</span>
-          </div>
+        <button className="brand-lockup" onClick={() => setView("dashboard")} title="Return to Dashboard" aria-label="Children's Museum of Stockton — return to Dashboard">
+          <img className="museum-brand-image" src={`${import.meta.env.BASE_URL}assets/childrens-museum-stockton.png`} alt="Children's Museum of Stockton" />
         </button>
         <nav className="nav-list">
           {navItems.filter((item) => item.id !== "revisions" && item.id !== "bugs" && item.id !== "screens").map((item) => {

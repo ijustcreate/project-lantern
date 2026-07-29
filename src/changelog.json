@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0065",
+    "title": "Add museum branding to navigation",
+    "summary": "Replaced the Project Lantern icon and wordmark in the top-left navigation with the supplied Children's Museum of Stockton image, including compact responsive presentation.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 12:22 PM",
+    "areas": [
+      "Branding",
+      "Navigation",
+      "Responsive layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "public/assets/childrens-museum-stockton.png"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0064",
     "title": "Save board orientation and museum test schedule",
     "summary": "Boards now retain portrait or landscape format, the primary portrait display runs Wednesday through Sunday from 7 AM to 6 PM, and three reusable test announcements are scheduled at 10 AM, 1 PM, and 3 PM.",

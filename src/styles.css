@@ -3523,9 +3523,21 @@ textarea:focus-visible,
 .brand-lockup {
   position: relative;
   z-index: 1;
-  gap: 11px;
-  min-height: 48px;
-  padding: 2px 4px;
+  min-height: 76px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 13px;
+}
+
+.museum-brand-image {
+  display: block;
+  width: 100%;
+  height: 76px;
+  border: 1px solid rgba(102, 228, 255, 0.22);
+  border-radius: 13px;
+  object-fit: cover;
+  object-position: center 42%;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 .brand-mark {
@@ -5948,7 +5960,8 @@ textarea:focus-visible,
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 80px minmax(0, 1fr); }
   .sidebar { padding-inline: 9px; }
-  .brand-lockup { justify-content: center; }
+  .brand-lockup { min-height: 52px; justify-content: center; }
+  .museum-brand-image { width: 52px; height: 52px; object-position: 10% 42%; }
   .brand-lockup > div:last-child,
   .nav-copy,
   .system-card > div { display: none !important; }
