@@ -9802,3 +9802,50 @@ textarea:focus-visible,
   .preview-readiness { grid-template-columns: 20px minmax(0, 1fr); align-items: start; }
   .preview-readiness .command-button { grid-column: 1 / -1; width: 100%; }
 }
+
+/* Portrait phones use document scrolling. The desktop shell locks the root
+   viewport, so every root-level lock must be released again at this breakpoint. */
+@media (max-width: 760px), (max-width: 900px) and (orientation: portrait) {
+  html {
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body,
+  #root {
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .main-panel {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    touch-action: pan-y;
+  }
+
+  .main-panel > section,
+  .dashboard-grid,
+  .dashboard-grid .workband,
+  .dashboard-grid .preview-stage,
+  .dashboard-display-grid,
+  .dashboard-display-tile {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+}

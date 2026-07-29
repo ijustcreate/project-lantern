@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0076",
+    "title": "Restore scrolling on portrait phones",
+    "summary": "Narrow and portrait layouts now release the desktop viewport lock so users can scroll through the complete interface on phones and skinny browser windows.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 2:21 PM",
+    "areas": [
+      "Mobile layout",
+      "Page shell",
+      "Dashboard"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check; reviewed final breakpoint cascade"
+  },
+  {
     "id": "DEV-0075",
     "title": "Keep dashboard 2D boards fitted after resize",
     "summary": "Dashboard board previews now observe their actual tile dimensions and continuously recalculate a centered, aspect-preserving orthographic fit after responsive layout changes.",
