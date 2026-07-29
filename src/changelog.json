@@ -1,5 +1,38 @@
 [
   {
+    "id": "DEV-0072",
+    "title": "Unify announcement preview manipulation",
+    "summary": "Announcement text and images now use the same direct move and resize affordances as board panels, while the 3D preview uses gentler perspective and orbit limits.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 1:43 PM",
+    "areas": [
+      "Announcements",
+      "Preview editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; local browser verified one move handle, six resize handles, and 3D preview"
+  },
+  {
+    "id": "DEV-0071",
+    "title": "Improve bug evidence and discussions",
+    "summary": "Screen capture now waits for the browser sharing picker to close, image evidence appears as compact thumbnails, and replies are visibly nested beneath their parent comments.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 1:43 PM",
+    "areas": [
+      "Bug reporting",
+      "Bug catalogue"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/bugs.json"
+    ],
+    "tests": "npm run build; local browser verified image thumbnail rendering"
+  },
+  {
     "id": "DEV-0070",
     "title": "Show board images in dashboard previews",
     "summary": "Updated the dashboard and live display renderer to preload and draw saved image panels with their contain or cover setting, matching the Board Editor layout.",

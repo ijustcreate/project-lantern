@@ -109,7 +109,7 @@ import type {
   TargetScreen,
   ScheduleEntry
 } from "./types";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import codeChangelog from "./changelog.json";
 
 type View = "dashboard" | "donors" | "theme" | "schedule" | "announcements" | "live" | "screens" | "revisions" | "bugs" | "settings";
@@ -609,7 +609,12 @@ function ControlCenter() {
 type BugAttachment = { name: string; dataUrl: string };
 type BugStatus = "open" | "in-progress" | "ready-for-test" | "verified" | "closed";
 type BugEvidence = { name: string; dataUrl?: string; path?: string; mimeType?: string };
-type AgentWorkEntry = { at: string; author: string; kind: "analysis" | "proposal" | "change" | "test" | "handoff"; note: string };
+type AgentWorkEntry = { at: string; author: string; kind: "analysis" | "proposal" | "change" | "test" | "handoff"; note: string; replyTo?: string };
+function bugEvidenceImageSource(evidence: BugEvidence) {
+  if (evidence.dataUrl?.startsWith("data:image/")) return evidence.dataUrl;
+  if (!evidence.path || !/\.(png|jpe?g|gif|webp|bmp)$/i.test(evidence.path)) return "";
+  return isTauri() ? convertFileSrc(evidence.path) : evidence.path;
+}
 type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
 const BUG_USERS_KEY = "project-lantern-bug-users";
@@ -701,6 +706,9 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         const video = document.createElement("video");
         video.srcObject = stream;
         await video.play();
+        setStatus("Share selected. Waiting for the picker to close…");
+        await new Promise((resolve) => window.setTimeout(resolve, 850));
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         canvas.getContext("2d")?.drawImage(video, 0, 0);
@@ -1061,8 +1069,8 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
   };
   const addComment = () => {
     if (!selected || !comment.trim()) return;
-    const replyLabel = replyTo === null ? "" : `Reply to ${selected.agentWork?.[replyTo]?.author ?? "comment"}: `;
-    setSelected({ ...selected, agentWork: [...(selected.agentWork ?? []), { at: new Date().toISOString(), author: activeUser, kind: "handoff", note: `${replyLabel}${comment.trim()}` }] });
+    const parent = replyTo === null ? undefined : selected.agentWork?.[replyTo];
+    setSelected({ ...selected, agentWork: [...(selected.agentWork ?? []), { at: new Date().toISOString(), author: activeUser, kind: "handoff", note: comment.trim(), replyTo: parent?.at }] });
     setComment("");
     setReplyTo(null);
     setCommentTab("user");
@@ -1094,10 +1102,17 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
           <label className="field"><span>Status</span><select value={selected.status} onChange={(e) => setSelected({ ...selected, status: e.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select></label>
           <label className="field"><span>Details</span><textarea value={selected.details} onChange={(e) => setSelected({ ...selected, details: e.target.value })} /></label>
           <label className="field"><span>Fix / test notes</span><textarea value={selected.fixTips} onChange={(e) => setSelected({ ...selected, fixTips: e.target.value })} /></label>
-          <div className="bug-detail-evidence"><strong>Evidence</strong><div>{selected.evidence?.map((item, i) => <button type="button" key={i} onClick={() => setViewingEvidence(item)}>{item.dataUrl?.startsWith("data:image/") ? <img src={item.dataUrl} alt={item.name} title={item.name} /> : <><ImageIcon size={15} />{item.path ?? item.name}</>}</button>)}{!selected.evidence?.length && selected.attachments.map((name) => <span key={name}><ImageIcon size={15} />{name}</span>)}</div></div>
+          <div className="bug-detail-evidence"><strong>Evidence</strong><div>{selected.evidence?.map((item, i) => {
+            const imageSource = bugEvidenceImageSource(item);
+            return <button type="button" key={i} className={imageSource ? "evidence-thumbnail" : ""} onClick={() => setViewingEvidence(item)}>{imageSource ? <><img src={imageSource} alt="" /><span>{item.name}</span></> : <><ImageIcon size={15} /><span>{item.path ?? item.name}</span></>}</button>;
+          })}{!selected.evidence?.length && selected.attachments.map((name) => <span key={name}><ImageIcon size={15} />{name}</span>)}</div></div>
           <div className="agent-work-log">
             <div className="bug-comment-tabs" role="tablist" aria-label="Bug discussion"><button type="button" role="tab" aria-selected={commentTab === "user"} className={commentTab === "user" ? "active" : ""} onClick={() => { setCommentTab("user"); setReplyTo(null); }}>User comments</button><button type="button" role="tab" aria-selected={commentTab === "ai"} className={commentTab === "ai" ? "active" : ""} onClick={() => { setCommentTab("ai"); setReplyTo(null); }}>AI comments</button></div>
-            {discussionEntries.length ? discussionEntries.map(({ entry, index }) => <article key={`${entry.at}-${index}`} className={replyTo === index ? "replying" : ""}><header><b>{commentTab === "user" ? "comment" : entry.kind}</b><span>{entry.author === "You" ? "Felix" : entry.author} · {new Date(entry.at).toLocaleString()}</span></header><p>{entry.note}</p><button type="button" className="work-log-reply" onClick={() => { setReplyTo(index); if (commentTab === "ai") setCommentTab("user"); }}><MessageSquare size={12} /> Reply</button></article>) : <small>No {commentTab === "user" ? "user comments" : "AI comments"} yet.</small>}
+            {discussionEntries.length ? discussionEntries.map(({ entry, index }) => {
+              const isReply = Boolean(entry.replyTo) || /^Reply to [^:]+:\s*/i.test(entry.note);
+              const note = entry.note.replace(/^Reply to [^:]+:\s*/i, "");
+              return <article key={`${entry.at}-${index}`} className={`${replyTo === index ? "replying " : ""}${isReply ? "thread-reply" : ""}`.trim()}><header><b>{isReply ? "reply" : commentTab === "user" ? "comment" : entry.kind}</b><span>{entry.author === "You" ? "Felix" : entry.author} · {new Date(entry.at).toLocaleString()}</span></header><p>{note}</p><button type="button" className="work-log-reply" onClick={() => { setReplyTo(index); if (commentTab === "ai") setCommentTab("user"); }}><MessageSquare size={12} /> Reply</button></article>;
+            }) : <small>No {commentTab === "user" ? "user comments" : "AI comments"} yet.</small>}
             {commentTab === "user" && <div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? `Comment as ${activeUser}…` : `Reply as ${activeUser}…`} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div>}
           </div>
         </div>
@@ -3966,9 +3981,9 @@ function AnnouncementMonitorSurface({
 }) {
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [editing, setEditing] = useState(false);
-  const [view, setView] = useState({ x: 0, y: 0, zoom: 1, rotateX: -4, rotateY: 12 });
+  const [view, setView] = useState({ x: 0, y: 0, zoom: 1, rotateX: -2, rotateY: 6 });
   const dragRef = useRef<{ pointerId: number; x: number; y: number; view: typeof view; pan: boolean } | null>(null);
-  const resetView = () => setView({ x: 0, y: 0, zoom: 1, rotateX: -4, rotateY: 12 });
+  const resetView = () => setView({ x: 0, y: 0, zoom: 1, rotateX: -2, rotateY: 6 });
   const setMode = (mode: "2d" | "3d") => {
     setViewMode(mode);
     resetView();
@@ -3987,7 +4002,7 @@ function AnnouncementMonitorSurface({
     if (drag.pan) {
       setView({ ...drag.view, x: drag.view.x + dx, y: drag.view.y + dy });
     } else {
-      setView({ ...drag.view, rotateX: clamp(drag.view.rotateX - dy * .22, -65, 65), rotateY: clamp(drag.view.rotateY + dx * .28, -75, 75) });
+      setView({ ...drag.view, rotateX: clamp(drag.view.rotateX - dy * .16, -34, 34), rotateY: clamp(drag.view.rotateY + dx * .2, -44, 44) });
     }
   };
   const endViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -4078,6 +4093,16 @@ function AnnouncementLayer({
   editing?: boolean;
   onPatch?: (patch: Partial<LanternState["announcement"]>) => void;
 }) {
+  const manipulationRef = useRef<{
+    pointerId: number;
+    kind: "layout" | "image";
+    edge: "move" | string;
+    pointerX: number;
+    pointerY: number;
+    x: number;
+    y: number;
+    width: number;
+  } | null>(null);
   const timerInAnnouncement = announcement.timerStyle !== "off" && announcement.timerPosition === "announcement-right";
   const overlayClass = preview ? "announcement-display-overlay" : "announcement-overlay";
   const styleClass = announcement.style.toLowerCase().replace(/\s/g, "-");
@@ -4095,14 +4120,50 @@ function AnnouncementLayer({
       transform: "translate(-50%, -50%)"
     } : {})
   } as React.CSSProperties;
-  const dragPosition = (event: React.PointerEvent<HTMLElement>, kind: "layout" | "image") => {
-    if (!editing || !onPatch || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+  const beginManipulation = (event: React.PointerEvent<HTMLElement>, kind: "layout" | "image", edge: "move" | string) => {
+    if (!editing || !onPatch) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    manipulationRef.current = {
+      pointerId: event.pointerId,
+      kind,
+      edge,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      x: kind === "layout" ? announcement.layoutX ?? 50 : announcement.imageX ?? 72,
+      y: kind === "layout" ? announcement.layoutY ?? defaultLayoutY : announcement.imageY ?? 50,
+      width: kind === "layout" ? announcement.layoutWidth ?? (announcement.style === "Ribbon" ? 90 : 78) : announcement.imageWidth ?? 22
+    };
+  };
+  const moveManipulation = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = manipulationRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !onPatch) return;
     const bounds = event.currentTarget.closest(".announcement-fixed-canvas")?.getBoundingClientRect();
     if (!bounds) return;
-    const x = clamp((event.clientX - bounds.left) / bounds.width * 100, 0, 100);
-    const y = clamp((event.clientY - bounds.top) / bounds.height * 100, 0, 100);
-    onPatch(kind === "layout" ? { layoutX: x, layoutY: y } : { imageX: x, imageY: y });
+    const dx = (event.clientX - drag.pointerX) / bounds.width * 100;
+    const dy = (event.clientY - drag.pointerY) / bounds.height * 100;
+    if (drag.edge === "move") {
+      onPatch(drag.kind === "layout"
+        ? { layoutX: clamp(drag.x + dx, 0, 100), layoutY: clamp(drag.y + dy, 0, 100) }
+        : { imageX: clamp(drag.x + dx, 0, 100), imageY: clamp(drag.y + dy, 0, 100) });
+      return;
+    }
+    const horizontal = drag.edge.includes("e") ? dx : drag.edge.includes("w") ? -dx : 0;
+    const width = clamp(drag.width + horizontal, drag.kind === "layout" ? 20 : 5, drag.kind === "layout" ? 96 : 70);
+    const centerShift = drag.edge.includes("e") ? horizontal / 2 : drag.edge.includes("w") ? -horizontal / 2 : 0;
+    onPatch(drag.kind === "layout"
+      ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, 0, 100) }
+      : { imageWidth: width, imageX: clamp(drag.x + centerShift, 0, 100) });
   };
+  const endManipulation = (event: React.PointerEvent<HTMLElement>) => {
+    if (manipulationRef.current?.pointerId !== event.pointerId) return;
+    manipulationRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const resizeHandles = (kind: "layout" | "image") => ["ne", "e", "se", "sw", "w", "nw"].map((edge) =>
+    <span key={edge} className={`announcement-resize-handle direct-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, kind, edge)} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation} />
+  );
   const editableText = (field: "title" | "message" | "details") => ({
     contentEditable: editing,
     suppressContentEditableWarning: true,
@@ -4111,17 +4172,11 @@ function AnnouncementLayer({
 
   return <>
     <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}${hasCustomLayout ? " custom-position" : ""}${editing ? " announcement-editable-element" : ""}`} style={overlayStyle}>
-      {editing && <button type="button" className="announcement-edit-handle text-handle" title="Drag announcement text box" onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }} onPointerMove={(event) => dragPosition(event, "layout")}><Move size={20} /></button>}
+      {editing && <><button type="button" className="announcement-edit-handle text-handle" title="Drag announcement text box" onPointerDown={(event) => beginManipulation(event, "layout", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("layout")}</>}
       <strong {...editableText("title")}>{announcement.title || "Announcement title"}</strong>
       <span {...editableText("message")}>{announcement.message || "Your message appears here."}</span>
       {announcement.details && <small className="announcement-details" {...editableText("details")}>{announcement.details}</small>}
-      {announcement.imageUrl && <img className={`announcement-image${editing ? " editable announcement-editable-element" : ""}`} src={announcement.imageUrl} alt="" draggable={false} onPointerDown={(event) => {
-        if (!editing || !onPatch) return;
-        event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }} onPointerMove={(event) => dragPosition(event, "image")} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }} />}
+      {announcement.imageUrl && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("image")}</>}</div>}
       {timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className="inside-announcement" />}
     </div>
     {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${announcement.timerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
