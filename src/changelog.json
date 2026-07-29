@@ -1,5 +1,26 @@
 [
   {
+    "id": "DEV-0068",
+    "title": "Polish the Board Editor",
+    "summary": "Made board editing clearer and more reliable with the larger museum logo, explicit shared-save confirmation, cleaner image controls, overlap-aware move handles, configurable footer icons, working donor icons, and saved donor row/column layouts.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 12:56 PM",
+    "areas": [
+      "Board Editor",
+      "Shared storage",
+      "Branding"
+    ],
+    "files": [
+      "public/assets/childrens-museum-stockton.png",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/host/lanternHost.ts",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; browser UI verification for image controls, donor controls/icons, redundant selection removal, logo sizing, and save-state feedback"
+  },
+  {
     "id": "DEV-0067",
     "title": "Schedule portrait and landscape boards independently",
     "summary": "The calendar now assigns a saved portrait board to Display 1 and a saved landscape board to Display 2 as separate Wednesday-through-Sunday events from 7 AM to 6 PM, while preserving user-created boards and other events during migration.",

@@ -594,11 +594,12 @@ function drawComposableBoard(
     if (panel.type === "donors") {
       const columns = panel.columns ?? program.columns;
       const nameFontUnit = Math.max(8, requestedSize * height / 900);
-      const rows = Math.max(1, Math.ceil(donors.length / columns));
+      const rows = panel.rows ?? Math.max(1, Math.ceil(donors.length / columns));
+      const visibleDonors = donors.slice(0, rows * columns);
       const listTop = y;
       const rowHeight = panelHeight / rows;
       context.textAlign = "center";
-      donors.forEach((donor, index) => {
+      visibleDonors.forEach((donor, index) => {
         const showSubtext = donorSubtextVisible(screen, donor.id);
         const column = index % columns;
         const row = Math.floor(index / columns);
@@ -660,7 +661,8 @@ function drawComposableBoard(
       context.textAlign = "center";
       context.fillStyle = panelTextColor ?? gold;
       context.font = `600 ${Math.max(10, Math.round(panelHeight * 0.22 * scale))}px ${font}, Inter, sans-serif`;
-      fitText(context, `♡   ${panel.title}   ♡`, centerX, centerY + panelHeight * 0.08, contentWidth * 0.92, Math.round(panelHeight * 0.22 * scale), 9);
+      const footerText = panel.footerIconPlacement === "both" ? `♡   ${panel.title}   ♡` : `♡   ${panel.title}`;
+      fitText(context, footerText, centerX, centerY + panelHeight * 0.08, contentWidth * 0.92, Math.round(panelHeight * 0.22 * scale), 9);
     }
 
     context.restore();

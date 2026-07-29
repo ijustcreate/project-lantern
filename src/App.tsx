@@ -85,6 +85,7 @@ import {
   nextRevision,
   openDisplayWindows,
   publishState,
+  saveSharedLanternState,
   shareLanternImages,
   storeLanternMedia,
   targetIncludes,
@@ -2052,6 +2053,7 @@ function ThemeStudio({
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [particleEditorOpen, setParticleEditorOpen] = useState(false);
   const [particleEditorPosition, setParticleEditorPosition] = useState(() => ({
     x: Math.max(16, window.innerWidth - 450),
@@ -2152,7 +2154,7 @@ function ThemeStudio({
       : nextPanel?.type === "footer"
         ? { footer: nextPanel.title }
         : nextPanel?.type === "donors"
-          ? { columns: nextPanel.columns ?? selectedProgram.columns }
+          ? { columns: nextPanel.columns && nextPanel.columns <= 2 ? nextPanel.columns as 1 | 2 : selectedProgram.columns }
           : {};
     patchProgram({ panels: nextPanels, ...legacyPatch });
   };
@@ -2295,6 +2297,18 @@ function ThemeStudio({
     updateState((current) => ({ ...current, donors: current.donors.map((donor) => donor.id === donorId ? { ...donor, name } : donor) }));
   };
 
+  const saveBoard = async () => {
+    setSaveStatus("saving");
+    try {
+      publishState(state);
+      await saveSharedLanternState(state);
+      setSaveStatus("saved");
+      window.setTimeout(() => setSaveStatus("idle"), 2600);
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
   if (!selectedProgram) return <div className="empty-inspector"><strong>No boards available</strong></div>;
 
   return (
@@ -2305,6 +2319,10 @@ function ThemeStudio({
           <button type="button" className="command-button secondary compact" onClick={duplicateProgram}>Duplicate current</button>
           <button type="button" className="command-button secondary compact" onClick={createProgram}><Plus size={16} /> New</button>
           <button type="button" className="icon-button danger-icon" onClick={deleteProgram} disabled={state.boardPrograms.length <= 1} title="Delete saved board"><Trash2 size={16} /></button>
+        </div>
+        <div className="board-save-cluster">
+          <button type="button" className="command-button primary compact" disabled={saveStatus === "saving"} onClick={() => void saveBoard()}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : "Save board"}</button>
+          <span className={`board-save-status ${saveStatus}`} role="status">{saveStatus === "saved" ? "Saved for everyone" : saveStatus === "error" ? "Could not save — try again" : ""}</span>
         </div>
       </div>
 
@@ -2341,7 +2359,7 @@ function ThemeStudio({
                   patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) });
                 }} /></label>)}
               </div>
-              <LabeledSelect label="Panel font" info="Typeface used only by this panel." value={selectedPanel.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} />
+              {selectedPanel.type !== "image" && <LabeledSelect label="Panel font" info="Typeface used only by this panel." value={selectedPanel.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} />}
               {selectedPanel.type !== "image" && <div className="panel-type-row"><Slider label="Font size" info="Changes the text size for the selected panel without changing its box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div>}
               {selectedPanel.type === "donors" && <>
                 <div className="donor-divider-controls">
@@ -2351,13 +2369,15 @@ function ThemeStudio({
                   </div>
                   <ColorOverrideField label="Line color" value={selectedPanel.donorDividerColor} fallback="#D9A657" onChange={(donorDividerColor) => patchPanel(selectedPanel.id, { donorDividerColor })} />
                 </div>
-                <div className="field"><span>Columns</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1 column"], ["2", "2 columns"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as 1 | 2 })} /></div>
+                <div className="field"><span>Names in each row</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as BoardPanel["columns"] })} /></div>
+                <Slider label="Rows" info="Sets how many donor rows fit inside this panel." value={selectedPanel.rows ?? Math.max(1, Math.ceil(selectedProgram.donorIds.length / (selectedPanel.columns ?? selectedProgram.columns)))} min={1} max={12} onChange={(rows) => patchPanel(selectedPanel.id, { rows })} />
                 <div className="mini-actions"><button type="button" onClick={() => patchProgram({ donorIds: state.donors.filter((donor) => donor.active).map((donor) => donor.id) })}>Use active</button><button type="button" onClick={() => patchProgram({ donorIds: [] })}>Clear</button></div>
                 <div className="board-donor-picker compact-picker">{donorPageItems.map((donor) => <label key={donor.id}><input type="checkbox" checked={selectedProgram.donorIds.includes(donor.id)} onChange={(event) => toggleProgramDonor(donor.id, event.target.checked)} /><span>{donor.name}</span></label>)}</div>
                 <Pager page={donorPage} pageCount={donorPageCount} onChange={setDonorPage} />
               </>}
+              {selectedPanel.type === "footer" && <div className="field"><span>Footer icons</span><SegmentedControl value={selectedPanel.footerIconPlacement ?? "left"} options={[["left", "Left side"], ["both", "Both sides"]]} onChange={(footerIconPlacement) => patchPanel(selectedPanel.id, { footerIconPlacement: footerIconPlacement as BoardPanel["footerIconPlacement"] })} /></div>}
               {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Choose PNG or image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the panel." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
-            </div> : <><div className="board-selection-empty"><Palette size={22} /><strong>Board selected</strong><span>Select a panel to modify or edit it. Click the area around the board to clear your selection.</span></div>
+            </div> : <>
             <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
@@ -2506,6 +2526,16 @@ function DirectBoardCanvas({
   const particleCount = display.particleCount ?? 34;
   const shadowRadians = (display.textShadowAngle ?? 135) * Math.PI / 180;
   const shadowDistance = display.textShadowDistance ?? 5;
+  const prioritizeMoveHandle = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const candidate = panels.find((panel) => {
+      const left = rect.left + ((panel.x ?? 5) / 100) * rect.width + 4;
+      const bottom = rect.top + (((panel.y ?? 5) + (panel.height ?? 18)) / 100) * rect.height - 4;
+      return event.clientX >= left && event.clientX <= left + 29 && event.clientY >= bottom - 27 && event.clientY <= bottom;
+    });
+    if (candidate && !(event.target as Element).closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
+  };
   return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${display.textFinish === "cut-brass" ? " finish-cut-brass" : ""}${display.textShadowEnabled ? " text-shadow-enabled" : ""}`} style={{
     fontFamily: display.fontFamily ?? "Montserrat",
     "--board-editor-zoom": editorZoom,
@@ -2513,7 +2543,7 @@ function DirectBoardCanvas({
     "--board-text-shadow-y": `${Math.sin(shadowRadians) * shadowDistance}px`,
     "--board-text-shadow-blur": `${1 + (display.textShadowStrength ?? 55) / 28}px`,
     "--board-text-shadow-alpha": Math.min(.62, .1 + (display.textShadowStrength ?? 55) / 165)
-  } as React.CSSProperties} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
+  } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
     {display.backgroundImage && <div className="direct-board-background"><img src={display.backgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${display.backgroundCrop?.x ?? 50}% ${display.backgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
@@ -2533,7 +2563,7 @@ function DirectBoardCanvas({
       } as React.CSSProperties} />;
     })}</div>}
     <div className="direct-board-inner">
-      {panels.map((panel, index) => <section key={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{
+      {panels.map((panel, index) => <section key={panel.id} data-panel-id={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{
         left: `${panel.x ?? 5}%`,
         top: `${panel.y ?? index * 20 + 5}%`,
         width: `${panel.width ?? 90}%`,
@@ -2552,15 +2582,15 @@ function DirectBoardCanvas({
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
         {panel.type === "heading" && <EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "supporters-heading" && <EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
-        {panel.type === "donors" && <div className={`direct-donor-grid columns-${panel.columns ?? program.columns}`}>{donors.map((donor) => <div
+        {panel.type === "donors" && <div className="direct-donor-grid" style={{ gridTemplateColumns: `repeat(${panel.columns ?? program.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${panel.rows ?? Math.max(1, Math.ceil(donors.length / (panel.columns ?? program.columns)))}, minmax(0, 1fr))` }}>{donors.slice(0, (panel.rows ?? Math.max(1, Math.ceil(donors.length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <div
           className={`direct-donor-name donor-custom highlight-${donor.highlight ?? "none"} animation-${donor.animation ?? "none"}`}
           style={{ "--donor-name-color": donor.nameColor || "#f5f2eb", "--donor-accent-color": donor.accentColor || "#d9a657", fontFamily: `${donor.fontOverride || display.fontFamily || "Montserrat"}, sans-serif` } as React.CSSProperties}
           key={donor.id}
-        >{display.showIcons && donor.icon !== "none" && <span className="donor-mark">{donorIconGlyph(donor.icon ?? "star")}</span>}<EditableBoardText value={donor.name} onCommit={(value) => onRenameDonor(donor.id, value)} />{donorSubtextVisibleForDisplay(display, donor.id) && donor.subtext && <small>{donor.subtext}</small>}</div>)}{!donors.length && <button className="empty-board-action" type="button">Select donors in the inspector</button>}</div>}
+        >{display.showIcons && <span className="donor-mark">{donorIconGlyph(donor.icon && donor.icon !== "none" ? donor.icon : "star")}</span>}<EditableBoardText value={donor.name} onCommit={(value) => onRenameDonor(donor.id, value)} />{donorSubtextVisibleForDisplay(display, donor.id) && donor.subtext && <small>{donor.subtext}</small>}</div>)}{!donors.length && <button className="empty-board-action" type="button">Select donors in the inspector</button>}</div>}
         {panel.type === "message" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
         {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><div><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></div></>}
         {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={panel.imageUrl} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
-        {panel.type === "footer" && <div className="direct-footer-line"><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><span /></div>}
+        {panel.type === "footer" && <div className={`direct-footer-line icons-${panel.footerIconPlacement ?? "left"}`}><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />{panel.footerIconPlacement === "both" && <span className="footer-heart">♡</span>}<span /></div>}
       </section>)}
     </div>
     {placingPanelType && <div className="placement-hint"><Plus size={14} /> Click where the {boardPanelLabel(placingPanelType).toLowerCase()} should go</div>}

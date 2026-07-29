@@ -127,7 +127,9 @@ export interface BoardPanel {
   title: string;
   body?: string;
   size: "compact" | "standard" | "feature";
-  columns?: 1 | 2;
+  columns?: 1 | 2 | 3 | 4;
+  rows?: number;
+  footerIconPlacement?: "left" | "both";
   x?: number;
   y?: number;
   width?: number;

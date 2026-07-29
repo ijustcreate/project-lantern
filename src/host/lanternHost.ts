@@ -117,12 +117,19 @@ function queueSharedStateSave(state: LanternState) {
   if (!sharedPersistenceEnabled || !LANTERN_SERVICE_ROOT) return;
   window.clearTimeout(sharedSaveTimer);
   sharedSaveTimer = window.setTimeout(() => {
-    void fetch(`${LANTERN_SERVICE_ROOT}/state`, {
-      method: "PUT",
-      headers: { "Accept": "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ state: serializableSharedState(state) })
-    }).catch(() => undefined);
+    void saveSharedLanternState(state).catch(() => undefined);
   }, 450);
+}
+
+export async function saveSharedLanternState(state: LanternState) {
+  if (!LANTERN_SERVICE_ROOT) throw new Error("Shared project storage is not configured");
+  window.clearTimeout(sharedSaveTimer);
+  const response = await fetch(`${LANTERN_SERVICE_ROOT}/state`, {
+    method: "PUT",
+    headers: { "Accept": "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ state: serializableSharedState(state) })
+  });
+  if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
 }
 
 export async function uploadLanternAsset(file: File) {
