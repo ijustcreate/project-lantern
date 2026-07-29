@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "project-lantern-bugs",
+  "main": "worker/bugs.ts",
+  "compatibility_date": "2026-07-29",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "BUGS_DB",
+      "database_name": "project-lantern-bugs",
+      "database_id": "4a3da883-e7e5-4b41-a82f-a33c1ba17037"
+    }
+  ]
+}

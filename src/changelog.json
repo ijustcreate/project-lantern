@@ -1,5 +1,28 @@
 [
   {
+    "id": "DEV-0063",
+    "title": "Shared tester bug reports",
+    "summary": "Public testers now submit reports and small screenshot evidence to a Cloudflare Worker backed by D1, allowing every report to appear in the shared Bugs page while the application remains hosted on GitHub Pages. The repository README is now a polished project portal with live access, testing guidance, architecture, privacy notes, and deployment instructions.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 12:02 PM",
+    "areas": [
+      "Bug reporting",
+      "Cloudflare deployment",
+      "Documentation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "worker/bugs.ts",
+      "worker/schema.sql",
+      "wrangler.jsonc",
+      ".github/workflows/deploy-pages.yml",
+      "README.md",
+      "package.json",
+      "package-lock.json"
+    ],
+    "tests": "npm run build; npm run build:worker; production Worker PUT/list/evidence round trip with CORS; disposable D1 test cleanup; git diff --check; npm audit --omit=dev"
+  },
+  {
     "id": "DEV-0062",
     "title": "Align dashboard and Board Editor previews",
     "summary": "Fixed dashboard donor text alignment and effect sizing, then made Board Editor typography respond to panel bounds so the same board stays centered, legible, and unclipped in both views.",

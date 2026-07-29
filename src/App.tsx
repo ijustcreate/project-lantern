@@ -732,14 +732,15 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
       } else {
         const bugs = readWebBugs();
         const now = new Date().toISOString();
-        const bugId = `BUG-${String(bugs.length + 1).padStart(4, "0")}`;
+        const randomDigits = crypto.getRandomValues(new Uint32Array(1))[0].toString().padStart(10, "0").slice(-10);
+        const bugId = `BUG-${randomDigits}`;
         const record: BugRecord = { bugId, summary, details, fixTips, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
         bugs.unshift(record);
         writeWebBugs(bugs);
         if (BUG_API_ENDPOINT) {
           try {
             await writeBridgeBug(record);
-            reportPath = `${bugId} in the shared Codex bug catalogue`;
+            reportPath = `${bugId} in the shared bug catalogue`;
           } catch {
             reportPath = `${bugId} on this device. The shared bug service is unavailable; use Bugs > Export all to send the report`;
           }
@@ -917,7 +918,8 @@ function EvidenceViewer({ bugId, evidence, onClose }: { bugId: string; evidence:
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const fileName = evidence.path?.split(/[\\/]/).pop() ?? evidence.name;
-  const source = evidence.dataUrl ?? `/__lantern/evidence/${encodeURIComponent(bugId)}/${encodeURIComponent(fileName)}${replay ? `?replay=${replay}` : ""}`;
+  const evidenceBase = !BUG_API_ENDPOINT || BUG_API_ENDPOINT === "/__lantern/bugs" ? "/__lantern/evidence" : `${BUG_API_ENDPOINT}/evidence`;
+  const source = evidence.dataUrl ?? `${evidenceBase}/${encodeURIComponent(bugId)}/${encodeURIComponent(fileName)}${replay ? `?replay=${replay}` : ""}`;
   const mime = evidence.mimeType ?? "";
   const isVideo = mime.startsWith("video/") || /\.(mov|mp4|mpeg|mpg|webm)$/i.test(fileName);
   const isGif = mime === "image/gif" || /\.gif$/i.test(fileName);

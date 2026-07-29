@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
+    "build:worker": "wrangler deploy --dry-run --outdir output/worker",
     "preview": "vite preview --host 127.0.0.1",
     "bugs": "node scripts/lantern-bugs.mjs",
     "changelog": "node scripts/lantern-changelog.mjs",
+    "cloudflare:deploy": "wrangler deploy",
+    "cloudflare:migrate": "wrangler d1 execute project-lantern-bugs --remote --file worker/schema.sql",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },
@@ -38,11 +41,13 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260729.1",
     "@tauri-apps/cli": "^2.9.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "wrangler": "^4.115.0"
   }
 }

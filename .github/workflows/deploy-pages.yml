@@ -29,6 +29,8 @@ jobs:
         run: npm ci
       - name: Build site
         run: npm run build
+        env:
+          VITE_LANTERN_BUG_ENDPOINT: ${{ vars.LANTERN_BUG_ENDPOINT }}
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
