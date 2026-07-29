@@ -2050,6 +2050,7 @@ function ThemeStudio({
   }));
   const particleEditorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
+  const boardDisplay = selectedProgram ? { ...display, orientation: selectedProgram.orientation } : display;
   const panels = selectedProgram?.panels?.length ? selectedProgram.panels : selectedProgram ? defaultBoardPanels(selectedProgram) : [];
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
   const donorPageSize = 8;
@@ -2225,6 +2226,8 @@ function ThemeStudio({
           ...current.screens[display.id],
           style: "donor-wall",
           boardProgramId: selectedProgram.id,
+          orientation: selectedProgram.orientation,
+          resolution: selectedProgram.orientation === "Portrait" ? "1080 x 1920" : "1920 x 1080",
           donorIds: [],
           donorRosterConfigured: false,
           customHeading: "",
@@ -2290,7 +2293,7 @@ function ThemeStudio({
           <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span><div className="mobile-board-zoom" aria-label="Board preview zoom"><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value - .15, .75, 1.75))}>−</button><button type="button" onClick={() => setBoardEditorZoom(1)}>{Math.round(boardEditorZoom * 100)}%</button><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value + .15, .75, 1.75))}>+</button></div></div>
           <DirectBoardCanvas
             state={state}
-            display={display}
+            display={boardDisplay}
             program={selectedProgram}
             panels={panels}
             selectedPanelId={selectedPanel?.id ?? ""}
@@ -2335,7 +2338,7 @@ function ThemeStudio({
             </div> : <><div className="board-selection-empty"><Palette size={22} /><strong>Board selected</strong><span>Select a panel to modify or edit it. Click the area around the board to clear your selection.</span></div>
             <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
-              <div className="field"><span>Format <InfoDot text="Choose the physical orientation for this display." /></span><SegmentedControl value={display.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchDisplay({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
+              <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
               <label className="switch-row"><input type="checkbox" checked={display.showFrame ?? true} onChange={(event) => patchDisplay({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
               <div className="board-background-controls">
                 <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {display.backgroundImage ? "Replace background" : "Add background image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
@@ -2629,6 +2632,8 @@ function LegacyThemeStudio({
           ...current.screens[display.id],
           style: "donor-wall",
           boardProgramId: selectedProgram.id,
+          orientation: selectedProgram.orientation,
+          resolution: selectedProgram.orientation === "Portrait" ? "1080 x 1920" : "1920 x 1080",
           donorIds: [],
           donorRosterConfigured: false,
           customHeading: "",

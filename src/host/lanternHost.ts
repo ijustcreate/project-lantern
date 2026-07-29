@@ -4,7 +4,7 @@ import type { HostMessage, LanternState, ScreenId, TargetScreen } from "../types
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
-const DEMO_DATA_VERSION = "3";
+const DEMO_DATA_VERSION = "4";
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
 
@@ -27,8 +27,12 @@ export function loadLanternState(): LanternState {
         board: { ...saved.board, storyImageUrl: "" },
         boardPrograms: initialState.boardPrograms,
         schedules: initialState.schedules,
+        savedAnnouncements: initialState.savedAnnouncements,
         screens: Object.fromEntries(Object.entries(saved.screens).map(([id, screen]) => [id, {
           ...screen,
+          orientation: id === "display-1" ? "Portrait" : screen.orientation,
+          resolution: id === "display-1" ? "1080 x 1920" : screen.resolution,
+          boardProgramId: id === "display-1" ? "board-classic" : screen.boardProgramId,
           style: screen.style === "image" ? "donor-wall" : screen.style,
           backgroundMode: screen.style === "image" ? "image" : screen.backgroundMode,
           backgroundImage: undefined,
@@ -268,7 +272,13 @@ function normalizeState(state: LanternState): LanternState {
         ...state.board?.footerVisibility
       }
     },
-    boardPrograms: state.boardPrograms ?? initialState.boardPrograms,
+    boardPrograms: (state.boardPrograms ?? initialState.boardPrograms).map((program) => ({
+      ...program,
+      orientation: program.orientation
+        ?? Object.values(screens).find((screen) => screen.boardProgramId === program.id)?.orientation
+        ?? initialState.boardPrograms.find((candidate) => candidate.id === program.id)?.orientation
+        ?? "Portrait"
+    })),
     schedules: (state.schedules ?? initialState.schedules).map((entry, index) => ({
       ...entry,
       contentType: entry.contentType ?? "board",

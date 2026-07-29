@@ -107,6 +107,7 @@ export interface BoardContent {
 export interface DonorBoardProgram {
   id: string;
   name: string;
+  orientation: DisplayProfile["orientation"];
   heading: string;
   subtitle: string;
   description: string;

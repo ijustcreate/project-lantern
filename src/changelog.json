@@ -1,5 +1,26 @@
 [
   {
+    "id": "DEV-0064",
+    "title": "Save board orientation and museum test schedule",
+    "summary": "Boards now retain portrait or landscape format, the primary portrait display runs Wednesday through Sunday from 7 AM to 6 PM, and three reusable test announcements are scheduled at 10 AM, 1 PM, and 3 PM.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 12:17 PM",
+    "areas": [
+      "Boards",
+      "Displays",
+      "Schedule",
+      "Announcements",
+      "Data migration"
+    ],
+    "files": [
+      "src/types.ts",
+      "src/App.tsx",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0063",
     "title": "Shared tester bug reports",
     "summary": "Public testers now submit reports and small screenshot evidence to a Cloudflare Worker backed by D1, allowing every report to appear in the shared Bugs page while the application remains hosted on GitHub Pages. The repository README is now a polished project portal with live access, testing guidance, architecture, privacy notes, and deployment instructions.",

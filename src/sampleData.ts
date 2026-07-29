@@ -3,7 +3,7 @@ import type { LanternState } from "./types";
 export const initialState: LanternState = {
   revision: 18,
   publishedAt: "Today, 9:12 AM",
-  nextScheduledEvent: "Story time banner at 2:30 PM",
+  nextScheduledEvent: "Test Message 1 at 10:00 AM",
   lastBackup: "Today, 8:45 AM",
   donors: [
     { id: "test-family-1", name: "Test Family Alpha", tier: "Founder", category: "Family", active: true, since: "2026", note: "Test record — family/founder", tags: ["(test)", "Supporter", "Education", "Custom icon"], customIconImage: "/assets/donor-icons/star.png", groupId: "group-founders", displayIds: ["display-1", "display-2"] },
@@ -77,6 +77,7 @@ export const initialState: LanternState = {
     {
       id: "board-classic",
       name: "Our Generous Donors",
+      orientation: "Portrait",
       heading: "THANK YOU",
       subtitle: "OUR GENEROUS DONORS",
       description: "TOGETHER, WE MAKE A DIFFERENCE.",
@@ -88,6 +89,7 @@ export const initialState: LanternState = {
     {
       id: "board-spotlight",
       name: "Community Spotlight",
+      orientation: "Landscape",
       heading: "THANK YOU",
       subtitle: "COMMUNITY PARTNERS",
       description: "YOUR SUPPORT BUILDS A BRIGHTER FUTURE.",
@@ -98,10 +100,60 @@ export const initialState: LanternState = {
     }
   ],
   schedules: [
-    { id: "schedule-first-half", name: "Test roster — first half", target: "all", boardId: "board-classic", contentType: "board", days: [0, 3, 4, 5, 6], startTime: "08:00", endTime: "13:00", color: "#5f55bd", active: true },
-    { id: "schedule-second-half", name: "Test roster — second half", target: "all", boardId: "board-spotlight", contentType: "board", days: [0, 3, 4, 5, 6], startTime: "13:00", endTime: "18:00", color: "#218ba2", active: true }
+    { id: "schedule-portrait-hours", name: "Portrait display hours", target: "display-1", boardId: "board-classic", contentType: "board", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "07:00", endTime: "18:00", color: "#5f55bd", active: true },
+    { id: "schedule-test-message-1", name: "Test Message 1", target: "display-1", boardId: "board-classic", contentType: "announcement", announcementId: "announcement-test-1", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "10:00", endTime: "10:10", color: "#a95777", active: true },
+    { id: "schedule-test-message-2", name: "Test Message 2", target: "display-1", boardId: "board-classic", contentType: "announcement", announcementId: "announcement-test-2", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "13:00", endTime: "13:10", color: "#218ba2", active: true },
+    { id: "schedule-test-message-3", name: "Test Message 3", target: "display-1", boardId: "board-classic", contentType: "announcement", announcementId: "announcement-test-3", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "15:00", endTime: "15:10", color: "#956330", active: true }
   ],
   savedAnnouncements: [
+    {
+      id: "announcement-test-1",
+      title: "Test Message 1",
+      message: "Test message 1",
+      target: "display-1",
+      priority: "Normal",
+      style: "Ribbon",
+      durationMinutes: 10,
+      timerStyle: "off",
+      timerPosition: "announcement-right",
+      timerAccentColor: "#6847e8",
+      timerTrackColor: "#e8e0d0",
+      finishSfx: "off",
+      sfxVolume: 70,
+      character: "off"
+    },
+    {
+      id: "announcement-test-2",
+      title: "Test Message 2",
+      message: "Test message 2",
+      target: "display-1",
+      priority: "Normal",
+      style: "Ribbon",
+      durationMinutes: 10,
+      timerStyle: "off",
+      timerPosition: "announcement-right",
+      timerAccentColor: "#6847e8",
+      timerTrackColor: "#e8e0d0",
+      finishSfx: "off",
+      sfxVolume: 70,
+      character: "off"
+    },
+    {
+      id: "announcement-test-3",
+      title: "Test Message 3",
+      message: "Test message 3",
+      target: "display-1",
+      priority: "Normal",
+      style: "Ribbon",
+      durationMinutes: 10,
+      timerStyle: "off",
+      timerPosition: "announcement-right",
+      timerAccentColor: "#6847e8",
+      timerTrackColor: "#e8e0d0",
+      finishSfx: "off",
+      sfxVolume: 70,
+      character: "off"
+    },
     {
       id: "a-001",
       title: "Story Time",
@@ -166,6 +218,7 @@ export const initialState: LanternState = {
       fps: 0,
       status: "offline",
       enabled: true,
+      boardProgramId: "board-classic",
       donorIds: [],
       customHeading: "THANK YOU",
       customSubheading: "OUR GENEROUS DONORS",
