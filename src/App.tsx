@@ -77,14 +77,18 @@ import { ChromaVideo } from "./components/ChromaVideo";
 import {
   createHostChannel,
   deleteLanternMedia,
+  enableSharedStatePersistence,
   fitWarnings,
   hydrateLanternMedia,
   loadLanternState,
+  loadSharedLanternState,
   nextRevision,
   openDisplayWindows,
   publishState,
+  shareLanternImages,
   storeLanternMedia,
-  targetIncludes
+  targetIncludes,
+  uploadLanternAsset
 } from "./host/lanternHost";
 import { attachDisplayVideoReceiver, DirectorVideoBridge } from "./host/videoBridge";
 import type {
@@ -224,11 +228,20 @@ function ControlCenter() {
 
   useEffect(() => {
     let mounted = true;
-    void hydrateLanternMedia(loadLanternState()).then((hydrated) => {
+    void (async () => {
+      let loaded = loadLanternState();
+      try {
+        loaded = await loadSharedLanternState() ?? loaded;
+      } catch {
+        // The local browser copy remains usable whenever the shared service is unavailable.
+      }
+      const hydrated = await hydrateLanternMedia(loaded);
+      const sharedImages = await shareLanternImages(hydrated);
       if (!mounted) return;
-      setState(hydrated);
-      publishState(hydrated);
-    });
+      setState(sharedImages);
+      enableSharedStatePersistence();
+      publishState(sharedImages);
+    })();
     return () => { mounted = false; };
   }, []);
 
@@ -1731,7 +1744,7 @@ function DonorAppearanceEditor({ donor, onChange }: { donor: Donor; onChange: (d
         <span>Custom donor override <InfoDot text="Optional JPG or PNG used instead of the display's circle, diamond, or dash. It only appears when donor icons are enabled." /></span>
         <div className="custom-donor-icon-row">
           {donor.customIconImage && <img src={donor.customIconImage} alt="" />}
-          <label className="image-upload compact"><Upload size={15} /><span>{donor.customIconImage ? "Replace image" : "Choose JPG or PNG"}</span><input type="file" accept="image/png,image/jpeg" onChange={(event) => readImageFile(event.target.files?.[0], (customIconImage) => onChange({ ...donor, customIconImage }))} /></label>
+          <label className="image-upload compact"><Upload size={15} /><span>{donor.customIconImage ? "Replace image" : "Choose JPG or PNG"}</span><input type="file" accept="image/png,image/jpeg" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (customIconImage) => onChange({ ...donor, customIconImage }))} /></label>
           {donor.customIconImage && <button type="button" className="icon-button danger-icon" onClick={() => onChange({ ...donor, customIconImage: undefined })} title="Remove custom donor icon"><Trash2 size={15} /></button>}
         </div>
       </div>
@@ -2236,16 +2249,29 @@ function ThemeStudio({
 
   const chooseBoardBackground = async (file?: File) => {
     if (!file) return;
-    const mediaId = await storeLanternMedia(file);
-    void deleteLanternMedia(display.backgroundMediaId);
-    patchDisplay({
-      backgroundImage: URL.createObjectURL(file),
-      backgroundMediaId: mediaId,
-      backgroundMediaType: "image",
-      backgroundMediaName: file.name,
-      backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
-      backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
-    });
+    try {
+      const backgroundImage = await uploadLanternAsset(file);
+      void deleteLanternMedia(display.backgroundMediaId);
+      patchDisplay({
+        backgroundImage,
+        backgroundMediaId: undefined,
+        backgroundMediaType: "image",
+        backgroundMediaName: file.name,
+        backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
+        backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
+      });
+    } catch {
+      const mediaId = await storeLanternMedia(file);
+      void deleteLanternMedia(display.backgroundMediaId);
+      patchDisplay({
+        backgroundImage: URL.createObjectURL(file),
+        backgroundMediaId: mediaId,
+        backgroundMediaType: "image",
+        backgroundMediaName: file.name,
+        backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
+        backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
+      });
+    }
   };
 
   const removeBoardBackground = () => {
@@ -2330,7 +2356,7 @@ function ThemeStudio({
                 <div className="board-donor-picker compact-picker">{donorPageItems.map((donor) => <label key={donor.id}><input type="checkbox" checked={selectedProgram.donorIds.includes(donor.id)} onChange={(event) => toggleProgramDonor(donor.id, event.target.checked)} /><span>{donor.name}</span></label>)}</div>
                 <Pager page={donorPage} pageCount={donorPageCount} onChange={setDonorPage} />
               </>}
-              {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Choose PNG or image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchPanel(selectedPanel.id, { imageUrl: String(reader.result) }); reader.readAsDataURL(file); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the panel." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
+              {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Choose PNG or image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the panel." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
             </div> : <><div className="board-selection-empty"><Palette size={22} /><strong>Board selected</strong><span>Select a panel to modify or edit it. Click the area around the board to clear your selection.</span></div>
             <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
@@ -2643,6 +2669,25 @@ function LegacyThemeStudio({
   const chooseMedia = async (file?: File) => {
     if (!file) return;
     const mediaType: DisplayProfile["backgroundMediaType"] = file.type.startsWith("video/") ? "video" : "image";
+    if (mediaType === "image") {
+      try {
+        const backgroundImage = await uploadLanternAsset(file);
+        void deleteLanternMedia(display.backgroundMediaId);
+        patchDisplay({
+          style: "donor-wall",
+          backgroundMode: "image",
+          backgroundImage,
+          backgroundMediaId: undefined,
+          backgroundMediaType: "image",
+          backgroundMediaName: file.name,
+          backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
+          backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
+        });
+        return;
+      } catch {
+        // Retain the existing device-local media path while offline.
+      }
+    }
     const mediaId = await storeLanternMedia(file);
     void deleteLanternMedia(display.backgroundMediaId);
     patchDisplay({
@@ -3130,7 +3175,7 @@ function AnnouncementsView({
             <div className="optional-section-body">
               <div className="optional-image-control">
                 <div><ImagePlus size={18} /><span><strong>Announcement image</strong><small>Add an optional PNG, JPG, GIF, or WebP to the message.</small></span></div>
-                <label className="image-upload announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => readImageFile(event.target.files?.[0], (imageUrl) => patchAnnouncement({ imageUrl, imageX: 72, imageY: 50, imageWidth: 22 }))} /></label>
+                <label className="image-upload announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (imageUrl) => patchAnnouncement({ imageUrl, imageX: 72, imageY: 50, imageWidth: 22 }))} /></label>
                 {state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined })} title="Remove announcement image"><Trash2 size={15} /></button>}
               </div>
               <div className="announcement-timer-controls">
@@ -3820,7 +3865,7 @@ function LivePreviewPanel({
             <Slider label="Edge feather" info="Smooths the transition around the segmented person." value={Math.round(state.live.effects.segmentationFeather * 100)} min={4} max={35} onChange={(value) => patchLive({ effects: { ...state.live.effects, segmentationFeather: value / 100 } })} />
             {state.live.effects.background === "blur" ? <Slider label="Background blur" info="Blur strength behind the segmented person." value={state.live.effects.blur} min={4} max={40} onChange={(value) => patchLive({ effects: { ...state.live.effects, blur: value } })} /> : <div className="effect-setting-note">Mask updates are stabilized between frames to reduce edge flicker.</div>}
           </div>
-          {state.live.effects.background === "image" && <label className="image-upload"><ImagePlus size={17} /><span>{state.live.effects.backgroundImage ? "Replace background image" : "Choose background image"}</span><input type="file" accept="image/*" onChange={(event) => readImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ effects: { ...state.live.effects, backgroundImage } }))} /></label>}
+          {state.live.effects.background === "image" && <label className="image-upload"><ImagePlus size={17} /><span>{state.live.effects.backgroundImage ? "Replace background image" : "Choose background image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ effects: { ...state.live.effects, backgroundImage } }))} /></label>}
         </section>}
 
         <section className="effect-settings-card face-settings-card">
@@ -5232,7 +5277,10 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
 
   useEffect(() => {
     let mounted = true;
-    void hydrateLanternMedia(loadLanternState()).then((hydrated) => mounted && setState(hydrated));
+    void loadSharedLanternState()
+      .catch(() => null)
+      .then((shared) => hydrateLanternMedia(shared ?? loadLanternState()))
+      .then((hydrated) => mounted && setState(hydrated));
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") setState(message.state);
     });
@@ -5279,7 +5327,10 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
 
   useEffect(() => {
     let mounted = true;
-    void hydrateLanternMedia(loadLanternState()).then((hydrated) => mounted && setState(hydrated));
+    void loadSharedLanternState()
+      .catch(() => null)
+      .then((shared) => hydrateLanternMedia(shared ?? loadLanternState()))
+      .then((hydrated) => mounted && setState(hydrated));
     return () => {
       mounted = false;
       if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
@@ -5527,6 +5578,15 @@ function playSound(source: string, volume = 85) {
   const audio = new Audio(source);
   audio.volume = Math.max(0, Math.min(1, volume / 100));
   void audio.play().catch(() => undefined);
+}
+
+async function readSharedImageFile(file: File | undefined, onLoad: (value: string) => void) {
+  if (!file) return;
+  try {
+    onLoad(await uploadLanternAsset(file));
+  } catch {
+    readImageFile(file, onLoad);
+  }
 }
 
 function readImageFile(file: File | undefined, onLoad: (value: string) => void) {

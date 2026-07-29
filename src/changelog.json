@@ -1,5 +1,46 @@
 [
   {
+    "id": "DEV-0067",
+    "title": "Schedule portrait and landscape boards independently",
+    "summary": "The calendar now assigns a saved portrait board to Display 1 and a saved landscape board to Display 2 as separate Wednesday-through-Sunday events from 7 AM to 6 PM, while preserving user-created boards and other events during migration.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 12:36 PM",
+    "areas": [
+      "Schedule",
+      "Boards",
+      "Displays",
+      "Data migration"
+    ],
+    "files": [
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0066",
+    "title": "Share boards and uploaded images across testers",
+    "summary": "Project data now syncs through the Cloudflare service, user-uploaded images are stored in durable Workers KV with automatic migration of existing embedded images, and local browser storage remains available as an offline fallback.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 12:36 PM",
+    "areas": [
+      "Boards",
+      "Images",
+      "Cloudflare",
+      "Shared testing",
+      "Data migration"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "worker/bugs.ts",
+      "worker/schema.sql",
+      "wrangler.jsonc",
+      ".github/workflows/deploy-pages.yml"
+    ],
+    "tests": "npm run build; npm run build:worker; live state PUT/GET round-trip; live image upload/download round-trip"
+  },
+  {
     "id": "DEV-0065",
     "title": "Add museum branding to navigation",
     "summary": "Replaced the Project Lantern icon and wordmark in the top-left navigation with the supplied Children's Museum of Stockton image, including compact responsive presentation.",

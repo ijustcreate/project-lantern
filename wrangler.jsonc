@@ -12,5 +12,11 @@
       "database_name": "project-lantern-bugs",
       "database_id": "4a3da883-e7e5-4b41-a82f-a33c1ba17037"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "LANTERN_ASSETS",
+      "id": "3d8cc51cb3e443a7a6cc113d790e5ab0"
+    }
   ]
 }

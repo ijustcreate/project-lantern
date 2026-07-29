@@ -21,3 +21,9 @@ CREATE TABLE IF NOT EXISTS bug_evidence (
 
 CREATE INDEX IF NOT EXISTS bug_evidence_bug_id
   ON bug_evidence(bug_id);
+
+CREATE TABLE IF NOT EXISTS shared_state (
+  state_id TEXT PRIMARY KEY,
+  updated_at TEXT NOT NULL,
+  state_json TEXT NOT NULL
+);

@@ -4,9 +4,15 @@ import type { HostMessage, LanternState, ScreenId, TargetScreen } from "../types
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
-const DEMO_DATA_VERSION = "4";
+const DEMO_DATA_VERSION = "5";
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
+const configuredServiceEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
+  || (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
+  || (import.meta.env.DEV ? "/__lantern/bugs" : "");
+const LANTERN_SERVICE_ROOT = configuredServiceEndpoint.replace(/\/bugs\/?$/, "");
+let sharedPersistenceEnabled = false;
+let sharedSaveTimer: number | undefined;
 
 type Listener = (message: HostMessage) => void;
 
@@ -19,15 +25,23 @@ export function loadLanternState(): LanternState {
   try {
     const saved = { ...initialState, ...JSON.parse(stored) } as LanternState;
     if (window.localStorage.getItem(DEMO_DATA_VERSION_KEY) !== DEMO_DATA_VERSION) {
+      const savedPrograms = saved.boardPrograms?.length ? saved.boardPrograms : initialState.boardPrograms;
+      const portraitProgram = savedPrograms.find((program) => program.orientation === "Portrait") ?? savedPrograms[0];
+      const landscapeProgram = savedPrograms.find((program) => program.orientation === "Landscape") ?? savedPrograms[1] ?? savedPrograms[0];
+      const retainedSchedules = (saved.schedules ?? []).filter((entry) => !["schedule-first-half", "schedule-second-half", "schedule-portrait-hours", "schedule-portrait-board", "schedule-landscape-board"].includes(entry.id));
+      const boardSchedules = [
+        { ...initialState.schedules.find((entry) => entry.id === "schedule-portrait-board")!, boardId: portraitProgram.id },
+        { ...initialState.schedules.find((entry) => entry.id === "schedule-landscape-board")!, boardId: landscapeProgram.id }
+      ];
       const migrated = normalizeState({
         ...saved,
         donors: initialState.donors,
         donorGroups: initialState.donorGroups,
         recognitionSettings: initialState.recognitionSettings,
         board: { ...saved.board, storyImageUrl: "" },
-        boardPrograms: initialState.boardPrograms,
-        schedules: initialState.schedules,
-        savedAnnouncements: initialState.savedAnnouncements,
+        boardPrograms: savedPrograms,
+        schedules: [...boardSchedules, ...retainedSchedules],
+        savedAnnouncements: saved.savedAnnouncements?.length ? saved.savedAnnouncements : initialState.savedAnnouncements,
         screens: Object.fromEntries(Object.entries(saved.screens).map(([id, screen]) => [id, {
           ...screen,
           orientation: id === "display-1" ? "Portrait" : screen.orientation,
@@ -75,6 +89,104 @@ export function saveLanternState(state: LanternState) {
   } catch (error) {
     console.warn("Project Lantern could not persist the current media asset locally.", error);
   }
+}
+
+function serializableSharedState(state: LanternState): LanternState {
+  return {
+    ...state,
+    screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
+      id,
+      screen.backgroundImage?.startsWith("blob:") ? { ...screen, backgroundImage: undefined } : screen
+    ])) as LanternState["screens"]
+  };
+}
+
+export async function loadSharedLanternState(): Promise<LanternState | null> {
+  if (!LANTERN_SERVICE_ROOT) return null;
+  const response = await fetch(`${LANTERN_SERVICE_ROOT}/state`, { headers: { "Accept": "application/json" } });
+  if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
+  const body = await response.json() as { state?: LanternState | null };
+  return body.state ? normalizeState({ ...initialState, ...body.state }) : null;
+}
+
+export function enableSharedStatePersistence() {
+  sharedPersistenceEnabled = true;
+}
+
+function queueSharedStateSave(state: LanternState) {
+  if (!sharedPersistenceEnabled || !LANTERN_SERVICE_ROOT) return;
+  window.clearTimeout(sharedSaveTimer);
+  sharedSaveTimer = window.setTimeout(() => {
+    void fetch(`${LANTERN_SERVICE_ROOT}/state`, {
+      method: "PUT",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ state: serializableSharedState(state) })
+    }).catch(() => undefined);
+  }, 450);
+}
+
+export async function uploadLanternAsset(file: File) {
+  if (!LANTERN_SERVICE_ROOT) throw new Error("Shared image storage is not configured");
+  const response = await fetch(`${LANTERN_SERVICE_ROOT}/assets`, {
+    method: "POST",
+    headers: { "Accept": "application/json", "Content-Type": file.type },
+    body: file
+  });
+  const body = await response.json() as { url?: string; error?: string };
+  if (!response.ok || !body.url) throw new Error(body.error ?? `Image service returned ${response.status}`);
+  return body.url;
+}
+
+async function shareImageUrl(value: string | undefined, name: string) {
+  if (!value?.startsWith("data:") && !value?.startsWith("blob:")) return value;
+  try {
+    const blob = await fetch(value).then((response) => response.blob());
+    const extension = blob.type === "image/png" ? "png" : blob.type === "image/gif" ? "gif" : blob.type === "image/webp" ? "webp" : "jpg";
+    return await uploadLanternAsset(new File([blob], `${name}.${extension}`, { type: blob.type }));
+  } catch {
+    return value;
+  }
+}
+
+export async function shareLanternImages(state: LanternState): Promise<LanternState> {
+  const boardPrograms = await Promise.all(state.boardPrograms.map(async (program) => ({
+    ...program,
+    panels: program.panels ? await Promise.all(program.panels.map(async (panel) => ({
+      ...panel,
+      imageUrl: await shareImageUrl(panel.imageUrl, `${program.id}-${panel.id}`)
+    }))) : program.panels
+  })));
+  const donors = await Promise.all(state.donors.map(async (donor) => ({
+    ...donor,
+    customIconImage: await shareImageUrl(donor.customIconImage, `${donor.id}-icon`)
+  })));
+  const savedAnnouncements = await Promise.all(state.savedAnnouncements.map(async (announcement) => ({
+    ...announcement,
+    imageUrl: await shareImageUrl(announcement.imageUrl, `${announcement.id}-image`)
+  })));
+  const screens = Object.fromEntries(await Promise.all(Object.entries(state.screens).map(async ([id, screen]) => {
+    const backgroundImage = await shareImageUrl(screen.backgroundImage, `${id}-background`);
+    return [id, {
+      ...screen,
+      backgroundImage,
+      backgroundMediaId: backgroundImage?.startsWith("http") ? undefined : screen.backgroundMediaId
+    }];
+  }))) as LanternState["screens"];
+  return {
+    ...state,
+    boardPrograms,
+    donors,
+    savedAnnouncements,
+    screens,
+    announcement: { ...state.announcement, imageUrl: await shareImageUrl(state.announcement.imageUrl, "active-announcement") },
+    live: {
+      ...state.live,
+      effects: {
+        ...state.live.effects,
+        backgroundImage: await shareImageUrl(state.live.effects.backgroundImage, "live-background")
+      }
+    }
+  };
 }
 
 export async function storeLanternMedia(file: File) {
@@ -154,6 +266,7 @@ export function createHostChannel(listener: Listener) {
 
 export function publishState(state: LanternState) {
   saveLanternState(state);
+  queueSharedStateSave(state);
   const channel = new BroadcastChannel(LANTERN_CHANNEL);
   channel.postMessage({ type: "state-update", state } satisfies HostMessage);
   channel.close();
@@ -237,7 +350,7 @@ export function fitWarnings(state: LanternState) {
   return warnings;
 }
 
-function normalizeState(state: LanternState): LanternState {
+export function normalizeState(state: LanternState): LanternState {
   const legacyScreens = state.screens as LanternState["screens"] & {
     portrait?: LanternState["screens"][string];
     landscape?: LanternState["screens"][string];

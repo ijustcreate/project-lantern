@@ -100,7 +100,8 @@ export const initialState: LanternState = {
     }
   ],
   schedules: [
-    { id: "schedule-portrait-hours", name: "Portrait display hours", target: "display-1", boardId: "board-classic", contentType: "board", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "07:00", endTime: "18:00", color: "#5f55bd", active: true },
+    { id: "schedule-portrait-board", name: "Portrait board · Display 1", target: "display-1", boardId: "board-classic", contentType: "board", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "07:00", endTime: "18:00", color: "#5f55bd", active: true },
+    { id: "schedule-landscape-board", name: "Landscape board · Display 2", target: "display-2", boardId: "board-spotlight", contentType: "board", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "07:00", endTime: "18:00", color: "#218ba2", active: true },
     { id: "schedule-test-message-1", name: "Test Message 1", target: "display-1", boardId: "board-classic", contentType: "announcement", announcementId: "announcement-test-1", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "10:00", endTime: "10:10", color: "#a95777", active: true },
     { id: "schedule-test-message-2", name: "Test Message 2", target: "display-1", boardId: "board-classic", contentType: "announcement", announcementId: "announcement-test-2", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "13:00", endTime: "13:10", color: "#218ba2", active: true },
     { id: "schedule-test-message-3", name: "Test Message 3", target: "display-1", boardId: "board-classic", contentType: "announcement", announcementId: "announcement-test-3", days: [0, 3, 4, 5, 6], recurrence: "weekly", startTime: "15:00", endTime: "15:10", color: "#956330", active: true }

@@ -1,5 +1,6 @@
 interface Env {
   BUGS_DB: D1Database;
+  LANTERN_ASSETS: KVNamespace;
 }
 
 type BugEvidence = { name: string; dataUrl?: string; path?: string; mimeType?: string };
@@ -25,16 +26,67 @@ const allowedOrigins = new Set([
 ]);
 const maxEvidenceDataUrlLength = 1_500_000;
 const maxReportBytes = 8 * 1024 * 1024;
+const maxAssetBytes = 10 * 1024 * 1024;
+const maxStateBytes = 1_500_000;
 
 function corsHeaders(request: Request) {
   const origin = request.headers.get("origin") ?? "";
   return {
     "access-control-allow-origin": allowedOrigins.has(origin) ? origin : "https://ijustcreate.github.io",
-    "access-control-allow-methods": "GET, PUT, OPTIONS",
+    "access-control-allow-methods": "GET, PUT, POST, OPTIONS",
     "access-control-allow-headers": "accept, content-type",
     "access-control-max-age": "86400",
     "vary": "Origin"
   };
+}
+
+async function readSharedState(request: Request, env: Env) {
+  const row = await env.BUGS_DB.prepare("SELECT state_json, updated_at FROM shared_state WHERE state_id = 'museum'")
+    .first<{ state_json: string; updated_at: string }>();
+  return json(request, row ? { state: JSON.parse(row.state_json), updatedAt: row.updated_at } : { state: null });
+}
+
+async function saveSharedState(request: Request, env: Env) {
+  const length = Number(request.headers.get("content-length") ?? "0");
+  if (length > maxStateBytes) return json(request, { error: "Project data is too large to save" }, 413);
+  const input = await request.json() as { state?: unknown };
+  if (!input.state || typeof input.state !== "object") return json(request, { error: "Project state is required" }, 400);
+  const stateJson = JSON.stringify(input.state);
+  if (stateJson.length > maxStateBytes) return json(request, { error: "Project data is too large to save" }, 413);
+  const updatedAt = new Date().toISOString();
+  await env.BUGS_DB.prepare(`
+    INSERT INTO shared_state (state_id, updated_at, state_json)
+    VALUES ('museum', ?, ?)
+    ON CONFLICT(state_id) DO UPDATE SET updated_at = excluded.updated_at, state_json = excluded.state_json
+  `).bind(updatedAt, stateJson).run();
+  return json(request, { saved: true, updatedAt });
+}
+
+function safeAssetKey(value: string) {
+  if (!/^[a-z0-9][a-z0-9._-]{5,180}$/i.test(value)) throw new Error("Invalid asset key");
+  return value;
+}
+
+async function saveAsset(request: Request, env: Env) {
+  const length = Number(request.headers.get("content-length") ?? "0");
+  if (!length || length > maxAssetBytes) return json(request, { error: "Images must be smaller than 10 MB" }, 413);
+  const mimeType = request.headers.get("content-type") ?? "";
+  if (!/^image\/(png|jpeg|webp|gif)$/i.test(mimeType)) return json(request, { error: "Use a PNG, JPG, WebP, or GIF image" }, 415);
+  const extension = ({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" } as Record<string, string>)[mimeType.toLowerCase()];
+  const key = `${crypto.randomUUID()}.${extension}`;
+  await env.LANTERN_ASSETS.put(key, request.body, { metadata: { contentType: mimeType, uploadedAt: new Date().toISOString() } });
+  const url = new URL(request.url);
+  return json(request, { key, url: `${url.origin}/assets/${key}` }, 201);
+}
+
+async function readAsset(request: Request, env: Env, pathname: string) {
+  const key = safeAssetKey(decodeURIComponent(pathname.slice("/assets/".length)));
+  const object = await env.LANTERN_ASSETS.getWithMetadata<{ contentType?: string }>(key, "arrayBuffer");
+  if (!object.value) return json(request, { error: "Image not found" }, 404);
+  const headers = new Headers(corsHeaders(request));
+  headers.set("content-type", object.metadata?.contentType ?? "application/octet-stream");
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.value, { headers });
 }
 
 function json(request: Request, value: unknown, status = 200) {
@@ -162,6 +214,10 @@ export default {
     try {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
       const pathname = new URL(request.url).pathname;
+      if (request.method === "GET" && pathname === "/state") return await readSharedState(request, env);
+      if (request.method === "PUT" && pathname === "/state") return await saveSharedState(request, env);
+      if (request.method === "POST" && pathname === "/assets") return await saveAsset(request, env);
+      if (request.method === "GET" && pathname.startsWith("/assets/")) return await readAsset(request, env, pathname);
       if (request.method === "GET" && pathname.includes("/bugs/evidence/")) return await readEvidence(request, env, pathname);
       if (request.method === "GET" && /\/bugs\/?$/.test(pathname)) return await listBugs(request, env);
       if (request.method === "PUT" && /\/bugs\/?$/.test(pathname)) return await saveBug(request, env);
