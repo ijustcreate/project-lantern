@@ -641,6 +641,11 @@ async function writeBridgeBug(bug: BugRecord): Promise<BugRecord> {
   if (!BUG_API_ENDPOINT) throw new Error("No shared bug service is configured");
   return readBugResponse<BugRecord>(await fetch(BUG_API_ENDPOINT, { method: "PUT", headers: { "Accept": "application/json", "Content-Type": "application/json" }, body: JSON.stringify(bug) }));
 }
+async function deleteBridgeBug(bugId: string): Promise<void> {
+  if (!BUG_API_ENDPOINT) return;
+  const endpoint = `${BUG_API_ENDPOINT.replace(/\/+$/, "")}/${encodeURIComponent(bugId)}`;
+  await readBugResponse(await fetch(endpoint, { method: "DELETE", headers: { "Accept": "application/json" } }));
+}
 
 function BugReportPanel({ initialAttachments, captureStatus, state, view, onSaved, onClose }: {
   initialAttachments: BugAttachment[];
@@ -1046,6 +1051,24 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
       setSelected(next); setMessage(`${next.bugId} updated`); await load();
     } catch (error) { setMessage(`Could not update bug: ${String(error)}`); }
   };
+  const deleteBug = async (bug: BugRecord) => {
+    if (!window.confirm(`Delete ${bug.bugId} permanently?\n\n"${bug.summary}"\n\nThis removes the report and its attachments for every tester. This cannot be undone.`)) return;
+    try {
+      if (isTauri()) await invoke("delete_bug_report", { bugId: bug.bugId });
+      else {
+        if (BUG_API_ENDPOINT) await deleteBridgeBug(bug.bugId);
+        const remaining = bugs.filter((item) => item.bugId !== bug.bugId);
+        writeWebBugs(remaining);
+        setBugs(remaining);
+      }
+      setSelected(null);
+      setViewingEvidence(null);
+      setMessage(`${bug.bugId} deleted`);
+      await load();
+    } catch (error) {
+      setMessage(`Could not delete bug: ${String(error)}`);
+    }
+  };
   const exportAll = async () => {
     try {
       if (isTauri()) {
@@ -1116,7 +1139,7 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
             {commentTab === "user" && <div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? `Comment as ${activeUser}…` : `Reply as ${activeUser}…`} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div>}
           </div>
         </div>
-        <footer className="bug-detail-actions"><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
+        <footer className="bug-detail-actions"><button className="command-button danger" onClick={() => void deleteBug(selected)}><Trash2 size={16} /> Delete bug</button><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
       </> : <div className="bugs-empty"><Pencil size={26} /><strong>Select a bug</strong><span>Open it here to edit details or move it to Ready for test.</span></div>}</aside>
     </div>
     {message && <div className="bugs-message">{message}</div>}

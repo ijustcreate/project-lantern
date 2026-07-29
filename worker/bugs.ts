@@ -33,7 +33,7 @@ function corsHeaders(request: Request) {
   const origin = request.headers.get("origin") ?? "";
   return {
     "access-control-allow-origin": allowedOrigins.has(origin) ? origin : "https://ijustcreate.github.io",
-    "access-control-allow-methods": "GET, PUT, POST, OPTIONS",
+    "access-control-allow-methods": "GET, PUT, POST, DELETE, OPTIONS",
     "access-control-allow-headers": "accept, content-type",
     "access-control-max-age": "86400",
     "vary": "Origin"
@@ -192,6 +192,19 @@ async function listBugs(request: Request, env: Env) {
   return json(request, result.results.map((row) => JSON.parse(row.record_json) as BugRecord));
 }
 
+async function deleteBug(request: Request, env: Env, pathname: string) {
+  const match = pathname.match(/\/bugs\/(BUG-\d{4,})\/?$/i);
+  if (!match) return json(request, { error: "Bug report not found" }, 404);
+  const bugId = safeBugId(match[1]);
+  const existing = await readExisting(env, bugId);
+  if (!existing) return json(request, { error: "Bug report not found" }, 404);
+  await env.BUGS_DB.batch([
+    env.BUGS_DB.prepare("DELETE FROM bug_evidence WHERE bug_id = ?").bind(bugId),
+    env.BUGS_DB.prepare("DELETE FROM bug_reports WHERE bug_id = ?").bind(bugId)
+  ]);
+  return json(request, { deleted: true, bugId });
+}
+
 async function readEvidence(request: Request, env: Env, pathname: string) {
   const match = pathname.match(/\/bugs\/evidence\/(BUG-\d{4,})\/([^/]+)$/i);
   if (!match) return json(request, { error: "Evidence not found" }, 404);
@@ -221,6 +234,7 @@ export default {
       if (request.method === "GET" && pathname.includes("/bugs/evidence/")) return await readEvidence(request, env, pathname);
       if (request.method === "GET" && /\/bugs\/?$/.test(pathname)) return await listBugs(request, env);
       if (request.method === "PUT" && /\/bugs\/?$/.test(pathname)) return await saveBug(request, env);
+      if (request.method === "DELETE" && /\/bugs\/BUG-\d{4,}\/?$/i.test(pathname)) return await deleteBug(request, env, pathname);
       return json(request, { error: "Not found" }, 404);
     } catch (error) {
       return json(request, { error: error instanceof Error ? error.message : String(error) }, 400);

@@ -273,10 +273,19 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       }
     });
 
-    const resize = () => resizeCamera();
+    let resizeFrame = 0;
+    const resize = () => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(resizeCamera);
+    };
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(canvas);
+    if (canvas.parentElement) resizeObserver.observe(canvas.parentElement);
     window.addEventListener("resize", resize);
 
     return () => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeObserver.disconnect();
       window.removeEventListener("resize", resize);
       canvas.removeEventListener("contextmenu", containContextMenu);
       canvas.removeEventListener("wheel", containWheel);

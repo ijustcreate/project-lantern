@@ -313,6 +313,26 @@ fn update_bug_report(app: AppHandle, bug: BugRecord) -> Result<BugRecord, String
 }
 
 #[tauri::command]
+fn delete_bug_report(app: AppHandle, bug_id: String) -> Result<(), String> {
+    let root = bug_root(&app)?;
+    let canonical_root = root.canonicalize().map_err(|e| e.to_string())?;
+    let target = fs::read_dir(&root).map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .find_map(|entry| {
+            let catalog = entry.path().join("catalog.json");
+            let text = fs::read_to_string(catalog).ok()?;
+            let record = serde_json::from_str::<BugRecord>(&text).ok()?;
+            (record.bug_id.eq_ignore_ascii_case(&bug_id)).then_some(entry.path())
+        })
+        .ok_or("Bug report was not found")?;
+    let canonical_target = target.canonicalize().map_err(|e| e.to_string())?;
+    if canonical_target == canonical_root || !canonical_target.starts_with(&canonical_root) {
+        return Err("Refusing to delete a bug outside the bug report folder".into());
+    }
+    fs::remove_dir_all(canonical_target).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn export_bug_reports(app: AppHandle) -> Result<String, String> {
     let root = bug_root(&app)?;
     let export = root.parent().unwrap_or(&root).join(format!("project-lantern-bugs-{}.zip", timestamp()));
@@ -404,7 +424,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![available_displays, open_test_displays, capture_bug_windows, capture_bug_snip, save_bug_report, list_bug_reports, update_bug_report, export_bug_reports])
+        .invoke_handler(tauri::generate_handler![available_displays, open_test_displays, capture_bug_windows, capture_bug_snip, save_bug_report, list_bug_reports, update_bug_report, delete_bug_report, export_bug_reports])
         .run(tauri::generate_context!())
         .expect("error while running Project Lantern");
 }

@@ -1,5 +1,38 @@
 [
   {
+    "id": "DEV-0075",
+    "title": "Keep dashboard 2D boards fitted after resize",
+    "summary": "Dashboard board previews now observe their actual tile dimensions and continuously recalculate a centered, aspect-preserving orthographic fit after responsive layout changes.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 2:01 PM",
+    "areas": [
+      "Dashboard",
+      "2D display preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; local browser visually verified centered portrait and landscape board containment"
+  },
+  {
+    "id": "DEV-0074",
+    "title": "Add confirmed bug deletion",
+    "summary": "Selected bug reports can now be permanently deleted after a detailed confirmation. Deletion removes the shared Cloudflare database record and evidence, local cache entry, or validated desktop bug folder as appropriate.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 2:01 PM",
+    "areas": [
+      "Bug catalogue",
+      "Cloudflare worker",
+      "Desktop app"
+    ],
+    "files": [
+      "src/App.tsx",
+      "worker/bugs.ts",
+      "src-tauri/src/lib.rs"
+    ],
+    "tests": "npm run build; npm run build:worker; local browser verified Delete bug control; Rust toolchain unavailable for cargo check"
+  },
+  {
     "id": "DEV-0073",
     "title": "Make Broadcast Studio display-aware",
     "summary": "Broadcast previews now use real saved boards, support one or both displays, offer three pop-out compositions, transform only the camera image, separate frame sizing from camera pan and zoom, and simplify mutually exclusive background removal and face effects.",
