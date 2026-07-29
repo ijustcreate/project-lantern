@@ -3320,18 +3320,24 @@ const livePolygonClip = (frame: LanternState["live"]["frame"]) => {
 };
 
 function DirectLiveStage({
+  state,
   screen,
   live,
   stream,
   mode,
   previewError,
+  boardProgramId,
+  showBoard = true,
   onFrameChange
 }: {
+  state: LanternState;
   screen: DisplayProfile;
   live: LanternState["live"];
   stream: MediaStream | null;
   mode: "frame" | "crop";
   previewError: string | null;
+  boardProgramId?: string;
+  showBoard?: boolean;
   onFrameChange: (frame: LanternState["live"]["frame"]) => void;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -3458,17 +3464,23 @@ function DirectLiveStage({
         <strong>{mode === "frame" ? "Drag to move · corner to resize" : "Drag to crop · wheel to zoom"}</strong>
       </div>
       <div ref={stageRef} className={`direct-live-stage ${orientationClass(screen)}`}>
-        <div className="direct-stage-board"><span>{screen.label}</span></div>
+        <div className="direct-stage-board">
+          {showBoard
+            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={boardProgramId} fitToScreen viewMode="2d" />
+            : <div className="broadcast-only-backdrop"><Radio size={24} /><span>Broadcast only</span></div>}
+        </div>
         <div
           className={`direct-live-frame ${mode === "crop" ? "crop-mode" : ""}`}
-          style={{ left: `${live.frame.x}%`, top: `${live.frame.y}%`, width: `${live.frame.width}%`, height: `${live.frame.height}%`, transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${live.frame.mirrorX ? -1 : 1}, ${live.frame.mirrorY ? -1 : 1})` }}
+          style={{ left: `${live.frame.x}%`, top: `${live.frame.y}%`, width: `${live.frame.width}%`, height: `${live.frame.height}%` }}
           onPointerDown={(event) => beginDrag(event, mode === "crop" ? "crop" : "move")}
           onPointerMove={moveDrag}
           onPointerUp={finishDrag}
           onPointerCancel={finishDrag}
         >
           <div className={`direct-live-content mask-${live.frame.maskShape ?? "rectangle"}`} style={live.frame.maskShape === "polygon" ? { clipPath: polygonClip } : undefined}>
-            {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
+            <div className="live-camera-transform" style={{ transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${live.frame.mirrorX ? -1 : 1}, ${live.frame.mirrorY ? -1 : 1})` }}>
+              {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
+            </div>
             <div className="lower-third preview"><strong>{live.title}</strong><span>{live.lowerThird}</span></div>
           </div>
           {mode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}`} onPointerDown={(event) => beginDrag(event, "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
@@ -3536,6 +3548,8 @@ function LivePreviewPanel({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [directMode, setDirectMode] = useState<"frame" | "crop">("frame");
+  const [previewBoardId, setPreviewBoardId] = useState("assigned");
+  const [popoutMode, setPopoutMode] = useState<"broadcast" | "selected" | "all">("selected");
   const [recordings, setRecordings] = useState<LiveRecording[]>([]);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -3581,7 +3595,10 @@ function LivePreviewPanel({
   const micDevices = devices.filter((device) => device.kind === "audioinput");
   const cameraOptions = deviceOptionList(cameraDevices, "Default camera", "Camera");
   const micOptions = deviceOptionList(micDevices, "Default mic", "Mic");
-  const previewScreen = state.screens[state.live.target] ?? Object.values(state.screens)[0];
+  const allScreens = Object.values(state.screens);
+  const previewScreen = state.screens[state.live.target] ?? allScreens[0];
+  const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
+  const selectedPreviewBoardId = previewBoardId === "assigned" ? undefined : previewBoardId;
   const backgroundRemovalMode = state.live.chromaKey.enabled
     ? "chroma"
     : state.live.effects.background === "original" ? "off" : "ai";
@@ -3795,6 +3812,7 @@ function LivePreviewPanel({
     void startLive();
   };
 
+  const popoutScreens = popoutMode === "all" ? allScreens : [previewScreen];
   const previewPortal = previewWindow && !previewWindow.closed && previewWindow.document.getElementById("lantern-live-preview-root")
     ? createPortal(
         <div className="live-preview-popout-shell">
@@ -3802,21 +3820,19 @@ function LivePreviewPanel({
             <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /> <strong>Broadcast / Stream</strong><small>{labelForTarget(state.live.target)}</small></div>
             <button type="button" className="icon-button" onClick={() => previewWindow.close()} title="Close preview"><X size={18} /></button>
           </header>
-          <div className={`live-preview-box popout-preview ${orientationClass(previewScreen)}`}>
-            <div className={`live-positioned-preview mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
-              {state.live.source !== "demo" && previewStream ? (
-                <ChromaVideo stream={previewStream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
-              ) : state.live.source !== "demo" ? (
-                <div className="live-source-waiting">
-                  {state.live.source === "screen" ? <Monitor size={34} /> : <Camera size={34} />}
-                  <strong>{previewBusy ? "Waiting for permission..." : state.live.source === "screen" ? "Screen share not connected" : "Camera not connected"}</strong>
-                  <span>{previewError ?? (state.live.source === "screen" ? "Choose a screen or application window from the Control Center." : "Allow webcam access from the Control Center.")}</span>
-                </div>
-              ) : (
-                <div className="live-test-pattern"><strong>DIRECTOR LIVE</strong><span>Generated local test feed</span></div>
-              )}
-              <div className="lower-third preview"><strong>{state.live.title}</strong><span>{state.live.lowerThird}</span></div>
-            </div>
+          <div className={`live-popout-grid ${popoutScreens.length > 1 ? "multiple" : "single"}`}>
+            {popoutScreens.map((screen) => <DirectLiveStage
+              key={screen.id}
+              state={state}
+              screen={screen}
+              live={state.live}
+              stream={previewStream}
+              mode="frame"
+              previewError={previewError}
+              boardProgramId={selectedPreviewBoardId}
+              showBoard={popoutMode !== "broadcast"}
+              onFrameChange={(frame) => patchLive({ frame })}
+            />)}
           </div>
           <footer className="live-preview-popout-footer"><span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
         </div>,
@@ -3829,6 +3845,7 @@ function LivePreviewPanel({
       <div className="live-panel-heading">
         <div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div>
         <div className="live-heading-actions">
+          <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => setPopoutMode(event.target.value as typeof popoutMode)}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
           <button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
           <button className={state.live.active ? "command-button danger compact" : "command-button primary compact"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
             {state.live.active ? <Square size={17} /> : <Play size={17} />}
@@ -3839,10 +3856,10 @@ function LivePreviewPanel({
       <div className="live-studio-workspace">
       <section className="live-program-monitor" aria-label="Broadcast preview">
         <div className="live-program-monitor-head">
-          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>{state.live.active ? "Program output" : "Preview"}</strong><span>{previewScreen.label}</span></div>
+          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>{state.live.active ? "Program output" : "Preview"}</strong><label className="monitor-display-select"><span className="sr-only">Preview display</span><select aria-label="Preview display" value={state.live.target} onChange={(event) => patchLive({ target: event.target.value as TargetScreen })}>{targetOptions(state).map((option) => <option key={option} value={option}>{targetOptionLabels(state)[option]}</option>)}</select></label></div>
           <span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span>
         </div>
-        <div className="persistent-live-preview"><DirectLiveStage screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} onFrameChange={(frame) => patchLive({ frame })} /></div>
+        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} />)}</div>
       </section>
       <aside className="live-inspector" aria-label="Broadcast controls">
       <EditorTabs value={liveTab} options={[["setup", "Source"], ["frame", "Frame & crop"], ["effects", "Effects"]]} onChange={(value) => setLiveTab(value as typeof liveTab)} />
@@ -3850,7 +3867,7 @@ function LivePreviewPanel({
       <LabeledInput label="Title" info="The live presentation title shown on the lower third." value={state.live.title} onChange={(value) => patchLive({ title: value })} />
       <LabeledInput label="Lower third" info="The smaller caption shown under the title." value={state.live.lowerThird} onChange={(value) => patchLive({ lowerThird: value })} />
       <div className="two-col">
-        <LabeledSelect label="Display" info="Choose which display receives the live presentation." value={state.live.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(value) => patchLive({ target: value as TargetScreen })} />
+        <LabeledSelect label="Board behind broadcast" info="Use each display's assigned board or preview another saved board behind the camera." value={previewBoardId} options={["assigned", ...state.boardPrograms.map((program) => program.id)]} optionLabels={{ assigned: "Assigned board for each display", ...Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name])) }} onChange={setPreviewBoardId} />
         <LabeledSelect label="Video source" info="Camera uses a camera, screen share captures a Zoom or Skype window, and demo is a local test feed." value={state.live.source} options={["demo", "camera", "screen"]} optionLabels={{ demo: "Generated test feed", camera: "Camera", screen: "Screen or window share" }} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
       </div>
       <div className="two-col">
@@ -3871,22 +3888,27 @@ function LivePreviewPanel({
       {liveTab === "frame" && <div className="live-frame-tab live-tab-panel">
         <div className="live-toolbox direct-frame-controls">
           <div className="direct-control-heading"><h3>Direct manipulation</h3><SegmentedControl value={directMode} options={[["frame", "Move & resize"], ["crop", "Pan & zoom"]]} onChange={(value) => setDirectMode(value as typeof directMode)} /></div>
-          <div className="four-col">
+          {directMode === "frame" ? <div className="four-col">
             <Slider label="Left" info="Video position from the left edge." value={state.live.frame.x} min={0} max={90} onChange={(value) => patchLive({ frame: { ...state.live.frame, x: Math.min(value, 100 - state.live.frame.width) } })} />
             <Slider label="Top" info="Video position from the top edge." value={state.live.frame.y} min={0} max={90} onChange={(value) => patchLive({ frame: { ...state.live.frame, y: Math.min(value, 100 - state.live.frame.height) } })} />
             <Slider label="Width" info="Video section width." value={state.live.frame.width} min={10} max={100 - state.live.frame.x} onChange={(value) => patchLive({ frame: { ...state.live.frame, width: value } })} />
             <Slider label="Height" info="Video section height." value={state.live.frame.height} min={10} max={100 - state.live.frame.y} onChange={(value) => patchLive({ frame: { ...state.live.frame, height: value } })} />
-          </div>
-          <Slider label="Source zoom" info="Zoom into the captured source. You can also use the mouse wheel in Pan & zoom mode." value={Math.round(state.live.frame.crop.scale * 100)} min={100} max={300} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: value / 100 } } })} />
-          <div className="two-col">
-            <Slider label="Crop horizontal" info="Pan the source left or right." value={state.live.frame.crop.x} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, x: value } } })} />
-            <Slider label="Crop vertical" info="Pan the source up or down." value={state.live.frame.crop.y} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, y: value } } })} />
-          </div>
+          </div> : <div className="camera-crop-controls">
+            <div className="camera-zoom-control">
+              <button type="button" className="icon-button" title="Zoom camera out" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale - .1, 1, 3) } } })}>−</button>
+              <Slider label="Camera zoom" info="Make the camera image larger inside its frame. You can also use the mouse wheel over the preview." value={Math.round(state.live.frame.crop.scale * 100)} min={100} max={300} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: value / 100 } } })} />
+              <button type="button" className="icon-button" title="Zoom camera in" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale + .1, 1, 3) } } })}>+</button>
+            </div>
+            <div className="two-col">
+              <Slider label="Pan left / right" info="Pan the camera image left or right inside its frame." value={state.live.frame.crop.x} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, x: value } } })} />
+              <Slider label="Pan up / down" info="Pan the camera image vertically inside its frame." value={state.live.frame.crop.y} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, y: value } } })} />
+            </div>
+          </div>}
           <div className="live-transform-controls"><LabeledSelect label="Mask" info="Choose the visible shape of the live source." value={state.live.frame.maskShape ?? "rectangle"} options={["rectangle", "square", "circle", "polygon"]} optionLabels={{ rectangle: "Rectangle", square: "Square", circle: "Circle", polygon: "Custom polygon" }} onChange={(value) => {
             const maskShape = value as NonNullable<LanternState["live"]["frame"]["maskShape"]>;
             const size = maskShape === "square" ? Math.min(state.live.frame.width, state.live.frame.height, 100 - state.live.frame.x, 100 - state.live.frame.y) : null;
             patchLive({ frame: { ...state.live.frame, maskShape, width: size ?? state.live.frame.width, height: size ?? state.live.frame.height, polygonPoints: maskShape === "polygon" ? (state.live.frame.polygonPoints?.length ? state.live.frame.polygonPoints : undefined) : state.live.frame.polygonPoints } });
-          }} /><Slider label="Rotate" info="Rotate the live source within its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip</span></label></div>
+          }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror camera</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip camera</span></label></div>
           {(state.live.frame.maskShape === "circle" || state.live.frame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
         </div>
       </div>}
@@ -3917,9 +3939,9 @@ function LivePreviewPanel({
 
         <section className="effect-settings-card face-settings-card">
           <div className="effect-card-heading"><div><strong>Face effects</strong><span>High-frequency, stabilized landmark tracking</span></div><b>30 FPS</b></div>
-          <label className="switch-row"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, accessory: event.target.checked ? state.live.effects.accessory : "none", puppetPreview: event.target.checked && state.live.effects.puppetPreview } })} /><ScanFace size={16} /><span>Track eyes, head, and mouth</span></label>
+          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, accessory: event.target.checked ? state.live.effects.accessory : "none", puppetPreview: event.target.checked && state.live.effects.puppetPreview } })} /><ScanFace size={16} /><span><strong>Face tracking</strong><small>Track eyes, head, and mouth</small></span></label>
           <div className="accessory-options"><button type="button" className={state.live.effects.accessory === "none" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "none" } })}>None</button><button type="button" className={state.live.effects.accessory === "glasses" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "glasses", faceTracking: true } })}><Glasses size={17} /> Glasses</button><button type="button" className={state.live.effects.accessory === "party-hat" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "party-hat", faceTracking: true } })}><PartyPopper size={17} /> Party hat</button></div>
-          <label className="switch-row"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span>Mouth-driven puppet preview</span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
+          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span><strong>Puppet preview</strong><small>Mouth movement drives the sample character</small></span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
         </section>
       </div>}
       </aside>
@@ -3945,7 +3967,7 @@ function LivePreviewPanel({
       {previewPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>
-        <div className="mobile-live-preview-stage"><DirectLiveStage screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} onFrameChange={(frame) => patchLive({ frame })} /></div>
+        <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} /></div>
         <footer><span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
       </div>}
       {sourcePromptOpen && <div className="modal-backdrop preview-source-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSourcePromptOpen(false); }}>
@@ -5540,8 +5562,10 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         </div>
       )}
       {showLive && (
-        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
-          <ChromaVideo stream={stream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
+        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined }}>
+          <div className="live-camera-transform" style={{ transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
+            <ChromaVideo stream={stream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
+          </div>
           <div className="lower-third">
             <strong>{state.live.title}</strong>
             <span>{state.live.lowerThird}</span>

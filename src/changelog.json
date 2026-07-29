@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0073",
+    "title": "Make Broadcast Studio display-aware",
+    "summary": "Broadcast previews now use real saved boards, support one or both displays, offer three pop-out compositions, transform only the camera image, separate frame sizing from camera pan and zoom, and simplify mutually exclusive background removal and face effects.",
+    "author": "Codex",
+    "createdAt": "Jul 29, 2026, 1:55 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Display preview",
+      "Camera effects"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; local browser verified assigned-board preview, two-stage All displays view, camera zoom controls, effects layout, and pop-out status"
+  },
+  {
     "id": "DEV-0072",
     "title": "Unify announcement preview manipulation",
     "summary": "Announcement text and images now use the same direct move and resize affordances as board panels, while the 3D preview uses gentler perspective and orbit limits.",
