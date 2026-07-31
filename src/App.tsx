@@ -259,7 +259,12 @@ function ControlCenter() {
   }, [activeUser, users]);
 
   useEffect(() => {
-    const refreshUsers = () => setUsers(readBugUsers());
+    const refreshUsers = (event: Event) => {
+      const discovered = event instanceof CustomEvent && Array.isArray(event.detail)
+        ? event.detail.filter((user): user is string => typeof user === "string")
+        : [];
+      setUsers((current) => Array.from(new Set([...current, ...readBugUsers(), ...discovered])));
+    };
     window.addEventListener(BUG_USERS_UPDATED_EVENT, refreshUsers);
     return () => window.removeEventListener(BUG_USERS_UPDATED_EVENT, refreshUsers);
   }, []);
@@ -753,8 +758,8 @@ function readBugUsers() {
     return Array.from(new Set([...DEFAULT_BUG_USERS, ...(Array.isArray(saved) ? saved.filter((user): user is string => typeof user === "string") : [])].map((user) => user.trim()).filter(Boolean)));
   } catch { return [...DEFAULT_BUG_USERS]; }
 }
-function notifyBugUsersUpdated() {
-  window.dispatchEvent(new Event(BUG_USERS_UPDATED_EVENT));
+function notifyBugUsersUpdated(users: string[] = []) {
+  window.dispatchEvent(new CustomEvent(BUG_USERS_UPDATED_EVENT, { detail: users }));
 }
 function readBugLauncherPosition(user: string): { x: number; y: number } {
   try {
@@ -1192,7 +1197,7 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
     if (localRoster.length !== readBugUsers().length) {
       localStorage.setItem(BUG_USERS_KEY, JSON.stringify(localRoster));
       setUsers((current) => Array.from(new Set([...current, ...localReporters])));
-      notifyBugUsersUpdated();
+      notifyBugUsersUpdated(localReporters);
     }
     if (!BUG_API_ENDPOINT) {
       setMessage(local.length ? "Reports are saved on this device. Use Export all to share them." : "");
@@ -1210,7 +1215,7 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       if (roster.length !== readBugUsers().length) {
         localStorage.setItem(BUG_USERS_KEY, JSON.stringify(roster));
         setUsers((current) => Array.from(new Set([...current, ...reporters])));
-        notifyBugUsersUpdated();
+        notifyBugUsersUpdated(reporters);
       }
       setMessage("");
     } catch {

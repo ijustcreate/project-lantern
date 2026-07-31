@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0140",
+    "title": "Sync shared bug reporters into the current-user dropdown",
+    "summary": "Shared reporter names now travel with the roster refresh event so users created on another device, including Edward, appear in the app-wide user dropdown.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:23 PM",
+    "areas": [
+      "Bugs",
+      "Users",
+      "Shared data"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0139",
     "title": "Expand face, shoulder, and hand tracking",
     "summary": "Added detailed face-region, gaze, shoulder, palm, finger and fingertip tracking with hand loss/reacquisition state, plus a camera-free colored-node diagnostics mode for testing every landmark.",
