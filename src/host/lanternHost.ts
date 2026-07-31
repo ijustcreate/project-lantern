@@ -336,6 +336,13 @@ export function openBrowserDisplayWindows(screens = Object.values(loadLanternSta
 }
 
 export async function openDisplayWindows(screens = Object.values(loadLanternState().screens)) {
+  // Keep browser popups inside the originating click event. Waiting for the
+  // Tauri module import first causes browsers to block all but the first window.
+  if (!(window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) {
+    openBrowserDisplayWindows(screens);
+    return;
+  }
+
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("open_test_displays", {

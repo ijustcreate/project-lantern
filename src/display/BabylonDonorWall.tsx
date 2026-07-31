@@ -190,6 +190,10 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       camera.orthoBottom = -halfHeight;
     };
     resizeCamera();
+    // Dashboard tiles can settle through several grid passes when a display
+    // is added. Refit once after layout has committed so a newly shortened
+    // preview never keeps the previous tile's camera framing.
+    const initialResizeFrame = window.requestAnimationFrame(resizeCamera);
 
     let redrawPanel: (animationTime?: number) => void = () => undefined;
     prepareBackgroundMedia(screen, () => redrawPanel());
@@ -312,6 +316,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
     return () => {
       window.cancelAnimationFrame(resizeFrame);
+      window.cancelAnimationFrame(initialResizeFrame);
       resizeObserver.disconnect();
       window.removeEventListener("resize", resize);
       canvas.removeEventListener("contextmenu", containContextMenu);
@@ -377,7 +382,14 @@ function drawTextureContent(
         ...baseProgram,
         heading: screen.customHeading || baseProgram?.heading || state.board.portraitHeading,
         subtitle: screen.customSubheading || baseProgram?.subtitle || state.board.portraitSubtitle,
-        columns: screen.columns ?? baseProgram?.columns ?? state.board.donorColumns
+        columns: screen.columns ?? baseProgram?.columns ?? state.board.donorColumns,
+        fontFamily: screen.fontFamily ?? baseProgram?.fontFamily,
+        nameSize: screen.nameSize ?? baseProgram?.nameSize,
+        donorScrollEnabled: screen.donorScrollEnabled ?? baseProgram?.donorScrollEnabled,
+        donorScrollSpeed: screen.donorScrollSpeed ?? baseProgram?.donorScrollSpeed,
+        donorScrollDirection: baseProgram?.donorScrollDirection,
+        showIcons: screen.showIcons ?? baseProgram?.showIcons,
+        showSubtext: baseProgram?.showSubtext
       } as LanternState["boardPrograms"][number]);
 
   const draw = () => {
@@ -430,12 +442,14 @@ function drawMuseumBoard(
   wash.addColorStop(1, galleryPlaque ? "#0a0e11" : chalkboard ? "#0b1014" : "#04111f");
   context.fillStyle = wash;
   context.fillRect(0, 0, width, height);
-  if (screen?.backgroundMode === "image" && screen.backgroundImage) drawImageBackground(context, width, height, screen);
+  if (screen && ((activeProgram?.backgroundMode === "image" && activeProgram.backgroundImage) || (screen.backgroundMode === "image" && screen.backgroundImage))) {
+    drawImageBackground(context, width, height, activeProgram?.backgroundMode === "image" && activeProgram.backgroundImage ? { ...screen, backgroundImage: activeProgram.backgroundImage, backgroundCrop: activeProgram.backgroundCrop ?? screen.backgroundCrop } : screen);
+  }
 
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
   else if (!chalkboard) drawBoardStars(context, width, height, screen, animationTime);
-  if (screen?.donorScrollEnabled) {
-    drawScrollingDonorBoard(context, width, height, donors, state, isPortrait, scale, activeProgram, screen, animationTime);
+  if (activeProgram?.donorScrollEnabled ?? screen?.donorScrollEnabled) {
+    drawScrollingDonorBoard(context, width, height, donors, state, isPortrait, scale, activeProgram, screen!, animationTime);
     return;
   }
   if (activeProgram?.panels?.length) {
@@ -479,7 +493,7 @@ function drawScrollingDonorBoard(
   const loopGap = Math.max(rowHeight * 2.25, viewportHeight * 0.18);
   const contentHeight = Math.max(rowHeight, donors.length * rowHeight);
   const cycleHeight = contentHeight + loopGap;
-  const speedSetting = Math.min(10, Math.max(1, screen.donorScrollSpeed ?? 4));
+  const speedSetting = Math.min(10, Math.max(1, activeProgram?.donorScrollSpeed ?? screen.donorScrollSpeed ?? 4));
   const speedPixelsPerSecond = height * (0.006 + speedSetting * 0.0036);
   const offset = ((animationTime / 1000) * speedPixelsPerSecond) % cycleHeight;
   const firstY = viewportBottom + rowHeight * 0.72 - offset;

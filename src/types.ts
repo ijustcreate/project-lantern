@@ -118,6 +118,17 @@ export interface DonorBoardProgram {
   donorIds: string[];
   active: boolean;
   panels?: BoardPanel[];
+  fontFamily?: DisplayProfile["fontFamily"];
+  nameSize?: number;
+  donorScrollEnabled?: boolean;
+  donorScrollSpeed?: number;
+  donorScrollDirection?: "vertical" | "horizontal";
+  showIcons?: boolean;
+  showSubtext?: boolean;
+  backgroundMode?: "board" | "image";
+  backgroundImage?: string;
+  backgroundMediaId?: string;
+  backgroundCrop?: ImageCrop;
 }
 
 export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image";

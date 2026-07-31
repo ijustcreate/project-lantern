@@ -1,5 +1,220 @@
 [
   {
+    "id": "DEV-0125",
+    "title": "Improve display editing and user workflows",
+    "summary": "Added per-user bug launcher positioning and user selection, safer donor deletion and unsaved-change handling, direct board/display opening controls, and expanded board presentation settings.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:52 PM",
+    "areas": [
+      "Control Center",
+      "Donor management",
+      "Display management",
+      "Board presentation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/changelog.json",
+      "src/display/BabylonDonorWall.tsx",
+      "src/host/lanternHost.ts",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0124",
+    "title": "Add main-menu user selector",
+    "summary": "Added a persisted user dropdown above Site Theme with a create-user action, reusing the existing user roster.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:49 PM",
+    "areas": [
+      "Main menu",
+      "User preferences"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0123",
+    "title": "Persist the final launcher drag coordinate",
+    "summary": "Ensure the active user's saved launcher position is updated with the latest pointer coordinates during dragging.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:49 PM",
+    "areas": [
+      "Bug reporting",
+      "User preferences"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0122",
+    "title": "Make the bug launcher movable per user",
+    "summary": "The floating bug launcher can now be dragged anywhere within the viewport, remains reachable, and remembers its position for the active user.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:48 PM",
+    "areas": [
+      "Bug reporting",
+      "User preferences"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0121",
+    "title": "Redesign donor editor",
+    "summary": "Consolidated donor editing tabs, widened the appearance preview, removed the helping-hand icon, renamed donation history, simplified board memberships, and added unsaved-change protection.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:44 PM",
+    "areas": [
+      "Donor editor",
+      "Appearance",
+      "Donation history",
+      "Boards"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0120",
+    "title": "Confirm donor deletion",
+    "summary": "Added a permanent deletion confirmation warning and cleaned deleted donors from board and display rosters.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:44 PM",
+    "areas": [
+      "Donors",
+      "Boards",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0119",
+    "title": "Move board presentation settings into board editor",
+    "summary": "Stored board-specific typography, scrolling, donor icon, subtext, and background controls on saved board programs; removed duplicated display-level controls and improved editor sizing.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:28 PM",
+    "areas": [
+      "Board editor",
+      "Display settings",
+      "Donor wall renderer"
+    ],
+    "files": [
+      "src/types.ts",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0118",
+    "title": "Remove deprecated screens page camera flow",
+    "summary": "Removed the deprecated Screens navigation route and changed display camera configuration to open from Dashboard while preserving separate webcam and microphone selections and an in-app room view.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:18 PM",
+    "areas": [
+      "Dashboard",
+      "Display settings",
+      "Room camera"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
+    "id": "DEV-0117",
+    "title": "Improve display naming and identify feedback",
+    "summary": "Clarified display-name editing and added a no open/connected displays alert before Identify sends a message.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:10 PM",
+    "areas": [
+      "Displays",
+      "Dashboard"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0116",
+    "title": "Refit dashboard previews after display grid changes",
+    "summary": "Ensure 2D display previews recalculate their camera framing after adding displays so the complete board remains visible in smaller tiles.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:06 PM",
+    "areas": [
+      "Dashboard",
+      "Display previews"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0115",
+    "title": "Open all displays in one click",
+    "summary": "Keep browser display popups synchronous and add a per-display header Open action.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:03 PM",
+    "areas": [
+      "Display controls",
+      "Dashboard"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0114",
+    "title": "Remove dashboard display metadata pills",
+    "summary": "Removed the nonessential metadata pill row beneath dashboard display previews to reclaim vertical space while keeping all display controls available.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:02 PM",
+    "areas": [
+      "Dashboard",
+      "Display cards"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0113",
+    "title": "Improve schedule event creation safeguards",
+    "summary": "New schedule events now default to the current rounded time, slot-created events preserve their clicked time, the editor has a visible Save event action, and deletion requires confirmation.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:00 PM",
+    "areas": [
+      "Schedule",
+      "Event editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0112",
     "title": "Make every Codex fix visible and exportable",
     "summary": "Add a Codex-authored bug creation command and mandatory workflow, backfill recent fix records to the shared catalogue, and add a per-bug Export to Codex action that copies reproduction details, evidence, diagnostics, discussion, and implementation instructions.",
