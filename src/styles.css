@@ -3393,6 +3393,9 @@ body,
 .bug-user-picker { display: flex; align-items: center; gap: 6px; padding: 4px 5px 4px 9px; border: 1px solid rgba(143,153,205,.2); border-radius: 9px; color: #9ba6bf; background: rgba(17,20,45,.72); font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .bug-user-picker svg { color: #6ddbd9; }
 .bug-user-picker select { min-width: 104px; padding: 6px 24px 6px 7px; border: 0; outline: 0; color: #f2f5ff; background: #151832; font: inherit; font-size: 10px; text-transform: none; }
+.bug-entered-by-note { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid rgba(103,212,220,.2); border-radius: 8px; color: #8d99b2; background: rgba(103,212,220,.06); font-size: 10px; }
+.bug-entered-by-note svg { color: #67d4dc; }
+.bug-entered-by-note strong { color: #dfe8f7; }
 .bug-launcher-toggle { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid rgba(143,153,205,.2); border-radius: 9px; color: #aab4cb; background: rgba(17,20,45,.72); font-size: 10px; font-weight: 700; cursor: pointer; }
 .bug-launcher-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #795de8; }
 .bug-launcher-toggle svg { color: #e66e82; }
@@ -3401,6 +3404,8 @@ body,
 .bugs-view-options,
 .bug-group-toggle { display: flex; align-items: center; gap: 8px; }
 .bugs-view-options { margin-left: auto; }
+.bug-entered-by-filter { display: flex; min-height: 32px; align-items: center; gap: 6px; padding-left: 9px; border: 1px solid rgba(143,153,205,.17); border-radius: 8px; }
+.bug-entered-by-filter svg { color: #67d4dc; }
 .bug-group-toggle { min-height: 32px; padding: 0 9px; border: 1px solid rgba(143,153,205,.17); border-radius: 8px; color: #9099b1; font-size: 10px; cursor: pointer; }
 .bug-status-group + .bug-status-group { border-top: 1px solid rgba(143,153,205,.16); }
 .bug-status-group-heading { display: flex; position: sticky; z-index: 2; top: 0; width: 100%; align-items: center; gap: 8px; padding: 9px 12px; border: 0; color: #cfd6ea; background: #171a35; font: inherit; text-align: left; text-transform: capitalize; cursor: pointer; }

@@ -41,6 +41,7 @@ struct BugReportInput {
     summary: String,
     details: String,
     fix_tips: String,
+    entered_by: String,
     tags: Vec<String>,
     attachments: Vec<BugAttachment>,
     app_state: serde_json::Value,
@@ -54,6 +55,8 @@ struct BugRecord {
     summary: String,
     details: String,
     fix_tips: String,
+    #[serde(default)]
+    entered_by: Option<String>,
     tags: Vec<String>,
     status: String,
     created_at: String,
@@ -259,6 +262,7 @@ fn save_bug_report(app: AppHandle, report: BugReportInput) -> Result<String, Str
     let diagnostic = serde_json::json!({
         "bugId": bug_id,
         "createdAt": created,
+        "enteredBy": report.entered_by.clone(),
         "app": {"name": app.package_info().name, "version": app.package_info().version.to_string()},
         "platform": {"os": std::env::consts::OS, "arch": std::env::consts::ARCH, "debugBuild": cfg!(debug_assertions)},
         "process": {"pid": std::process::id(), "workingDirectory": std::env::current_dir().ok()},
@@ -270,13 +274,13 @@ fn save_bug_report(app: AppHandle, report: BugReportInput) -> Result<String, Str
     fs::write(dir.join("report.json"), serde_json::to_string_pretty(&report).unwrap()).map_err(|e| e.to_string())?;
     let record = BugRecord {
         bug_id: bug_id.clone(), summary: report.summary.clone(), details: report.details.clone(),
-        fix_tips: report.fix_tips.clone(), tags: report.tags.clone(), status: "open".into(),
+        fix_tips: report.fix_tips.clone(), entered_by: Some(report.entered_by.clone()), tags: report.tags.clone(), status: "open".into(),
         created_at: created.clone(), updated_at: created.clone(), attachments: saved_attachments.clone(),
         folder: dir.display().to_string(),
     };
     fs::write(dir.join("catalog.json"), serde_json::to_string_pretty(&record).unwrap()).map_err(|e| e.to_string())?;
-    let markdown = format!("# {bug_id}: {}\n\nCreated: {created}\nTags: {}\n\n## Brief description\n\n{}\n\n## Details\n\n{}\n\n## Tips on how to fix\n\n{}\n\n## Attached evidence\n\n{}\n\n## Codex handoff\n\nStart with `diagnostics.json`, then inspect `logs/` and the screenshots. Reproduce from the Details section before changing code.\n",
-        report.summary, report.tags.join(", "), report.summary, report.details, report.fix_tips,
+    let markdown = format!("# {bug_id}: {}\n\nCreated: {created}\nEntered by: {}\nTags: {}\n\n## Brief description\n\n{}\n\n## Details\n\n{}\n\n## Tips on how to fix\n\n{}\n\n## Attached evidence\n\n{}\n\n## Codex handoff\n\nStart with `diagnostics.json`, then inspect `logs/` and the screenshots. Reproduce from the Details section before changing code.\n",
+        report.summary, report.entered_by, report.tags.join(", "), report.summary, report.details, report.fix_tips,
         saved_attachments.iter().map(|p| format!("- `{p}`")).collect::<Vec<_>>().join("\n"));
     fs::write(dir.join("report.md"), markdown).map_err(|e| e.to_string())?;
     Ok(dir.display().to_string())
@@ -305,8 +309,8 @@ fn update_bug_report(app: AppHandle, bug: BugRecord) -> Result<BugRecord, String
     updated.updated_at = timestamp();
     updated.folder = folder.display().to_string();
     fs::write(folder.join("catalog.json"), serde_json::to_string_pretty(&updated).unwrap()).map_err(|e| e.to_string())?;
-    let markdown = format!("# {}: {}\n\nStatus: {}\nTags: {}\n\n## Details\n\n{}\n\n## Tips on how to fix\n\n{}\n\n## Attached evidence\n\n{}\n",
-        updated.bug_id, updated.summary, updated.status, updated.tags.join(", "), updated.details, updated.fix_tips,
+    let markdown = format!("# {}: {}\n\nStatus: {}\nEntered by: {}\nTags: {}\n\n## Details\n\n{}\n\n## Tips on how to fix\n\n{}\n\n## Attached evidence\n\n{}\n",
+        updated.bug_id, updated.summary, updated.status, updated.entered_by.as_deref().unwrap_or("Unattributed"), updated.tags.join(", "), updated.details, updated.fix_tips,
         updated.attachments.iter().map(|p| format!("- `{p}`")).collect::<Vec<_>>().join("\n"));
     fs::write(folder.join("report.md"), markdown).map_err(|e| e.to_string())?;
     Ok(updated)

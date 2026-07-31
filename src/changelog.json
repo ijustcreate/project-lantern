@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0107",
+    "title": "Track and filter bugs by reporter",
+    "summary": "Stamped new bug and feedback reports with the active user, added Codex as a built-in reporter, added a saved Entered by filter and reporter controls, preserved older reports as Unattributed, and carried reporter ownership through web, Cloudflare, and native storage.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:01 AM",
+    "areas": [
+      "Bugs",
+      "Feedback"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "worker/bugs.ts",
+      "src-tauri/src/lib.rs"
+    ],
+    "tests": "npm run build; Playwright verified Codex active-user stamping and saved Entered by filter; Rust source reviewed because cargo is unavailable"
+  },
+  {
     "id": "DEV-0106",
     "title": "Refresh the operator guide and repository README",
     "summary": "Rebuilt the in-app How to use presentation and quick guide around all nine current Control Center workspaces, replaced every walkthrough screenshot, and rewrote the GitHub README with current workflows, scheduling rules, broadcast tools, themes, feedback diagnostics, architecture, and valid assets.",

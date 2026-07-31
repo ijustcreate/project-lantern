@@ -15,6 +15,7 @@ type BugRecord = {
   updatedAt: string;
   attachments: string[];
   folder: string;
+  enteredBy?: string;
   evidence?: BugEvidence[];
   agentWork?: unknown[];
 };
@@ -166,6 +167,7 @@ async function saveBug(request: Request, env: Env) {
     fixTips: String(input.fixTips ?? "").slice(0, 10000),
     tags: Array.isArray(input.tags) ? input.tags.map(String).slice(0, 20) : [],
     status: String(input.status ?? "open").slice(0, 40),
+    enteredBy: String(input.enteredBy ?? existing?.enteredBy ?? "Unattributed").trim().slice(0, 80) || "Unattributed",
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
     evidence: evidence.length ? evidence : (existing?.evidence ?? []),

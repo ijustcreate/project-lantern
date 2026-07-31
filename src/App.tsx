@@ -636,14 +636,18 @@ function bugEvidenceImageSource(bugId: string, evidence: BugEvidence) {
   const evidenceBase = !BUG_API_ENDPOINT || BUG_API_ENDPOINT === "/__lantern/bugs" ? "/__lantern/evidence" : `${BUG_API_ENDPOINT}/evidence`;
   return `${evidenceBase}/${encodeURIComponent(bugId)}/${encodeURIComponent(fileName)}`;
 }
-type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; stepsToReproduce?: string; expectedResult?: string; actualResult?: string; frequency?: string; impact?: string; diagnostics?: Record<string, unknown>; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
+type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; enteredBy?: string; stepsToReproduce?: string; expectedResult?: string; actualResult?: string; frequency?: string; impact?: string; diagnostics?: Record<string, unknown>; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
 const BUG_USERS_KEY = "project-lantern-bug-users";
 const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
 const BUG_VIEW_PREFS_KEY = "project-lantern-bug-view-preferences";
+const DEFAULT_BUG_USERS = ["Felix", "Codex"];
+const UNATTRIBUTED_BUG_USER = "Unattributed";
 const BUG_API_ENDPOINT = (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
   || (import.meta.env.DEV ? "/__lantern/bugs" : "");
 function isTauri() { return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window; }
+function currentBugUser() { return localStorage.getItem(ACTIVE_BUG_USER_KEY)?.trim() || DEFAULT_BUG_USERS[0]; }
+function bugEnteredBy(bug: BugRecord) { return bug.enteredBy?.trim() || UNATTRIBUTED_BUG_USER; }
 function readWebBugs(): BugRecord[] { try { return JSON.parse(localStorage.getItem(WEB_BUGS_KEY) ?? "[]") as BugRecord[]; } catch { return []; } }
 function writeWebBugs(bugs: BugRecord[]) { localStorage.setItem(WEB_BUGS_KEY, JSON.stringify(bugs)); }
 async function readBugResponse<T>(response: Response): Promise<T> {
@@ -686,6 +690,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
   const [actualResult, setActualResult] = useState("");
   const [frequency, setFrequency] = useState("every-time");
   const [impact, setImpact] = useState("medium");
+  const [enteredBy] = useState(currentBugUser);
   const [tags, setTags] = useState<string[]>([]);
   const [knownBugTags, setKnownBugTags] = useState<string[]>(() => readWebBugs().flatMap((bug) => bug.tags));
   const [status, setStatus] = useState("");
@@ -761,7 +766,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
     setStatus("Building report package…");
     try {
       const payload = {
-        summary, details, fixTips, stepsToReproduce, expectedResult, actualResult, frequency, impact,
+        summary, details, fixTips, stepsToReproduce, expectedResult, actualResult, frequency, impact, enteredBy,
         tags,
         attachments,
         appState: {
@@ -795,7 +800,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         const now = new Date().toISOString();
         const highestBugNumber = bugs.reduce((highest, bug) => Math.max(highest, Number(bug.bugId.match(/\d+/)?.[0] ?? 0)), 0);
         const bugId = `BUG-${String(highestBugNumber + 1).padStart(5, "0")}`;
-        const record: BugRecord = { bugId, summary, details, fixTips, stepsToReproduce, expectedResult, actualResult, frequency, impact, diagnostics: payload.appState, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
+        const record: BugRecord = { bugId, summary, details, fixTips, enteredBy, stepsToReproduce, expectedResult, actualResult, frequency, impact, diagnostics: payload.appState, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
         bugs.unshift(record);
         writeWebBugs(bugs);
         if (BUG_API_ENDPOINT) {
@@ -824,6 +829,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         <button className="icon-button" onPointerDown={(event) => event.stopPropagation()} onClick={onClose} title="Close"><X size={17} /></button>
       </header>
       <div className="bug-report-body">
+        <div className="bug-entered-by-note"><Users size={15} /><span>Entered by <strong>{enteredBy}</strong></span></div>
         <label className="field"><span>Brief description <b>*</b> <InfoDot text="In one sentence, say what went wrong and where. A good example is: “Schedule screen goes blank after I press Publish.”" /></span><input autoFocus value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="What went wrong?" /></label>
         <label className="field"><span>Details <InfoDot text="Tell us the steps you took, what you expected to happen, and what actually happened. Include whether it happens every time or only sometimes." /></span><textarea value={details} onChange={(event) => setDetails(event.target.value)} placeholder="What were you doing? What happened? What did you expect?" /></label>
         <label className="field"><span>Steps to reproduce <InfoDot text="List the exact clicks or actions that make the problem happen. Numbered steps are easiest to follow." /></span><textarea value={stepsToReproduce} onChange={(event) => setStepsToReproduce(event.target.value)} placeholder={"1. Open…\n2. Select…\n3. Click…"} /></label>
@@ -1015,10 +1021,10 @@ function EvidenceViewer({ bugId, evidence, onClose }: { bugId: string; evidence:
 
 function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNewBug: () => void; launcherVisible: boolean; onLauncherVisibleChange: (visible: boolean) => void }) {
   const defaultStatusFilters: BugStatus[] = ["open", "in-progress", "ready-for-test"];
-  const initialActiveUser = localStorage.getItem(ACTIVE_BUG_USER_KEY) || "Felix";
+  const initialActiveUser = currentBugUser();
   const readViewPreferences = (user: string) => {
     try {
-      const all = JSON.parse(localStorage.getItem(BUG_VIEW_PREFS_KEY) ?? "{}") as Record<string, { statuses?: BugStatus[]; groupByStatus?: boolean; collapsed?: Partial<Record<BugStatus, boolean>> }>;
+      const all = JSON.parse(localStorage.getItem(BUG_VIEW_PREFS_KEY) ?? "{}") as Record<string, { statuses?: BugStatus[]; groupByStatus?: boolean; collapsed?: Partial<Record<BugStatus, boolean>>; enteredBy?: string }>;
       return all[user] ?? {};
     } catch {
       return {};
@@ -1034,14 +1040,15 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   const splitDrag = useRef<{ startX: number; startWidth: number; containerWidth: number } | null>(null);
   const [sort, setSort] = useState<"newest" | "oldest" | "status">("newest");
   const [statusFilters, setStatusFilters] = useState<BugStatus[]>(initialPreferences.statuses ?? defaultStatusFilters);
+  const [enteredByFilter, setEnteredByFilter] = useState(initialPreferences.enteredBy ?? "all");
   const [groupByStatus, setGroupByStatus] = useState(initialPreferences.groupByStatus ?? true);
   const [collapsedStatuses, setCollapsedStatuses] = useState<Partial<Record<BugStatus, boolean>>>(initialPreferences.collapsed ?? {});
   const [users, setUsers] = useState<string[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(BUG_USERS_KEY) ?? "[]") as string[];
-      return Array.from(new Set(["Felix", ...saved.filter(Boolean)]));
+      return Array.from(new Set([...DEFAULT_BUG_USERS, initialActiveUser, ...saved.filter(Boolean)]));
     } catch {
-      return ["Felix"];
+      return Array.from(new Set([...DEFAULT_BUG_USERS, initialActiveUser]));
     }
   });
   const [activeUser, setActiveUser] = useState(initialActiveUser);
@@ -1079,6 +1086,7 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
     const preferences = readViewPreferences(activeUser);
     preferencesUserRef.current = activeUser;
     setStatusFilters(preferences.statuses ?? defaultStatusFilters);
+    setEnteredByFilter(preferences.enteredBy ?? "all");
     setGroupByStatus(preferences.groupByStatus ?? true);
     setCollapsedStatuses(preferences.collapsed ?? {});
   }, [activeUser]);
@@ -1086,10 +1094,10 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
     if (preferencesUserRef.current !== activeUser) return;
     try {
       const all = JSON.parse(localStorage.getItem(BUG_VIEW_PREFS_KEY) ?? "{}") as Record<string, unknown>;
-      all[activeUser] = { statuses: statusFilters, groupByStatus, collapsed: collapsedStatuses };
+      all[activeUser] = { statuses: statusFilters, enteredBy: enteredByFilter, groupByStatus, collapsed: collapsedStatuses };
       localStorage.setItem(BUG_VIEW_PREFS_KEY, JSON.stringify(all));
     } catch { /* Preferences are optional; the catalogue remains usable without storage. */ }
-  }, [activeUser, statusFilters, groupByStatus, collapsedStatuses]);
+  }, [activeUser, statusFilters, enteredByFilter, groupByStatus, collapsedStatuses]);
   useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!splitDrag.current) return;
@@ -1107,16 +1115,24 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       window.removeEventListener("pointerup", stop);
     };
   }, []);
-  const visible = useMemo(() => bugs.filter((bug) => !statusFilters.length || statusFilters.includes(bug.status)).sort((a, b) => {
+  const reporterUsers = useMemo(() => Array.from(new Set([...DEFAULT_BUG_USERS, ...users, ...bugs.map(bugEnteredBy)])).sort((a, b) => {
+    if (a === UNATTRIBUTED_BUG_USER) return 1;
+    if (b === UNATTRIBUTED_BUG_USER) return -1;
+    return a.localeCompare(b);
+  }), [bugs, users]);
+  const visible = useMemo(() => bugs.filter((bug) =>
+    (!statusFilters.length || statusFilters.includes(bug.status))
+    && (enteredByFilter === "all" || bugEnteredBy(bug) === enteredByFilter)
+  ).sort((a, b) => {
     if (sort === "status") return a.status.localeCompare(b.status);
     return sort === "oldest" ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt);
-  }), [bugs, statusFilters, sort]);
+  }), [bugs, statusFilters, enteredByFilter, sort]);
   const toggleStatusFilter = (status: BugStatus) => {
     setStatusFilters((current) => current.includes(status) ? current.filter((value) => value !== status) : [...current, status]);
   };
   const statusOrder: BugStatus[] = ["open", "in-progress", "ready-for-test", "verified", "closed"];
   const statusLabel = (status: BugStatus) => status.replace(/-/g, " ");
-  const renderBugRow = (bug: BugRecord) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>;
+  const renderBugRow = (bug: BugRecord) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)} · Entered by {bugEnteredBy(bug)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>;
   const save = async (bug: BugRecord) => {
     const next = { ...bug, updatedAt: new Date().toISOString() };
     try {
@@ -1185,7 +1201,7 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") addUser(); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
     </div>
     <div className="bug-metrics"><article><Bug /><span><b>{counts.open}</b>Open</span></article><article><BadgeCheck /><span><b>{counts.testing}</b>Ready for test</span></article><article><CheckCircle2 /><span><b>{counts.closed}</b>Verified / closed</span></article></div>
-    <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status">{statusOrder.map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{statusLabel(value)}</button>)}<button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button></div><div className="bugs-view-options"><label className="bug-group-toggle"><input type="checkbox" checked={groupByStatus} onChange={(event) => setGroupByStatus(event.target.checked)} /><span>Separate by status</span></label><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div></div>
+    <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status">{statusOrder.map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{statusLabel(value)}</button>)}<button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button></div><div className="bugs-view-options"><label className="bug-entered-by-filter"><Users size={14} /><span>Entered by</span><select aria-label="Filter bugs by entered by" value={enteredByFilter} onChange={(event) => setEnteredByFilter(event.target.value)}><option value="all">All users</option>{reporterUsers.map((user) => <option key={user} value={user}>{user}</option>)}</select></label><label className="bug-group-toggle"><input type="checkbox" checked={groupByStatus} onChange={(event) => setGroupByStatus(event.target.checked)} /><span>Separate by status</span></label><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div></div>
     <div className="bugs-layout" style={{ gridTemplateColumns: `${listWidth}fr 8px ${100 - listWidth}fr` }}>
       <div className="bug-list">{groupByStatus ? statusOrder.filter((status) => !statusFilters.length || statusFilters.includes(status)).map((status) => {
         const group = visible.filter((bug) => bug.status === status);
@@ -1203,6 +1219,7 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       <aside className="bug-detail">{selected ? <>
         <div className="bug-detail-scroll">
           <div className="bug-detail-head"><span>Selected bug · {displayBugId(selected.bugId)}</span><button className="icon-button" onClick={() => setSelected(null)}><X size={16} /></button></div>
+          <label className="field"><span>Entered by</span><select value={bugEnteredBy(selected)} onChange={(event) => setSelected({ ...selected, enteredBy: event.target.value })}>{reporterUsers.map((user) => <option key={user} value={user}>{user}</option>)}</select></label>
           <label className="field"><span>Summary</span><input value={selected.summary} onChange={(e) => setSelected({ ...selected, summary: e.target.value })} /></label>
           <label className="field"><span>Details</span><textarea value={selected.details} onChange={(e) => setSelected({ ...selected, details: e.target.value })} /></label>
           <label className="field"><span>Fix / test notes</span><textarea value={selected.fixTips} onChange={(e) => setSelected({ ...selected, fixTips: e.target.value })} /></label>
