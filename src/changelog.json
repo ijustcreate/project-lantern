@@ -1,5 +1,31 @@
 [
   {
+    "id": "DEV-0106",
+    "title": "Refresh the operator guide and repository README",
+    "summary": "Rebuilt the in-app How to use presentation and quick guide around all nine current Control Center workspaces, replaced every walkthrough screenshot, and rewrote the GitHub README with current workflows, scheduling rules, broadcast tools, themes, feedback diagnostics, architecture, and valid assets.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:53 AM",
+    "areas": [
+      "Help",
+      "Documentation",
+      "GitHub"
+    ],
+    "files": [
+      "src/App.tsx",
+      "README.md",
+      "public/assets/help/dashboard.png",
+      "public/assets/help/donors.png",
+      "public/assets/help/board-editor.png",
+      "public/assets/help/schedule.png",
+      "public/assets/help/announcements.png",
+      "public/assets/help/broadcast.png",
+      "public/assets/help/settings.png",
+      "public/assets/help/revisions.png",
+      "public/assets/help/bugs.png"
+    ],
+    "tests": "npm run build; Playwright verified the 10-slide presentation, nine quick-guide steps, and all nine guide images loaded; checked every README image path exists; git diff --check"
+  },
+  {
     "id": "DEV-0105",
     "title": "Remove sidebar menu numbers",
     "summary": "Removed the numeric sequence labels from every desktop primary and utility navigation button for a cleaner main menu.",

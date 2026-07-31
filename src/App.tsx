@@ -1241,73 +1241,103 @@ function fileToDataUrl(file: File): Promise<string> {
 const helpSlides = [
   {
     kicker: "Welcome",
-    title: "Run recognition displays with confidence",
-    copy: "Project Lantern keeps donor content, screen layouts, schedules, and live announcements together in one control center.",
-    points: ["Build the content", "Preview the result", "Publish to your displays"],
+    title: "Meet the Museum Donor Board Control Center",
+    copy: "Project Lantern brings donor records, board design, display previews, scheduling, announcements, broadcasts, revisions, and feedback into one staff-friendly workspace.",
+    points: ["Prepare and preview safely", "Control portrait and landscape displays", "Publish only when you are ready"],
     accent: "01",
     image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
-    imageAlt: "Recognition OS dashboard showing display previews and publishing controls",
-    callout: "Your control center"
+    imageAlt: "Museum Donor Board Control Center dashboard with two display previews",
+    callout: "Start from the Dashboard"
   },
   {
-    kicker: "Start here",
-    title: "Connect and check your screens",
-    copy: "Open Screens to name each display, choose its orientation, and confirm that it is attached. The Dashboard status pills show what is ready at a glance.",
-    points: ["Open display windows", "Confirm each screen says Attached", "Select a screen before editing"],
+    kicker: "Dashboard",
+    title: "Monitor and open every display",
+    copy: "Each display card shows its assigned board, orientation, connection state, schedule, live preview, and room-camera tools. Open displays when the exhibit screens are ready.",
+    points: ["Check attached and live status", "Preview boards in 2D or 3D", "Add displays, schedules, or room cameras"],
     accent: "02",
     image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
-    imageAlt: "Dashboard showing the connected display cards and screen controls",
-    callout: "Check display status here"
+    imageAlt: "Dashboard with portrait and landscape display management cards",
+    callout: "One card per physical display"
   },
   {
-    kicker: "People",
-    title: "Add and organize donors",
-    copy: "Use Donors to create recognition profiles. Add a name, giving details, group, optional story, and a visual treatment for special recognition.",
-    points: ["Choose Add donor", "Complete the guided setup", "Keep Active enabled to show the donor"],
+    kicker: "Donors",
+    title: "Build the recognition roster",
+    copy: "Create donor profiles with names, tiers, categories, tags, giving details, stories, icons, and presentation treatments. Donors are assigned to boards, so one profile can be reused consistently.",
+    points: ["Search, filter, group, and reorder", "Assign each donor to the right boards", "Use Active to control recognition visibility"],
     accent: "03",
     image: `${import.meta.env.BASE_URL}assets/help/donors.png`,
-    imageAlt: "Donors workspace showing recognition profiles and donor tools",
-    callout: "Add and manage profiles"
+    imageAlt: "Donors workspace with searchable donor profiles and board assignments",
+    callout: "Manage people once"
   },
   {
-    kicker: "Design",
-    title: "Build the recognition board",
-    copy: "In Board Editor, select a display and arrange headings, donor lists, messages, stories, and footers. The canvas is your live layout preview.",
-    points: ["Choose the target display", "Add and reorder panels", "Adjust colors, type, and background media"],
+    kicker: "Board Editor",
+    title: "Design reusable recognition boards",
+    copy: "Create portrait or landscape board programs, choose the donor roster, edit text directly, and tune layout, typography, colors, backgrounds, logos, cameras, and 2D or 3D presentation.",
+    points: ["Choose or add a board program", "Edit against the live preview", "Assign the finished board to displays or schedules"],
     accent: "04",
     image: `${import.meta.env.BASE_URL}assets/help/board-editor.png`,
-    imageAlt: "Board Editor with layout controls and a live recognition board preview",
-    callout: "Design with a live preview"
+    imageAlt: "Board Editor with board controls and a live museum recognition preview",
+    callout: "Boards are reusable designs"
   },
   {
-    kicker: "Timing",
-    title: "Schedule what appears when",
-    copy: "Schedule lets you place boards and saved announcements on a calendar. Set the target screen, start time, and duration, then check for overlaps.",
-    points: ["Create a schedule entry", "Pick a board or announcement", "Review conflicts before publishing"],
+    kicker: "Schedule",
+    title: "Plan boards, announcements, and broadcasts",
+    copy: "Use week, month, or agenda views to place content on specific displays. Boards, announcements, and broadcasts can layer together; only overlapping items of the same type are conflicts.",
+    points: ["Add Board, Announcement, or Broadcast", "Set display, date, time, duration, and recurrence", "Resolve same-type conflicts before showtime"],
     accent: "05",
     image: `${import.meta.env.BASE_URL}assets/help/schedule.png`,
-    imageAlt: "Schedule workspace showing the recognition content calendar",
-    callout: "Plan content by time"
+    imageAlt: "Schedule calendar containing boards, announcements, and broadcast entries",
+    callout: "Plan every display by time"
+  },
+  {
+    kicker: "Announcements",
+    title: "Overlay timely messages",
+    copy: "Compose a headline, supporting message, details, colors, sounds, enhancements, target displays, layout, duration, and optional schedule. Announcements can run over a board without replacing it.",
+    points: ["Save reusable announcements", "Preview on the selected display", "Send now or choose a date"],
+    accent: "06",
+    image: `${import.meta.env.BASE_URL}assets/help/announcements.png`,
+    imageAlt: "Announcement composer with delivery controls and live display preview",
+    callout: "Messages layer over boards"
   },
   {
     kicker: "Broadcast / Stream",
-    title: "Publish, announce, and broadcast",
-    copy: "Publish sends the current revision to your displays. Announcements can temporarily take over a screen, while Broadcast / Stream supports camera, screen-share, and presentation content.",
-    points: ["Preview before publishing", "Use Announcements for time-sensitive messages", "Use Restore to return to the donor wall"],
-    accent: "06",
-    image: `${import.meta.env.BASE_URL}assets/help/announcements.png`,
-    imageAlt: "Announcements workspace with message controls and a display preview",
-    callout: "Preview before going live"
-  },
-  {
-    kicker: "Good practice",
-    title: "A simple operating rhythm",
-    copy: "Prepare content early, verify every target display, publish once, and watch the screen status. Revisions give you a safe record of recent changes.",
-    points: ["Edit → preview → publish", "Check legibility from viewing distance", "Use Revisions when you need to roll back"],
+    title: "Compose camera and screen broadcasts",
+    copy: "Choose a camera, screen share, or test feed; move the title and lower third directly; crop and position video; style the panel, frame, and canvas; then add background removal or face effects.",
+    points: ["Source connects the feed", "Frame & crop shapes the composition", "Effects and recording finish the production"],
     accent: "07",
     image: `${import.meta.env.BASE_URL}assets/help/broadcast.png`,
-    imageAlt: "Broadcast and Stream workspace for live presentation content",
-    callout: "Present with confidence"
+    imageAlt: "Broadcast and Stream studio with camera composition and inspector controls",
+    callout: "Preview before going on air"
+  },
+  {
+    kicker: "Settings",
+    title: "Choose the portal theme and vocabulary",
+    copy: "Switch among Dark, Light, Ocean, Warm, High contrast, and Sparkle Unicorn themes. Maintain the recognition tiers, donor categories, and tags used throughout the control center.",
+    points: ["Themes affect the control portal only", "Board designs keep their saved colors", "Vocabulary changes flow into donor forms and filters"],
+    accent: "08",
+    image: `${import.meta.env.BASE_URL}assets/help/settings.png`,
+    imageAlt: "Settings workspace with portal theme and donor vocabulary controls",
+    callout: "Personalize the staff workspace"
+  },
+  {
+    kicker: "Revisions",
+    title: "Review what changed and why",
+    copy: "The revision history records code improvements and board publishes with affected areas, files, verification, and restore context. Use Restore boards when you need to return displays to the published board state.",
+    points: ["Filter code changes and board publishes", "Review verification notes", "Restore boards without losing your working edits"],
+    accent: "09",
+    image: `${import.meta.env.BASE_URL}assets/help/revisions.png`,
+    imageAlt: "Revision History showing the Project Lantern changelog",
+    callout: "A clear operational history"
+  },
+  {
+    kicker: "Bugs & feedback",
+    title: "Capture actionable reports",
+    copy: "Report a bug from any page with a description, reproduction details, expected result, frequency, severity, tags, and annotated evidence. Technical context is attached automatically for a Codex-ready handoff.",
+    points: ["Capture, paste, annotate, or attach evidence", "Track status, type, comments, and testing progress", "Group and filter the catalogue to focus the work"],
+    accent: "10",
+    image: `${import.meta.env.BASE_URL}assets/help/bugs.png`,
+    imageAlt: "Bug catalogue with status filters and report details",
+    callout: "Turn feedback into fixes"
   }
 ];
 
@@ -1331,8 +1361,8 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
       <section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
         <header className="help-modal-header">
           <div>
-            <p className="eyebrow">Project Lantern learning center</p>
-            <h2 id="help-modal-title">How to use Recognition OS</h2>
+            <p className="eyebrow">Museum Donor Board learning center</p>
+            <h2 id="help-modal-title">How to use the Control Center</h2>
           </div>
           <div className="help-modal-header-actions">
             <div className="help-mode-switch" role="tablist" aria-label="Help format">
@@ -1355,7 +1385,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
               </div>
               <figure className="help-slide-visual">
                 <div className="help-slide-browser">
-                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>Recognition OS</span></div>
+                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>Museum Donor Board Control Center</span></div>
                   <img src={current.image} alt={current.imageAlt} />
                 </div>
                 <figcaption><Sparkles size={14} /> {current.callout}</figcaption>
@@ -1377,7 +1407,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
             <aside className="help-guide-intro">
               <span className="help-guide-icon"><BookOpen size={26} /></span>
               <h3>Quick-start guide</h3>
-              <p>Follow this checklist whenever you prepare a recognition display.</p>
+              <p>Follow the current workflow from donor records and board design through scheduling, live content, publishing, and feedback.</p>
               <small>Tip: the presentation tab gives you a guided walkthrough. You can return here at any time from the Dashboard.</small>
             </aside>
             <ol className="help-guide-steps">

@@ -1,131 +1,155 @@
 <div align="center">
-  <img src="public/favicon.svg" width="86" alt="Project Lantern logo" />
+  <img src="public/favicon.png" width="86" alt="Project Lantern logo" />
 
   # Project Lantern
 
-  **A flexible recognition-board control center for museum displays**
+  **Museum Donor Board Control Center**
 
-  Design donor boards, schedule presentations, manage announcements, and preview
-  portrait and landscape displays from one workspace.
+  Manage donor records, design recognition boards, schedule display content,
+  compose announcements and broadcasts, and review feedback from one workspace.
 
-  [**Open the live prototype →**](https://ijustcreate.github.io/project-lantern/)
+  [**Open the live Control Center →**](https://ijustcreate.github.io/project-lantern/)
   &nbsp;&nbsp;·&nbsp;&nbsp;
-  [Report feedback](https://ijustcreate.github.io/project-lantern/)
+  [How to test](#testing-the-prototype)
   &nbsp;&nbsp;·&nbsp;&nbsp;
   [Developer setup](#developer-setup)
 
   ![GitHub Pages](https://img.shields.io/badge/Frontend-GitHub%20Pages-222?logo=github)
   ![Cloudflare Workers](https://img.shields.io/badge/API-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
-  ![Cloudflare D1](https://img.shields.io/badge/Reports-Cloudflare%20D1-F38020?logo=cloudflare&logoColor=white)
-  ![Cloudflare D1](https://img.shields.io/badge/Evidence-Cloudflare%20D1-F38020?logo=cloudflare&logoColor=white)
-  ![Prototype](https://img.shields.io/badge/status-active%20prototype-2f8f6b)
+  ![Cloudflare D1](https://img.shields.io/badge/Feedback-Cloudflare%20D1-F38020?logo=cloudflare&logoColor=white)
+  ![Status](https://img.shields.io/badge/status-active%20prototype-2f8f6b)
 </div>
 
----
+![Current Project Lantern dashboard](public/assets/help/dashboard.png)
 
-## Start here
+## What this project is
 
-Project Lantern is currently an **active testing prototype**. It is ready for
-museum staff and invited testers to explore, but some tools are unfinished and
-bugs are expected.
+Project Lantern is an active prototype for the Children’s Museum of Stockton.
+It is designed to become a durable, staff-friendly control center for portrait
+and landscape donor-recognition displays.
 
-| I want to… | Go here |
-| --- | --- |
-| Explore the current prototype | [Launch Project Lantern](https://ijustcreate.github.io/project-lantern/) |
-| Preview recognition displays | Open **Displays**, then launch a portrait or landscape display |
-| Report a problem | Select the floating **Bug** button anywhere in the app |
-| Review submitted feedback | Open **Bugs** in the main navigation |
-| Run the project locally | Follow [Developer setup](#developer-setup) |
-| Understand the hosting model | See [Testing architecture](#testing-architecture) |
+The hosted site is for interface testing, workflow review, and feedback. The
+planned museum installation uses the same React interface inside a Tauri
+desktop application that can open dedicated display windows and persist
+operational data on the museum computer.
 
 > [!IMPORTANT]
-> The public prototype is for interface, workflow, and display-layout testing.
+> Use fictional or non-sensitive donor information in the public prototype.
 > Do not enter passwords, payment information, private donor records, or other
-> sensitive museum data.
+> confidential museum data.
 
-## What Project Lantern does
+## Current workspaces
 
-Project Lantern brings the main recognition-display workflows into one visual
-control center:
+| Workspace | What it does |
+| --- | --- |
+| **Dashboard** | Monitors portrait and landscape displays, opens display windows, previews assigned boards, manages display schedules, and configures room cameras. |
+| **Donors** | Creates and organizes donor profiles with tiers, categories, tags, stories, icons, ordering, status, and board assignments. |
+| **Board Editor** | Builds reusable board programs with donor rosters, direct text editing, typography, color, background media, logos, layout, cameras, and 2D/3D presentation. |
+| **Schedule** | Plans boards, announcements, and broadcasts in week, month, and agenda views with display targeting and recurrence. Conflicts are reported only for overlapping items of the same type. |
+| **Announcements** | Creates saved message overlays with targeting, timing, layouts, colors, sounds, enhancements, scheduling, and a live display preview. |
+| **Broadcast / Stream** | Composes camera, screen-share, or test feeds with movable text, direct frame manipulation, pan/zoom crop, masks, panel and canvas styling, background removal, effects, and recording. |
+| **Settings** | Selects Dark, Light, Ocean, Warm, High contrast, or Sparkle Unicorn portal themes and maintains donor tiers, categories, and tags. |
+| **Revisions** | Shows code changes and board publishes with affected areas, verification notes, and restore context. |
+| **Bugs** | Captures, groups, filters, comments on, and tracks actionable feedback with annotated evidence and automatic diagnostic context. |
 
-- Build donor-recognition boards with configurable layouts, typography,
-  backgrounds, panels, and effects.
-- Manage donor records, recognition tiers, tags, and presentation content.
-- Preview independent portrait and landscape display windows.
-- Schedule boards and announcements for different screens.
-- Prepare live announcements, camera effects, and presentation sequences.
-- Publish revisions and review prior board states.
-- Capture structured bug reports with screenshots and technical context.
+The **How to use** button on the Dashboard opens an in-app presentation and
+quick-start guide with current screenshots of every workspace.
 
-### Current project status
+## A practical operating workflow
 
-| Area | Status | Notes |
-| --- | --- | --- |
-| Board design | Available | Core editor and display renderer are ready for testing |
-| Donor management | Available | Suitable for sample data during public testing |
-| Portrait and landscape previews | Available | Best tested from a desktop browser |
-| Announcements and presentation tools | In development | Some controls may be incomplete |
-| Shared tester bug reports | Cloudflare deployment | Reports and testing screenshots use D1 |
-| Museum-local persistence | Planned | Final installation will store operational data on the museum computer |
-| Cross-device live synchronization | Planned | Public testing currently focuses on interface and layout |
+1. Open **Dashboard** and confirm that the expected displays are attached.
+2. Add or update donor profiles in **Donors**.
+3. Build the portrait and landscape experiences in **Board Editor**.
+4. Assign boards to displays or place them on the **Schedule**.
+5. Prepare saved **Announcements** for temporary message overlays.
+6. Configure **Broadcast / Stream** when a camera or screen presentation is
+   needed.
+7. Preview the result on the intended display and check readability from the
+   real viewing distance.
+8. Publish only when the working content is ready to become live.
+9. Use **Revisions** to understand recent changes or restore published boards.
+10. Use the floating bug button when a workflow is confusing or broken.
 
-## Testing guide
+### Understanding scheduled layers
 
-The fastest useful test takes about five minutes:
+Boards, announcements, and broadcasts are independent presentation layers:
 
-1. Open the [live prototype](https://ijustcreate.github.io/project-lantern/) in
-   current Chrome or Edge.
-2. Explore the **Dashboard**, **Donors**, **Boards**, **Announcements**, and
-   **Displays** sections.
-3. Create or modify sample content. Public-test data is not museum production
-   data.
-4. Open a portrait or landscape display and check that the result matches the
-   editor preview.
-5. If something is confusing or broken, click the floating **Bug** button.
-6. Add a short description, optional details, and a screenshot when useful.
-7. Save the report. Shared reports appear in the app’s **Bugs** section.
+- a board can run with an announcement;
+- a board can run with a broadcast;
+- an announcement can run with a broadcast; and
+- conflicts occur only when two or more items of the **same type** overlap on
+  the same display.
 
-Helpful reports explain:
+## Testing the prototype
 
-- what you were trying to do;
-- what you expected to happen;
-- what actually happened;
-- whether it happens every time; and
-- which screen, board, or browser you were using.
+The fastest useful test takes about ten minutes:
 
-## Testing architecture
+1. Open the [live Control Center](https://ijustcreate.github.io/project-lantern/)
+   in current Chrome or Edge.
+2. Choose **How to use** from the Dashboard for the visual walkthrough.
+3. Explore the workspaces using fictional sample content.
+4. Open a portrait or landscape display and compare it with its editor preview.
+5. Try a theme in **Settings** and confirm the interface remains readable.
+6. If something is unclear or broken, choose the floating bug button.
+7. Explain what you were doing, what happened, and what you expected.
+8. Add a capture or file when it helps, then save the report.
 
-The public application remains on GitHub Pages. Only features that require a
-writable server use Cloudflare.
+A useful report includes:
+
+- short summary;
+- exact reproduction steps;
+- expected and actual results;
+- frequency and severity;
+- affected workspace, board, or display;
+- browser and viewport details;
+- screenshot, GIF, video, or log evidence when appropriate; and
+- any workaround already tried.
+
+The report form automatically adds app state, version, route, theme, platform,
+recent client errors, and application logs so the result can be handed to
+Codex with less manual reconstruction.
+
+## Screenshots
+
+| Donor management | Board design |
+| --- | --- |
+| ![Donors workspace](public/assets/help/donors.png) | ![Board Editor](public/assets/help/board-editor.png) |
+
+| Scheduling | Announcements |
+| --- | --- |
+| ![Schedule workspace](public/assets/help/schedule.png) | ![Announcement composer](public/assets/help/announcements.png) |
+
+| Broadcast studio | Settings |
+| --- | --- |
+| ![Broadcast and Stream studio](public/assets/help/broadcast.png) | ![Control Center settings](public/assets/help/settings.png) |
+
+| Revision history | Bug catalogue |
+| --- | --- |
+| ![Revision History](public/assets/help/revisions.png) | ![Bug catalogue](public/assets/help/bugs.png) |
+
+## Hosting and data flow
+
+The public frontend remains static on GitHub Pages. Features requiring shared
+writes use Cloudflare:
 
 ```mermaid
 flowchart LR
-    T[Tester browser] -->|loads application| P[GitHub Pages]
-    T -->|submits or reads reports| W[Cloudflare Worker]
-    W -->|reports and testing evidence| D[(Cloudflare D1)]
-    M[Museum staff] -->|reviews reports| W
+    T[Tester browser] -->|loads frontend| P[GitHub Pages]
+    T -->|submits and reads feedback| W[Cloudflare Worker]
+    W -->|reports, comments, and evidence| D[(Cloudflare D1)]
+    M[Museum staff] -->|reviews and updates reports| W
 ```
 
-This separation keeps the share link stable and the static application simple:
+- **GitHub Pages** deploys the React/Vite frontend from `main`.
+- **Cloudflare Worker** provides the shared feedback API.
+- **Cloudflare D1** stores report text, workflow state, comments, diagnostics,
+  and prototype-sized evidence.
+- **Tauri** is the native Windows host for dedicated display windows and local
+  museum operation.
 
-- **GitHub Pages** publishes the React/Vite frontend from `main`.
-- **Cloudflare Worker** exposes the public bug-report API.
-- **Cloudflare D1** stores report text, status, comments, metadata, and
-  prototype-sized screenshot evidence.
-- **Cloudflare R2** is the planned upgrade path if testing later requires large
-  videos or full-resolution file archives.
-- The future **museum desktop build** will store operational board and donor data
-  locally so the exhibit does not depend on public hosting.
-
-## Museum deployment direction
-
-The public prototype and the final museum installation serve different needs.
-
-The hosted prototype is for sharing, review, and feedback. The museum build is
-intended to run as a Tauri desktop application on a designated Windows computer,
-open dedicated display windows, and persist museum data locally. Export/import
-backups will allow staff to recover or move the installation without relying on
-the public testing service.
+Browser-local board and donor state is separate from the shared bug catalogue.
+The production museum build is intended to keep operational recognition data on
+the designated museum computer.
 
 ## Developer setup
 
@@ -133,8 +157,8 @@ the public testing service.
 
 - Node.js 22
 - npm
-- A current Chromium-based browser
-- Rust and the Windows build tools only when running the native Tauri shell
+- Current Chromium-based browser
+- Rust and Windows build tools only for the native Tauri shell
 
 ### Run the web application
 
@@ -143,23 +167,30 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use the monitor button in the top bar or
-open **Displays** to launch independent test displays.
+Open the local URL printed by Vite.
 
-### Production verification
+### Verify production builds
 
 ```powershell
 npm run build
 npm run build:worker
 ```
 
-### Cloudflare resources
+### Run the native shell
 
-The Worker configuration lives in [`wrangler.jsonc`](wrangler.jsonc), its
-implementation in [`worker/bugs.ts`](worker/bugs.ts), and the D1 schema in
-[`worker/schema.sql`](worker/schema.sql).
+```powershell
+npm run tauri:dev
+```
 
-After authenticating Wrangler and creating the configured D1 database:
+### Cloudflare feedback service
+
+Configuration and implementation:
+
+- [`wrangler.jsonc`](wrangler.jsonc)
+- [`worker/bugs.ts`](worker/bugs.ts)
+- [`worker/schema.sql`](worker/schema.sql)
+
+After Wrangler authentication and D1 setup:
 
 ```powershell
 npm run cloudflare:migrate
@@ -167,57 +198,42 @@ npm run cloudflare:deploy
 ```
 
 Set the GitHub Actions repository variable `LANTERN_BUG_ENDPOINT` to the
-deployed Worker endpoint followed by `/bugs`. The Pages workflow injects that
-value as `VITE_LANTERN_BUG_ENDPOINT`.
-
-### Native Tauri shell
-
-```powershell
-npm run tauri:dev
-```
-
-The native host can create independent portrait and landscape webview windows.
-Rust/Cargo and the appropriate Windows build tools must be installed first.
+deployed Worker endpoint. The Pages workflow exposes it to the frontend as
+`VITE_LANTERN_BUG_ENDPOINT` and `VITE_LANTERN_SERVICE_ENDPOINT`.
 
 ## Repository map
 
 ```text
 project-lantern/
 ├── .github/workflows/      GitHub Pages deployment
-├── public/                 Static assets, sounds, and branding
+├── public/assets/help/     Current walkthrough and README screenshots
 ├── scripts/                Changelog and bug-work tooling
-├── src/                    React application and display renderer
+├── src/                    React control center and display renderer
 ├── src-tauri/              Native Windows/Tauri host
-├── worker/                 Cloudflare bug-report API and schema
-├── vite.config.ts          Web build and local bug bridge
+├── worker/                 Cloudflare feedback API and D1 schema
+├── vite.config.ts          Web build and local feedback bridge
 └── wrangler.jsonc          Cloudflare bindings and deployment settings
 ```
 
-## Data and privacy
+## Project workflow
 
-- Use fictional or non-sensitive donor information in the public prototype.
-- Bug reports may include the entered description, app state, browser context,
-  recent application errors, and small attachments selected by the tester.
-- Testers should remove screenshots containing private information before
-  submitting.
-- Museum production data will move to local storage in the installed desktop
-  version.
+After each material code or configuration change:
 
-## Development workflow
+1. verify the change in proportion to its risk;
+2. add one changelog entry per cohesive user-facing change; and
+3. record bug-specific investigation and progress in the bug-work log.
 
-Material changes are verified and recorded in the in-app changelog. Bug-specific
-analysis and test results are also recorded in the local Lantern bug-work log.
+Useful commands:
 
 ```powershell
-npm run bugs -- list --status=open
-npm run bugs -- show BUG-0002
+npm run bugs -- list
+npm run bugs -- show BUG-00002
 npm run changelog -- --help
 ```
 
 ---
 
 <div align="center">
-  <strong>Project Lantern</strong><br />
-  Built as a practical foundation for a durable, staff-friendly museum
-  recognition experience.
+  <strong>Project Lantern · Museum Donor Board Control Center</strong><br />
+  A practical foundation for a durable museum recognition experience.
 </div>
