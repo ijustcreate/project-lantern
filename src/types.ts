@@ -249,6 +249,8 @@ export interface LiveEffectsSettings {
   segmentationThreshold: number;
   segmentationFeather: number;
   accessory: "none" | "glasses" | "party-hat";
+  glassesEnabled?: boolean;
+  partyHatEnabled?: boolean;
   faceTracking: boolean;
   puppetPreview: boolean;
 }

@@ -1,5 +1,73 @@
 [
   {
+    "id": "DEV-0112",
+    "title": "Make every Codex fix visible and exportable",
+    "summary": "Add a Codex-authored bug creation command and mandatory workflow, backfill recent fix records to the shared catalogue, and add a per-bug Export to Codex action that copies reproduction details, evidence, diagnostics, discussion, and implementation instructions.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:53 AM",
+    "areas": [
+      "Bug catalogue",
+      "Developer workflow"
+    ],
+    "files": [
+      "AGENTS.md",
+      "scripts/lantern-bugs.mjs",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check; browser verified shared Codex records, selected-bug export control, and copy confirmation"
+  },
+  {
+    "id": "DEV-0111",
+    "title": "Put the portal theme selector in the sidebar",
+    "summary": "Add the full theme dropdown between Settings and Revisions with divider lines above and below so appearance is always available from the main menu.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:42 AM",
+    "areas": [
+      "Navigation",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; browser verified sidebar ordering and Ocean theme application"
+  },
+  {
+    "id": "DEV-0110",
+    "title": "Make live AI and face effects responsive",
+    "summary": "Use the optimized selfie-segmentation model, show background-effect readiness, provide an immediate blur fallback while the model loads, allow glasses and party hats together, and raise the hat above the forehead.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:42 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera effects"
+    ],
+    "files": [
+      "src/components/ChromaVideo.tsx",
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; browser verified both accessory toggles can be active simultaneously"
+  },
+  {
+    "id": "DEV-0109",
+    "title": "Align broadcast camera crop controls",
+    "summary": "Made raw and effects-processed camera feeds use the same cover, zoom, and pan transform so the video fills its resizable panel and the yellow crop editor describes the actual camera image bounds instead of a letterboxed or untransformed canvas.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:35 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera crop"
+    ],
+    "files": [
+      "src/components/ChromaVideo.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified portrait broadcast Move & resize and Pan & zoom modes, camera zoom changes from 140% to 100%, and the matching yellow crop editor state; git diff --check"
+  },
+  {
     "id": "DEV-0108",
     "title": "Remove 3D panel edge artifacts",
     "summary": "Separated the rendered donor-board artwork from the panel body so the full board texture is no longer repeated across the thin side faces when dashboard previews are tilted in 3D, while preserving the correct upright texture orientation.",

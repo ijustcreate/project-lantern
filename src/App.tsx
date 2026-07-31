@@ -22,6 +22,7 @@ import {
   Move3d,
   Glasses,
   Circle,
+  ClipboardCopy,
   Download,
   Eraser,
   History,
@@ -495,6 +496,27 @@ function ControlCenter() {
             );
           })}
         </nav>
+        <label className="sidebar-theme-control">
+          <span><Palette size={15} /> Site theme</span>
+          <select
+            aria-label="Site theme"
+            value={state.recognitionSettings.appearance}
+            onChange={(event) => updateState((current) => ({
+              ...current,
+              recognitionSettings: {
+                ...current.recognitionSettings,
+                appearance: event.target.value as LanternState["recognitionSettings"]["appearance"]
+              }
+            }))}
+          >
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="ocean">Ocean</option>
+            <option value="warm">Warm</option>
+            <option value="contrast">High contrast</option>
+            <option value="sparkle">Sparkle Unicorn</option>
+          </select>
+        </label>
         <nav className="nav-list nav-utility-list" aria-label="History and support">
           {navItems.filter((item) => item.id === "revisions" || item.id === "bugs").map((item) => {
             const Icon = item.icon;
@@ -1175,6 +1197,67 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       }
     } catch (error) { setMessage(`Could not export bugs: ${String(error)}`); }
   };
+  const exportBugToCodex = async (bug: BugRecord) => {
+    const evidence = (bug.evidence?.length ? bug.evidence.map((item) => item.path ?? item.name) : bug.attachments).map((item) => `- ${item}`).join("\n") || "- None attached";
+    const work = (bug.agentWork ?? []).map((entry) => `- ${entry.at} — ${entry.author} (${entry.kind}): ${entry.note}`).join("\n") || "- No discussion or work recorded";
+    const diagnosticJson = JSON.stringify(bug.diagnostics ?? {}, null, 2);
+    const report = `# Project Lantern bug for Codex
+
+Bug ID: ${bug.bugId}
+Status: ${statusLabel(bug.status)}
+Entered by: ${bugEnteredBy(bug)}
+Created: ${bug.createdAt}
+Updated: ${bug.updatedAt}
+Tags: ${bug.tags.join(", ") || "None"}
+
+## Summary
+${bug.summary}
+
+## Details
+${bug.details || "Not provided"}
+
+## Steps to reproduce
+${bug.stepsToReproduce || "Not provided"}
+
+## Expected result
+${bug.expectedResult || "Not provided"}
+
+## Actual result
+${bug.actualResult || "Not provided"}
+
+## Frequency and impact
+- Frequency: ${bug.frequency || "Not provided"}
+- Impact: ${bug.impact || "Not provided"}
+
+## Fix / test notes
+${bug.fixTips || "Not provided"}
+
+## Evidence
+${evidence}
+
+## Discussion and prior work
+${work}
+
+## Diagnostics
+\`\`\`json
+${diagnosticJson}
+\`\`\`
+
+Please inspect the Project Lantern workspace, reproduce this issue, implement the fix, verify it, and update ${bug.bugId} with analysis, change, and test entries.`;
+    try {
+      await navigator.clipboard.writeText(report);
+      setMessage(`${bug.bugId} copied. Paste it into Codex to begin.`);
+    } catch {
+      const blob = new Blob([report], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${bug.bugId.toLowerCase()}-for-codex.md`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage(`Clipboard access was unavailable, so ${bug.bugId} was downloaded for Codex.`);
+    }
+  };
   const counts = { open: bugs.filter((bug) => bug.status === "open").length, testing: bugs.filter((bug) => bug.status === "ready-for-test").length, closed: bugs.filter((bug) => bug.status === "closed" || bug.status === "verified").length };
   const addUser = () => {
     const name = window.prompt("New user name");
@@ -1237,7 +1320,7 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
             {commentTab === "user" && <div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? `Comment as ${activeUser}…` : `Reply as ${activeUser}…`} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div>}
           </div>
         </div>
-        <footer className="bug-detail-actions"><button className="command-button danger" onClick={() => void deleteBug(selected)}><Trash2 size={16} /> Delete bug</button><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
+        <footer className="bug-detail-actions"><button className="command-button danger" onClick={() => void deleteBug(selected)}><Trash2 size={16} /> Delete bug</button><button className="command-button secondary" onClick={() => void exportBugToCodex(selected)}><ClipboardCopy size={16} /> Export to Codex</button><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
       </> : <div className="bugs-empty"><Pencil size={26} /><strong>Select a bug</strong><span>Open it here to edit details or move it to Ready for test.</span></div>}</aside>
     </div>
     {message && <div className="bugs-message">{message}</div>}
@@ -4188,8 +4271,20 @@ function LivePreviewPanel({
 
         <section className="effect-settings-card face-settings-card">
           <div className="effect-card-heading"><div><strong>Face effects</strong><span>High-frequency, stabilized landmark tracking</span></div><b>30 FPS</b></div>
-          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, accessory: event.target.checked ? state.live.effects.accessory : "none", puppetPreview: event.target.checked && state.live.effects.puppetPreview } })} /><ScanFace size={16} /><span><strong>Face tracking</strong><small>Track eyes, head, and mouth</small></span></label>
-          <div className="accessory-options"><button type="button" className={state.live.effects.accessory === "none" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "none" } })}>None</button><button type="button" className={state.live.effects.accessory === "glasses" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "glasses", faceTracking: true } })}><Glasses size={17} /> Glasses</button><button type="button" className={state.live.effects.accessory === "party-hat" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "party-hat", faceTracking: true } })}><PartyPopper size={17} /> Party hat</button></div>
+          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, puppetPreview: event.target.checked && state.live.effects.puppetPreview } })} /><ScanFace size={16} /><span><strong>Face tracking</strong><small>Track eyes, head, and mouth</small></span></label>
+          <div className="accessory-options">
+            <button type="button" className={!(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses") && !(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat") ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "none", glassesEnabled: false, partyHatEnabled: false } })}>None</button>
+            <button type="button" className={(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses") ? "selected" : ""} aria-pressed={state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses"} onClick={() => {
+              const enabled = !(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses");
+              const hatEnabled = state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat";
+              patchLive({ effects: { ...state.live.effects, accessory: enabled ? "glasses" : hatEnabled ? "party-hat" : "none", glassesEnabled: enabled, partyHatEnabled: hatEnabled, faceTracking: enabled || state.live.effects.faceTracking } });
+            }}><Glasses size={17} /> Glasses</button>
+            <button type="button" className={(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat") ? "selected" : ""} aria-pressed={state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat"} onClick={() => {
+              const enabled = !(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat");
+              const glassesOn = state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses";
+              patchLive({ effects: { ...state.live.effects, accessory: glassesOn ? "glasses" : enabled ? "party-hat" : "none", glassesEnabled: glassesOn, partyHatEnabled: enabled, faceTracking: enabled || state.live.effects.faceTracking } });
+            }}><PartyPopper size={17} /> Party hat</button>
+          </div>
           <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span><strong>Puppet preview</strong><small>Mouth movement drives the sample character</small></span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
         </section>
       </div>}

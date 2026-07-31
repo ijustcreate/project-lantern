@@ -209,7 +209,7 @@ export const initialState: LanternState = {
     source: "camera",
     frame: { x: 24, y: 13, width: 65, height: 80, crop: { scale: 1.4, x: 6, y: -34 }, maskShape: "rectangle", rotation: -1, mirrorX: false },
     chromaKey: { enabled: false, color: "#18a558", similarity: 0.34, smoothness: 0.12, spill: 0.18 },
-    effects: { background: "remove", blur: 18, segmentationThreshold: 0.42, segmentationFeather: 0.18, accessory: "none", faceTracking: false, puppetPreview: false }
+    effects: { background: "remove", blur: 18, segmentationThreshold: 0.42, segmentationFeather: 0.18, accessory: "none", glassesEnabled: false, partyHatEnabled: false, faceTracking: false, puppetPreview: false }
   },
   screens: {
     "display-1": {

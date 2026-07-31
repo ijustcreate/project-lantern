@@ -14,7 +14,37 @@ async function all() {
 }
 
 const bugs = await all();
-if (command === "list") {
+if (command === "add") {
+  const summary = argument?.trim();
+  const details = rest.join(" ").trim();
+  if (!summary) {
+    console.error('Usage: npm run bugs -- add "Summary" "Details"');
+    process.exitCode = 1;
+  } else {
+    const highest = bugs.reduce((value, bug) => Math.max(value, Number(bug.bugId.match(/\d+/)?.[0] ?? 0)), 0);
+    const bugId = `BUG-${String(highest + 1).padStart(4, "0")}`;
+    const now = new Date().toISOString();
+    const folder = path.join(root, bugId);
+    const bug = {
+      bugId,
+      summary,
+      details,
+      fixTips: "",
+      enteredBy: "Codex",
+      tags: ["codex-request"],
+      status: "open",
+      createdAt: now,
+      updatedAt: now,
+      attachments: [],
+      evidence: [],
+      folder: path.join(".lantern", "bugs", bugId),
+      agentWork: []
+    };
+    await import("node:fs/promises").then(({ mkdir }) => mkdir(folder, { recursive: true }));
+    await writeFile(path.join(folder, "catalog.json"), JSON.stringify(bug, null, 2));
+    console.log(`Added ${bugId}: ${summary}`);
+  }
+} else if (command === "list") {
   const status = argument?.replace(/^--status=/, "");
   const visible = status ? bugs.filter((bug) => bug.status === status) : bugs;
   if (!visible.length) console.log("No matching bugs.");
@@ -50,6 +80,6 @@ if (command === "list") {
     console.log(`Added ${kind} entry to ${bug.bugId}.`);
   }
 } else {
-  console.error("Usage: npm run bugs -- [list | show BUG-0002 | status BUG-0002 in-progress | work BUG-0002 proposal \"note\"]");
+  console.error("Usage: npm run bugs -- [add \"Summary\" \"Details\" | list | show BUG-0002 | status BUG-0002 in-progress | work BUG-0002 proposal \"note\"]");
   process.exitCode = 1;
 }

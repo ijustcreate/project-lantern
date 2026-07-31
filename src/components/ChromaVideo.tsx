@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FaceLandmarker, ImageSegmenter, NormalizedLandmark } from "@mediapipe/tasks-vision";
 import type { ChromaKeySettings, ImageCrop, LiveEffectsSettings } from "../types";
 
@@ -22,7 +22,7 @@ const INFERENCE_HEIGHT = 180;
 const SEGMENT_INTERVAL_MS = 1000 / 10;
 const FACE_INTERVAL_MS = 1000 / 30;
 const VISION_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
-const SEGMENTATION_MODEL_URL = "https://storage.googleapis.com/mediapipe-assets/deeplabv3.tflite?generation=1661875711618421";
+const SEGMENTATION_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite";
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task";
 
 type VisionModule = typeof import("@mediapipe/tasks-vision");
@@ -48,11 +48,19 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const settingsRef = useRef({ chromaKey, effects, crop });
   const replacementImageRef = useRef<HTMLImageElement | null>(null);
+  const [aiStatus, setAiStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   settingsRef.current = { chromaKey, effects, crop };
 
   const chromaActive = chromaKey.enabled;
   const aiBackgroundActive = !chromaActive && effects.background !== "original";
-  const faceEffectsActive = effects.faceTracking && (effects.accessory !== "none" || effects.puppetPreview);
+  const glassesEnabled = effects.glassesEnabled ?? effects.accessory === "glasses";
+  const partyHatEnabled = effects.partyHatEnabled ?? effects.accessory === "party-hat";
+  const faceEffectsActive = effects.faceTracking && (glassesEnabled || partyHatEnabled || effects.puppetPreview);
+  const cropStyle = {
+    objectFit: "cover" as const,
+    transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
+    transformOrigin: "center"
+  };
   const processingActive = chromaActive || aiBackgroundActive || faceEffectsActive;
 
   useEffect(() => {
@@ -83,6 +91,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!processingActive || !video || !canvas) return;
+    setAiStatus(aiBackgroundActive ? "loading" : "idle");
 
     const context = canvas.getContext("2d");
     const source = document.createElement("canvas");
@@ -148,6 +157,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
             const labels = nextSegmenter.getLabels().map((label) => label.toLowerCase());
             const detectedPersonIndex = labels.findIndex((label) => label.includes("person"));
             if (detectedPersonIndex >= 0) personMaskIndex = detectedPersonIndex;
+            setAiStatus("ready");
           }
         }
 
@@ -176,11 +186,13 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
           if (disposed) nextLandmarker.close();
           else faceLandmarker = nextLandmarker;
         }
-      } catch {
+      } catch (error) {
+        console.error("Background removal could not start.", error);
         segmenter?.close();
         faceLandmarker?.close();
         segmenter = null;
         faceLandmarker = null;
+        if (aiBackgroundActive && !disposed) setAiStatus("error");
       }
     };
     void initializeVision();
@@ -263,7 +275,13 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
         context.filter = "none";
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-        if (aiBackgroundActive && maskReady) {
+        if (aiBackgroundActive && currentEffects.background === "blur" && !maskReady) {
+          const overscan = Math.max(12, currentEffects.blur * 2);
+          context.save();
+          context.filter = `blur(${currentEffects.blur}px)`;
+          context.drawImage(source, -overscan, -overscan, OUTPUT_WIDTH + overscan * 2, OUTPUT_HEIGHT + overscan * 2);
+          context.restore();
+        } else if (aiBackgroundActive && maskReady) {
           if (currentEffects.background === "blur") {
             const overscan = Math.max(12, currentEffects.blur * 2);
             context.save();
@@ -289,8 +307,11 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
         }
 
         const transform = { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT };
-        if (landmarks && currentEffects.faceTracking && currentEffects.accessory !== "none") {
-          drawAccessory(context, landmarks, transform, currentEffects.accessory);
+        if (landmarks && currentEffects.faceTracking) {
+          const showGlasses = currentEffects.glassesEnabled ?? currentEffects.accessory === "glasses";
+          const showPartyHat = currentEffects.partyHatEnabled ?? currentEffects.accessory === "party-hat";
+          if (showGlasses) drawAccessory(context, landmarks, transform, "glasses");
+          if (showPartyHat) drawAccessory(context, landmarks, transform, "party-hat");
         }
         if (landmarks && currentEffects.faceTracking && currentEffects.puppetPreview) {
           drawPuppetPreview(context, landmarks, transform);
@@ -327,12 +348,11 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     playsInline
     muted
     className={processingActive ? "chroma-source" : className ?? "chroma-video"}
-    style={processingActive ? undefined : {
-      objectFit: "fill",
-      transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
-      transformOrigin: "center"
-    }}
-  />{processingActive && <canvas ref={canvasRef} width={OUTPUT_WIDTH} height={OUTPUT_HEIGHT} className={className ?? "chroma-video"} />}</>;
+    style={processingActive ? undefined : cropStyle}
+  />{processingActive && <canvas ref={canvasRef} width={OUTPUT_WIDTH} height={OUTPUT_HEIGHT} className={className ?? "chroma-video"} style={cropStyle} />}
+  {aiBackgroundActive && aiStatus !== "ready" && <span className={`ai-background-status ${aiStatus}`}>
+    {aiStatus === "error" ? "Background effect unavailable" : "Preparing background effect…"}
+  </span>}</>;
 }
 
 function applyChromaKey(context: CanvasRenderingContext2D, width: number, height: number, chromaKey: ChromaKeySettings) {
@@ -410,7 +430,7 @@ function drawAccessory(context: CanvasRenderingContext2D, landmarks: NormalizedL
     context.beginPath(); context.moveTo(-eyeWidth * 0.03, 0); context.lineTo(eyeWidth * 0.03, 0); context.stroke();
   } else {
     const top = point(landmarks, 10, transform);
-    context.translate(0, top.y - (left.y + right.y) / 2);
+    context.translate(0, top.y - (left.y + right.y) / 2 - eyeWidth * 0.28);
     context.fillStyle = "#f2c46d";
     context.strokeStyle = "#f07b5f";
     context.lineWidth = Math.max(3, eyeWidth * 0.025);

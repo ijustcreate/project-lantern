@@ -3658,8 +3658,42 @@ textarea:focus-visible,
 
 .nav-utility-list {
   flex: 0 0 auto;
-  padding-top: 7px;
-  border-top: 1px solid rgba(148, 158, 220, .12);
+  padding-top: 0;
+}
+
+.sidebar-theme-control {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 6px;
+  padding: 10px 3px;
+  border-top: 1px solid rgba(148, 158, 220, .16);
+  border-bottom: 1px solid rgba(148, 158, 220, .16);
+}
+
+.sidebar-theme-control > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sidebar-theme-control select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background-color: var(--panel-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .nav-item {
@@ -8538,6 +8572,32 @@ textarea:focus-visible,
   height: 100%;
 }
 
+.ai-background-status {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 4;
+  max-width: calc(100% - 20px);
+  padding: 4px 7px;
+  border: 1px solid rgba(102, 222, 232, .45);
+  border-radius: 999px;
+  color: #d9fcff;
+  background: rgba(5, 13, 23, .84);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .34);
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.ai-background-status.error {
+  border-color: rgba(255, 143, 143, .62);
+  color: #ffd4d4;
+}
+
 .direct-live-content .lower-third.preview,
 .live-overlay .lower-third {
   z-index: 3;
@@ -8588,7 +8648,13 @@ textarea:focus-visible,
 .direct-crop-resize-handle.resize-w { top: 50%; left: -6px; cursor: ew-resize; transform: translateY(-50%); }
 .direct-crop-resize-handle.resize-nw { top: -6px; left: -6px; cursor: nwse-resize; }
 .direct-live-content .chroma-video,
-.live-positioned-preview .chroma-video { position: absolute; inset: 0; width: 100%; height: 100%; }
+.live-positioned-preview .chroma-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .direct-live-frame .live-test-pattern strong { font-size: clamp(10px, 1.5vw, 18px); }
 .direct-live-frame .live-test-pattern span { font-size: 8px; }
 
