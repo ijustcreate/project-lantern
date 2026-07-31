@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0108",
+    "title": "Remove 3D panel edge artifacts",
+    "summary": "Separated the rendered donor-board artwork from the panel body so the full board texture is no longer repeated across the thin side faces when dashboard previews are tilted in 3D, while preserving the correct upright texture orientation.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:16 AM",
+    "areas": [
+      "Dashboard",
+      "3D preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; Playwright visually confirmed upright, non-mirrored portrait and landscape previews, then tilted the portrait preview to an extreme side angle and confirmed a clean solid edge without duplicated artwork; git diff --check"
+  },
+  {
     "id": "DEV-0107",
     "title": "Track and filter bugs by reporter",
     "summary": "Stamped new bug and feedback reports with the active user, added Codex as a built-in reporter, added a saved Entered by filter and reporter controls, preserved older reports as Unattributed, and carried reporter ownership through web, Cloudflare, and native storage.",

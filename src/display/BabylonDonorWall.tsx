@@ -198,12 +198,28 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     const texture = panelTexture.texture;
     texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
     texture.anisotropicFilteringLevel = 16;
+    // A standalone plane uses the opposite vertical UV direction from the
+    // front face of Babylon's box. Flip only V so the board remains upright
+    // without mirroring its left and right sides.
+    texture.vScale = -1;
+    texture.vOffset = 1;
     redrawPanel = panelTexture.redraw;
     const panelMaterial = new StandardMaterial("baked-donor-lettering", scene);
     panelMaterial.diffuseTexture = texture;
     panelMaterial.diffuseColor = Color3.White();
     panelMaterial.specularColor = state.theme.finish === "Matte" ? new Color3(0.06, 0.07, 0.07) : new Color3(0.24, 0.2, 0.14);
     panelMaterial.specularPower = state.theme.finish === "Soft Gloss" ? 52 : state.theme.finish === "Matte" ? 8 : 24;
+    panelMaterial.backFaceCulling = false;
+
+    // Keep the rendered board artwork on the front face only. Applying the
+    // DynamicTexture to a box maps the complete board onto every narrow side
+    // face, which appears as a duplicated vertical strip when viewed at an
+    // angle in 3D.
+    const panelBodyMaterial = new StandardMaterial("donor-panel-body", scene);
+    panelBodyMaterial.diffuseColor = Color3.FromHexString(materialColor(state.theme.material).dark);
+    panelBodyMaterial.specularColor = state.theme.finish === "Matte"
+      ? new Color3(0.03, 0.04, 0.05)
+      : new Color3(0.12, 0.13, 0.14);
 
     const panel = MeshBuilder.CreateBox(
       "donor-panel",
@@ -214,7 +230,18 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       },
       scene
     );
-    panel.material = panelMaterial;
+    panel.material = panelBodyMaterial;
+
+    const panelFace = MeshBuilder.CreatePlane(
+      "donor-panel-face",
+      {
+        width: panelWidth,
+        height: panelHeight
+      },
+      scene
+    );
+    panelFace.position.z = 0.091;
+    panelFace.material = panelMaterial;
 
     const backMaterial = new StandardMaterial("solid-panel-back", scene);
     backMaterial.diffuseColor = Color3.FromHexString("#11130f");
