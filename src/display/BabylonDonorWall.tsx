@@ -19,7 +19,7 @@ import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import "@babylonjs/core/Meshes/Builders/tubeBuilder";
-import type { Announcement, DisplayProfile, Donor, LanternState, ScreenId } from "../types";
+import type { Announcement, DisplayProfile, Donor, LanternState, ScheduleEntry, ScreenId } from "../types";
 
 interface BabylonDonorWallProps {
   state: LanternState;
@@ -1380,10 +1380,46 @@ function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date
   const day = now.getDay();
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const schedule = state.schedules?.find((entry) => entry.contentType !== "announcement" && entry.active && (entry.recurrence === "once" && entry.scheduleDate ? entry.scheduleDate === localDate : entry.days.includes(day)) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
+  const matchesDate = (entry: ScheduleEntry, date: Date) => {
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (entry.recurrence === "once" && entry.scheduleDate) return entry.scheduleDate === dateKey;
+    if (entry.scheduleDate && dateKey < entry.scheduleDate) return false;
+    if (entry.scheduleEndDate && dateKey > entry.scheduleEndDate) return false;
+    return entry.days.includes(date.getDay());
+  };
+  const schedule = state.schedules?.find((entry) => entry.contentType !== "announcement" && entry.active && matchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
   if (schedule) return state.boardPrograms?.find((program) => program.id === schedule.boardId && program.active);
+  let latest: { entry: ScheduleEntry; endedAt: number } | null = null;
+  for (const entry of state.schedules ?? []) {
+    if (entry.contentType === "announcement" || !entry.active || (entry.target !== "all" && entry.target !== screenId)) continue;
+    const dates: Date[] = [];
+    if (entry.recurrence === "once" && entry.scheduleDate) {
+      const [year, month, date] = entry.scheduleDate.split("-").map(Number);
+      dates.push(new Date(year, month - 1, date));
+    } else {
+      for (let offset = 0; offset <= 7; offset += 1) {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+        if (matchesDate(entry, date)) {
+          dates.push(date);
+          break;
+        }
+      }
+    }
+    for (const date of dates) {
+      const [hours, minutes] = entry.endTime.split(":").map(Number);
+      date.setHours(hours, minutes, 0, 0);
+      const endedAt = date.getTime();
+      if (endedAt <= now.getTime() && (!latest || endedAt > latest.endedAt)) latest = { entry, endedAt };
+    }
+  }
+  if (latest) {
+    const program = state.boardPrograms?.find((candidate) => candidate.id === latest!.entry.boardId && candidate.active);
+    if (program) return program;
+  }
   const assignedProgramId = state.screens[screenId]?.boardProgramId;
-  return assignedProgramId ? state.boardPrograms?.find((program) => program.id === assignedProgramId) : undefined;
+  return state.boardPrograms?.find((program) => program.id === assignedProgramId)
+    ?? state.boardPrograms?.find((program) => program.active && program.orientation === state.screens[screenId]?.orientation)
+    ?? state.boardPrograms?.[0];
 }
 
 function wrapLines(context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number) {

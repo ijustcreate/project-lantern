@@ -233,7 +233,7 @@ fn save_bug_report(app: AppHandle, report: BugReportInput) -> Result<String, Str
     let root = bug_root(&app)?;
     let number = fs::read_dir(&root).map_err(|e| e.to_string())?
         .filter_map(Result::ok).filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false)).count() + 1;
-    let bug_id = format!("BUG-{number:04}");
+    let bug_id = format!("BUG-{number:05}");
     let dir = root.join(format!("{}-{}", bug_id, slug(&report.summary)));
     let shots = dir.join("screenshots");
     let files = dir.join("attachments");

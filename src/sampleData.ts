@@ -254,6 +254,7 @@ export const initialState: LanternState = {
       fps: 0,
       status: "offline",
       enabled: true,
+      boardProgramId: "board-spotlight",
       donorIds: [],
       customHeading: "THANK YOU",
       customSubheading: "OUR GENEROUS DONORS",

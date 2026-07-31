@@ -84,7 +84,6 @@ import {
   hydrateLanternMedia,
   loadLanternState,
   loadSharedLanternState,
-  nextRevision,
   openDisplayWindows,
   publishState,
   saveSharedLanternState,
@@ -224,6 +223,8 @@ function ControlCenter() {
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const [bugCapture, setBugCapture] = useState<BugAttachment[]>([]);
   const [bugCaptureStatus, setBugCaptureStatus] = useState("");
+  const [bugLauncherVisible, setBugLauncherVisible] = useState(() => localStorage.getItem("project-lantern-bug-launcher-visible") !== "false");
+  const [scheduleFocusId, setScheduleFocusId] = useState<string | null>(null);
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const videoBridge = useRef<DirectorVideoBridge | null>(null);
@@ -333,17 +334,29 @@ function ControlCenter() {
     window.setTimeout(() => publishState(state), 700);
   };
 
-  const publishRevision = () => {
-    updateState((current) => nextRevision(current, "Validated display-specific scene bundles"));
-  };
-
-  const restoreDonorWall = () => {
-    videoBridge.current?.stop("all");
+  const scheduleBoardNow = (screenId: ScreenId, boardId: string) => {
+    const now = new Date();
+    const start = now.getHours() * 60 + now.getMinutes();
+    const id = `schedule-${Date.now()}`;
     updateState((current) => ({
       ...current,
-      announcement: { ...current.announcement, active: false },
-      live: { ...current.live, active: false }
+      schedules: [...current.schedules, {
+        id,
+        name: `${current.boardPrograms.find((program) => program.id === boardId)?.name ?? "Donor board"} · ${current.screens[screenId]?.label ?? screenId}`,
+        target: screenId,
+        boardId,
+        contentType: "board",
+        days: [now.getDay()],
+        recurrence: "once",
+        scheduleDate: toDateInputValue(now),
+        startTime: minutesToTime(start),
+        endTime: minutesToTime(Math.min(1439, start + 60)),
+        color: "#4f63cf",
+        active: true
+      }]
     }));
+    setScheduleFocusId(id);
+    setView("schedule");
   };
 
   const toggleAnnouncement = () => {
@@ -499,14 +512,11 @@ function ControlCenter() {
           <div className="topbar-actions">
             {view === "dashboard" && (
               <>
-              <button className="header-operation-button" onClick={addDonor} title="Add a test or production donor">
-                <Plus size={16} /><span>Add donor</span>
+              <button className="header-operation-button" onClick={openDisplays} title="Open every recognition display">
+                <Monitor size={16} /><span>Open displays</span>
               </button>
-              <button className="header-operation-button" onClick={openAnnouncementComposer} title="Create a new announcement">
-                <Megaphone size={16} /><span>Announce</span>
-              </button>
-              <button className="header-operation-button" onClick={() => setView("live")} title="Open the broadcast and streaming studio">
-                <Radio size={16} /><span>Broadcast / Stream</span>
+              <button className="header-operation-button" onClick={addDisplay} title="Add a recognition display">
+                <Plus size={16} /><span>Add display</span>
               </button>
               <button className="command-button secondary help-launch-button" onClick={() => setHelpOpen(true)} title="Open the Project Lantern walkthrough">
                 <BookOpen size={18} />
@@ -514,14 +524,6 @@ function ControlCenter() {
               </button>
               </>
             )}
-            <button className="command-button secondary" onClick={restoreDonorWall} title="Stop live video and announcements, then return every display to its scheduled donor board">
-              <RotateCcw size={18} />
-              Restore boards
-            </button>
-            <button className="command-button primary" onClick={publishRevision} title="Publish the current donor, board, and schedule changes to all displays">
-              <Send size={18} />
-              Publish
-            </button>
           </div>
         </header>
         <nav className="mobile-primary-nav" aria-label="Primary navigation">
@@ -536,9 +538,7 @@ function ControlCenter() {
             state={state}
             selectedDisplayId={selectedDisplayId}
             setSelectedDisplayId={setSelectedDisplayId}
-            openDisplays={openDisplays}
             updateState={updateState}
-            addDisplay={addDisplay}
             deleteDisplay={deleteDisplay}
             identifyDisplay={identifyDisplay}
             editDisplay={(screenId) => {
@@ -546,6 +546,7 @@ function ControlCenter() {
               setView("theme");
             }}
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room")}
+            scheduleBoardNow={scheduleBoardNow}
           />
         )}
         {view === "donors" && (
@@ -565,6 +566,7 @@ function ControlCenter() {
         {view === "schedule" && <ScheduleCalendarView
           state={state}
           updateState={updateState}
+          initialSelectedId={scheduleFocusId}
           onEditDisplay={(target) => { setSelectedDisplayId(target === "all" ? firstDisplayId(state) : target); setView("theme"); }}
           onEditAnnouncement={(announcementId) => {
             const saved = state.savedAnnouncements.find((item) => item.id === announcementId);
@@ -587,13 +589,16 @@ function ControlCenter() {
           </section>
         )}
         {view === "screens" && <ScreensView state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} />}
-        {view === "revisions" && <RevisionsView state={state} updateState={updateState} />}
-        {view === "bugs" && <BugsView onNewBug={() => void openBugReport()} />}
+        {view === "revisions" && <RevisionsView />}
+        {view === "bugs" && <BugsView onNewBug={() => void openBugReport()} launcherVisible={bugLauncherVisible} onLauncherVisibleChange={(visible) => {
+          setBugLauncherVisible(visible);
+          localStorage.setItem("project-lantern-bug-launcher-visible", String(visible));
+        }} />}
         {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} />}
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
       </main>
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
-      <button className="bug-report-fab" onClick={() => void openBugReport()} title="Report a bug"><Bug size={19} /><span>Bug</span></button>
+      {bugLauncherVisible && <button className="bug-report-fab" onClick={() => void openBugReport()} title="Report a bug" aria-label="Report a bug"><Bug size={19} /></button>}
       {bugReportOpen && <BugReportPanel
         initialAttachments={bugCapture}
         captureStatus={bugCaptureStatus}
@@ -610,10 +615,17 @@ type BugAttachment = { name: string; dataUrl: string };
 type BugStatus = "open" | "in-progress" | "ready-for-test" | "verified" | "closed";
 type BugEvidence = { name: string; dataUrl?: string; path?: string; mimeType?: string };
 type AgentWorkEntry = { at: string; author: string; kind: "analysis" | "proposal" | "change" | "test" | "handoff"; note: string; replyTo?: string };
-function bugEvidenceImageSource(evidence: BugEvidence) {
+function displayBugId(bugId: string) {
+  const match = bugId.match(/^BUG-(\d+)$/i);
+  return match ? `BUG-${match[1].padStart(5, "0")}` : bugId;
+}
+function bugEvidenceImageSource(bugId: string, evidence: BugEvidence) {
   if (evidence.dataUrl?.startsWith("data:image/")) return evidence.dataUrl;
   if (!evidence.path || !/\.(png|jpe?g|gif|webp|bmp)$/i.test(evidence.path)) return "";
-  return isTauri() ? convertFileSrc(evidence.path) : evidence.path;
+  if (isTauri()) return convertFileSrc(evidence.path);
+  const fileName = evidence.path.split(/[\\/]/).pop() ?? evidence.name;
+  const evidenceBase = !BUG_API_ENDPOINT || BUG_API_ENDPOINT === "/__lantern/bugs" ? "/__lantern/evidence" : `${BUG_API_ENDPOINT}/evidence`;
+  return `${evidenceBase}/${encodeURIComponent(bugId)}/${encodeURIComponent(fileName)}`;
 }
 type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
@@ -757,8 +769,8 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
       } else {
         const bugs = readWebBugs();
         const now = new Date().toISOString();
-        const randomDigits = crypto.getRandomValues(new Uint32Array(1))[0].toString().padStart(10, "0").slice(-10);
-        const bugId = `BUG-${randomDigits}`;
+        const highestBugNumber = bugs.reduce((highest, bug) => Math.max(highest, Number(bug.bugId.match(/\d+/)?.[0] ?? 0)), 0);
+        const bugId = `BUG-${String(highestBugNumber + 1).padStart(5, "0")}`;
         const record: BugRecord = { bugId, summary, details, fixTips, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
         bugs.unshift(record);
         writeWebBugs(bugs);
@@ -968,7 +980,7 @@ function EvidenceViewer({ bugId, evidence, onClose }: { bugId: string; evidence:
   </section>, document.body);
 }
 
-function BugsView({ onNewBug }: { onNewBug: () => void }) {
+function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNewBug: () => void; launcherVisible: boolean; onLauncherVisibleChange: (visible: boolean) => void }) {
   const [bugs, setBugs] = useState<BugRecord[]>([]);
   const [selected, setSelected] = useState<BugRecord | null>(null);
   const [viewingEvidence, setViewingEvidence] = useState<BugEvidence | null>(null);
@@ -1105,12 +1117,12 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
   return <section className="bugs-page">
     <div className="bugs-toolbar">
       <div><h2>Bug catalogue</h2><p>Track reports from discovery through verification.</p></div>
-      <div><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") addUser(); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
+      <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") addUser(); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
     </div>
     <div className="bug-metrics"><article><Bug /><span><b>{counts.open}</b>Open</span></article><article><BadgeCheck /><span><b>{counts.testing}</b>Ready for test</span></article><article><CheckCircle2 /><span><b>{counts.closed}</b>Verified / closed</span></article></div>
     <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status"><button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button>{(["open", "in-progress", "ready-for-test", "verified", "closed"] as const).map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{value.replace(/-/g, " ")}</button>)}</div><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div>
     <div className="bugs-layout" style={{ gridTemplateColumns: `${listWidth}fr 8px ${100 - listWidth}fr` }}>
-      <div className="bug-list">{visible.map((bug) => <button className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId} onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{bug.bugId} · {bug.status.replace(/-/g, " ")}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span><ChevronRight size={17} /></button>)}{!visible.length && <div className="bugs-empty"><Bug size={28} /><strong>No bugs here</strong><span>New reports will appear in this catalogue.</span></div>}</div>
+      <div className="bug-list">{visible.map((bug) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>)}{!visible.length && <div className="bugs-empty"><Bug size={28} /><strong>No bugs here</strong><span>New reports will appear in this catalogue.</span></div>}</div>
       <div className="bugs-splitter" role="separator" aria-label="Resize bug list and selected bug" onPointerDown={(event) => {
         const container = event.currentTarget.parentElement;
         if (!container) return;
@@ -1120,13 +1132,12 @@ function BugsView({ onNewBug }: { onNewBug: () => void }) {
       }}><GripVertical size={15} /></div>
       <aside className="bug-detail">{selected ? <>
         <div className="bug-detail-scroll">
-          <div className="bug-detail-head"><span>Selected bug · {selected.bugId}</span><button className="icon-button" onClick={() => setSelected(null)}><X size={16} /></button></div>
+          <div className="bug-detail-head"><span>Selected bug · {displayBugId(selected.bugId)}</span><button className="icon-button" onClick={() => setSelected(null)}><X size={16} /></button></div>
           <label className="field"><span>Summary</span><input value={selected.summary} onChange={(e) => setSelected({ ...selected, summary: e.target.value })} /></label>
-          <label className="field"><span>Status</span><select value={selected.status} onChange={(e) => setSelected({ ...selected, status: e.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select></label>
           <label className="field"><span>Details</span><textarea value={selected.details} onChange={(e) => setSelected({ ...selected, details: e.target.value })} /></label>
           <label className="field"><span>Fix / test notes</span><textarea value={selected.fixTips} onChange={(e) => setSelected({ ...selected, fixTips: e.target.value })} /></label>
           <div className="bug-detail-evidence"><strong>Evidence</strong><div>{selected.evidence?.map((item, i) => {
-            const imageSource = bugEvidenceImageSource(item);
+            const imageSource = bugEvidenceImageSource(selected.bugId, item);
             return <button type="button" key={i} className={imageSource ? "evidence-thumbnail" : ""} onClick={() => setViewingEvidence(item)}>{imageSource ? <><img src={imageSource} alt="" /><span>{item.name}</span></> : <><ImageIcon size={15} /><span>{item.path ?? item.name}</span></>}</button>;
           })}{!selected.evidence?.length && selected.attachments.map((name) => <span key={name}><ImageIcon size={15} />{name}</span>)}</div></div>
           <div className="agent-work-log">
@@ -1318,28 +1329,27 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
 
 function Dashboard({
   state,
-  openDisplays,
   updateState,
-  addDisplay,
   deleteDisplay,
   identifyDisplay,
   editDisplay,
-  editRoomCamera
+  editRoomCamera,
+  scheduleBoardNow
 }: {
   state: LanternState;
   selectedDisplayId: ScreenId;
   setSelectedDisplayId: (screenId: ScreenId) => void;
-  openDisplays: () => void;
   updateState: (updater: (current: LanternState) => LanternState) => void;
-  addDisplay: () => void;
   deleteDisplay: (screenId: ScreenId) => void;
   identifyDisplay: (screenId: ScreenId) => void;
   editDisplay: (screenId: ScreenId) => void;
   editRoomCamera: (screenId: ScreenId) => void;
+  scheduleBoardNow: (screenId: ScreenId, boardId: string) => void;
 }) {
   const displays = Object.values(state.screens);
   const [preview3d, setPreview3d] = useState<Record<string, boolean>>({});
   const [previewReset, setPreviewReset] = useState<Record<string, number>>({});
+  const [undimmedDisplays, setUndimmedDisplays] = useState<Record<string, boolean>>({});
   const previewGridClass = displays.length === 1
     ? "single"
     : displays.length === 2
@@ -1350,13 +1360,11 @@ function Dashboard({
     <section className="dashboard-grid">
       <div className="workband">
         <div className="preview-stage">
-          <div className="dashboard-display-commandbar">
-            <div><strong>{displays.length} display{displays.length === 1 ? "" : "s"}</strong><span>Manage, preview, and open every recognition display.</span></div>
-            <div className="button-row"><button className="command-button secondary compact" onClick={openDisplays}><Monitor size={16} /> Open displays</button><button className="command-button primary compact" onClick={addDisplay}><Plus size={16} /> Add display</button></div>
-          </div>
           <div className={`dashboard-display-grid ${previewGridClass}`} data-display-count={displays.length}>
             {displays.map((screen) => {
               const activeBoard = resolveActiveBoardProgram(state, screen.id);
+              const noScheduledBoard = !resolveCurrentBoardSchedule(state, screen.id);
+              const previewDimmed = noScheduledBoard && !undimmedDisplays[screen.id];
               const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
               return (
               <article className="dashboard-display-tile" key={screen.id}>
@@ -1365,13 +1373,15 @@ function Dashboard({
                     <div className="dashboard-display-heading">
                       <strong>{screen.label}</strong>
                       <span className="dashboard-assignment-pill board" title={`Active board: ${activeBoard?.name ?? "No board assigned"}`}>Board · {activeBoard?.name ?? "None"}</span>
+                      {noScheduledBoard && <span className="dashboard-assignment-pill unscheduled">No scheduled board</span>}
                       {liveMessage && <span className="dashboard-assignment-pill live" title={`Live scheduled message: ${liveMessage.title || "Untitled message"}`}>Live · {liveMessage.title || "Message"}</span>}
                     </div>
                     <span>{screen.orientation} · {screen.resolution}</span>
                   </div>
-                  <div className="dashboard-display-status"><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
+                  <div className="dashboard-display-status">{noScheduledBoard && activeBoard && <button className="command-button secondary compact dashboard-schedule-now" onClick={() => scheduleBoardNow(screen.id, activeBoard.id)}><CalendarDays size={15} /> Add schedule</button>}<span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
-                <div className={`dashboard-display-preview ${orientationClass(screen)} mode-${preview3d[screen.id] ? "3d" : "2d"}`}>
+                <div className={`dashboard-display-preview ${orientationClass(screen)} mode-${preview3d[screen.id] ? "3d" : "2d"}${previewDimmed ? " dimmed" : ""}`}>
+                  {noScheduledBoard && <button type="button" className={`preview-dim-toggle${previewDimmed ? "" : " active"}`} onClick={() => setUndimmedDisplays((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={previewDimmed ? "Show this unscheduled preview at full brightness" : "Dim this unscheduled preview"}><Eye size={15} /></button>}
                   <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
                   <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
                   <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
@@ -4366,10 +4376,12 @@ function ScreensView({
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const [roomScreenId, setRoomScreenId] = useState<ScreenId | null>(null);
   const [roomStream, setRoomStream] = useState<MediaStream | null>(null);
-  const [roomWindow, setRoomWindow] = useState<Window | null>(null);
   const [roomMuted, setRoomMuted] = useState(false);
+  const [editorPosition, setEditorPosition] = useState({ x: Math.max(8, window.innerWidth - 790), y: 72 });
+  const [roomViewPosition, setRoomViewPosition] = useState({ x: 48, y: 88 });
+  const editorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+  const roomViewDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const roomStreamRef = useRef<MediaStream | null>(null);
-  const roomWindowRef = useRef<Window | null>(null);
   const editingScreen = editingId ? state.screens[editingId] : null;
   const screens = Object.values(state.screens);
   const pageSize = 4;
@@ -4471,12 +4483,10 @@ function ScreensView({
     void navigator.mediaDevices?.enumerateDevices().then(setMediaDevices).catch(() => setMediaDevices([]));
     return () => {
       roomStreamRef.current?.getTracks().forEach((track) => track.stop());
-      if (roomWindowRef.current && !roomWindowRef.current.closed) roomWindowRef.current.close();
     };
   }, []);
 
   useEffect(() => { roomStreamRef.current = roomStream; }, [roomStream]);
-  useEffect(() => { roomWindowRef.current = roomWindow; }, [roomWindow]);
 
   const detectRoomDevices = async () => {
     setDeviceError(null);
@@ -4493,37 +4503,11 @@ function ScreensView({
     roomStreamRef.current?.getTracks().forEach((track) => track.stop());
     roomStreamRef.current = null;
     setRoomStream(null);
-    if (roomWindowRef.current && !roomWindowRef.current.closed) roomWindowRef.current.close();
-    roomWindowRef.current = null;
-    setRoomWindow(null);
     setRoomScreenId(null);
   };
 
   const openRoomView = async (screen: DisplayProfile) => {
-    let popup = roomWindowRef.current;
-    if (!popup || popup.closed) {
-      popup = window.open("", "lantern-room-monitor", "popup=yes,width=900,height=620,resizable=yes,scrollbars=no");
-      if (!popup) {
-        setDeviceError("The browser blocked the room-view window. Allow pop-ups for 127.0.0.1 and try again.");
-        return;
-      }
-      popup.document.head.innerHTML = '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
-      popup.document.title = `${screen.label} Room View`;
-      document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => popup!.document.head.appendChild(node.cloneNode(true)));
-      popup.document.body.className = "room-view-popout-body";
-      popup.document.body.innerHTML = '<div id="lantern-room-view-root"></div>';
-      popup.addEventListener("beforeunload", () => {
-        roomStreamRef.current?.getTracks().forEach((track) => track.stop());
-        roomStreamRef.current = null;
-        setRoomStream(null);
-        setRoomWindow(null);
-        setRoomScreenId(null);
-      }, { once: true });
-      roomWindowRef.current = popup;
-      setRoomWindow(popup);
-    }
     setRoomScreenId(screen.id);
-    popup.focus();
     roomStreamRef.current?.getTracks().forEach((track) => track.stop());
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -4563,23 +4547,27 @@ function ScreensView({
     channel.close();
   };
 
-  const roomPortal = roomWindow && !roomWindow.closed && roomScreen && roomWindow.document.getElementById("lantern-room-view-root")
-    ? createPortal(
+  const roomPortal = roomScreen
+    ? <aside className="room-view-floating" style={{ left: roomViewPosition.x, top: roomViewPosition.y }}>
         <div className="room-view-shell">
-          <header className="room-view-header">
-            <div><span className={roomStream ? "live-indicator active" : "live-indicator"} /><strong>{roomScreen.label}</strong><small>Room camera</small></div>
+          <header className="room-view-header" onPointerDown={(event) => { if ((event.target as Element).closest("button, select, input")) return; roomViewDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...roomViewPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = roomViewDragRef.current; if (!drag) return; setRoomViewPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 430)), y: clamp(drag.y + event.clientY - drag.pointerY, 8, Math.max(8, window.innerHeight - 180)) }); }} onPointerUp={() => { roomViewDragRef.current = null; }} onPointerCancel={() => { roomViewDragRef.current = null; }}>
+            <div><span className={roomStream ? "live-indicator active" : "live-indicator"} /><strong>{roomScreen.label}</strong><small>Room camera · drag to move</small></div>
             <div>
               <button type="button" className={roomMuted ? "icon-button active" : "icon-button"} onClick={() => setRoomMuted((current) => !current)} title={roomMuted ? "Unmute room audio" : "Mute room audio"}>{roomMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
               <button type="button" className="icon-button" onClick={closeRoomView} title="Close room view"><X size={18} /></button>
             </div>
           </header>
+          <div className="room-view-device-controls">
+            <label><span>Camera</span><select value={roomScreen.roomVideoDeviceId ?? ""} onChange={(event) => { const roomVideoDeviceId = event.target.value || undefined; patchDisplay(roomScreen.id, { roomVideoDeviceId }); void openRoomView({ ...roomScreen, roomVideoDeviceId }); }}>{roomCameraOptions.options.map((value) => <option key={value || "default"} value={value}>{roomCameraOptions.labels[value] ?? value}</option>)}</select></label>
+            <label><span>Microphone</span><select value={roomScreen.roomAudioDeviceId ?? ""} onChange={(event) => { const roomAudioDeviceId = event.target.value || undefined; patchDisplay(roomScreen.id, { roomAudioDeviceId }); void openRoomView({ ...roomScreen, roomAudioDeviceId }); }}>{roomMicOptions.options.map((value) => <option key={value || "default"} value={value}>{roomMicOptions.labels[value] ?? value}</option>)}</select></label>
+            <button type="button" className="icon-button" onClick={() => void detectRoomDevices()} title="Detect cameras and microphones"><RefreshCcw size={16} /></button>
+          </div>
           <div className="room-view-video">
             {roomStream ? <MediaStreamVideo stream={roomStream} muted={roomMuted} /> : <div className="room-view-empty"><Camera size={34} /><strong>Room camera unavailable</strong><span>{deviceError ?? "Choose the camera assigned to this display and try again."}</span></div>}
           </div>
           <footer className="room-view-footer"><span>{roomMuted ? "Audio muted" : "Room audio on"}</span><span>{roomScreen.roomVideoDeviceId ? "Assigned camera" : "Default camera"}</span></footer>
-        </div>,
-        roomWindow.document.getElementById("lantern-room-view-root")!
-      )
+        </div>
+      </aside>
     : null;
 
   return (
@@ -4596,9 +4584,9 @@ function ScreensView({
         ))}
       </div>
       <div className="collection-footer"><span>{screens.length} configured display{screens.length === 1 ? "" : "s"}</span><Pager page={page} pageCount={pageCount} onChange={setPage} /></div>
-      {editingScreen && <aside className="screen-editor-drawer">
+      {editingScreen && <aside className="screen-editor-drawer" style={{ left: editorPosition.x, top: editorPosition.y, right: "auto", bottom: "auto" }}>
         <button className="icon-button screen-editor-close" onClick={() => setEditingId(null)} title="Close editor"><X size={18} /></button>
-        <div className="panel-heading"><div><p className="eyebrow">Display settings</p><h2>{editingScreen.label}</h2></div></div>
+        <div className="panel-heading screen-editor-drag-handle" onPointerDown={(event) => { if ((event.target as Element).closest("button, input, select")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 320)), y: clamp(drag.y + event.clientY - drag.pointerY, 8, Math.max(8, window.innerHeight - 120)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Display settings · drag to move</p><h2>{editingScreen.label}</h2></div></div>
         <EditorTabs value={editorTab} options={[["setup", "Configuration"], ["room", "Room camera"], ["names", "Assigned names"]]} onChange={(value) => setEditorTab(value as typeof editorTab)} />
         {editorTab === "setup" &&
         <div className="screen-editor-grid">
@@ -4621,7 +4609,7 @@ function ScreensView({
           <LabeledSelect label="Room microphone" info="Microphone used to hear people near this monitor." value={editingScreen.roomAudioDeviceId ?? ""} options={roomMicOptions.options} optionLabels={roomMicOptions.labels} onChange={(value) => patchDisplay(editingScreen.id, { roomAudioDeviceId: value || undefined })} />
           <label className="switch-row"><input type="checkbox" checked={editingScreen.roomAudioEnabled ?? true} onChange={(event) => patchDisplay(editingScreen.id, { roomAudioEnabled: event.target.checked })} /><Volume2 size={16} /><span>Capture room audio</span></label>
           {deviceError && <div className="device-error"><AlertTriangle size={16} /><span>{deviceError}</span></div>}
-          <button type="button" className="command-button primary" onClick={() => void openRoomView(editingScreen)}><PictureInPicture2 size={17} /> Open movable room view</button>
+          <button type="button" className="command-button primary" onClick={() => void openRoomView(editingScreen)}><PictureInPicture2 size={17} /> Open floating room view</button>
         </div>}
         {editorTab === "names" && <div className="display-roster-editor">
           <div className="display-roster-heading">
@@ -4669,11 +4657,13 @@ function ScreensView({
 function ScheduleCalendarView({
   state,
   updateState,
+  initialSelectedId,
   onEditDisplay,
   onEditAnnouncement
 }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
+  initialSelectedId?: string | null;
   onEditDisplay: (target: TargetScreen) => void;
   onEditAnnouncement: (announcementId: string) => void;
 }) {
@@ -4682,7 +4672,7 @@ function ScheduleCalendarView({
   const [compact, setCompact] = useState(() => window.innerWidth <= 760);
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [displayFilter, setDisplayFilter] = useState<TargetScreen>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [contextMenu, setContextMenu] = useState<{ id?: string; x: number; y: number; date?: Date; start?: number } | null>(null);
   const [previewEntry, setPreviewEntry] = useState<ScheduleEntry | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -4702,6 +4692,9 @@ function ScheduleCalendarView({
   const [dragPreview, setDragPreview] = useState<{ id: string; sourceDate: string; start: number; end: number; dayDelta: number } | null>(null);
   const dragPreviewRef = useRef<typeof dragPreview>(null);
   const selected = state.schedules.find((entry) => entry.id === selectedId) ?? null;
+  useEffect(() => {
+    if (initialSelectedId) setSelectedId(initialSelectedId);
+  }, [initialSelectedId]);
   const visibleMode = compact ? "agenda" : viewMode;
   const weekStart = startOfCalendarWeek(anchorDate);
   const hourHeight = clamp((window.innerHeight - 280) / 17, 20, 32);
@@ -5346,62 +5339,60 @@ function VocabularyEditor({ title, description, values, onChange }: { title: str
   );
 }
 
-function RevisionsView({ state, updateState }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void }) {
-  const [page, setPage] = useState(0);
-  const [filter, setFilter] = useState<"all" | "code" | "publish">("all");
-  const pageSize = 5;
-  const entries = [
-    ...codeChangelog.map((entry) => ({ ...entry, kind: "code" as const })),
-    ...state.revisions.map((revision) => ({
-      id: `BOARD-${String(revision.id).padStart(4, "0")}`,
-      kind: "publish" as const,
-      title: `Published board revision ${revision.id}`,
-      summary: revision.note,
-      author: revision.author,
-      createdAt: revision.publishedAt,
-      areas: ["Board content", "Display package"],
-      files: [] as string[],
-      tests: revision.portraitReady && revision.landscapeReady ? "Portrait and landscape displays ready" : "Display verification needed",
-      revisionId: revision.id
-    }))
-  ];
-  const filteredEntries = entries.filter((entry) => filter === "all" || entry.kind === filter);
-  const pageCount = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
-  const pageItems = filteredEntries.slice(page * pageSize, page * pageSize + pageSize);
-  useEffect(() => setPage(0), [filter]);
-  const restore = (revisionId: number) => {
-    updateState((current) => ({
-      ...current,
-      revision: revisionId,
-      publishedAt: new Date().toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
-      screens: Object.fromEntries(Object.entries(current.screens).map(([id, screen]) => [id, { ...screen, currentRevision: revisionId }])) as LanternState["screens"]
-    }));
-  };
+function RevisionsView() {
+  const [tag, setTag] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const entries = codeChangelog.map((entry) => ({ ...entry, kind: "code" as const }));
+  const tags = useMemo(() => Array.from(new Set(entries.flatMap((entry) => entry.areas))).sort((a, b) => a.localeCompare(b)), [entries]);
+  const filteredEntries = tag === "all" ? entries : entries.filter((entry) => entry.areas.includes(tag));
+  const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+  const githubRoot = "https://github.com/ijustcreate/project-lantern";
+  const githubFileUrl = (file: string) => `${githubRoot}/blob/main/${file.split("/").map(encodeURIComponent).join("/")}`;
 
   return (
     <section className="revision-workspace">
-      <div className="revision-hero"><div><p className="eyebrow">Version control</p><h2>Project changelog</h2><span>Code changes, reasoning, verification, and restorable board publishes in one history.</span><div className="revision-filters">{(["all", "code", "publish"] as const).map((value) => <button className={filter === value ? "active" : ""} key={value} onClick={() => setFilter(value)}>{value === "all" ? "All activity" : value === "code" ? "Code changes" : "Board publishes"}</button>)}</div></div><div className="revision-orb"><History size={24} /><strong>{entries.length}</strong><small>Changes</small></div></div>
-      <div className="revision-list github-log">
-      {pageItems.map((revision) => (
-        <article className="revision-row changelog-row" key={`${revision.kind}-${revision.id}`}>
-          <div className={`change-kind-icon ${revision.kind}`}>{revision.kind === "code" ? "<>" : <History size={15} />}</div>
-          <div className="change-main">
-            <div className="change-title"><strong>{revision.title}</strong><code>{revision.id}</code><span className={`change-badge ${revision.kind}`}>{revision.kind === "code" ? "Code" : "Publish"}</span></div>
-            <p>{revision.summary}</p>
-            <div className="change-meta"><span>{revision.author}</span><span>{revision.createdAt}</span><span>{revision.tests}</span></div>
-            <div className="change-details">
-              {revision.areas.map((area) => <span key={area}>{area}</span>)}
-              {revision.files.slice(0, 3).map((file) => <code key={file}>{file}</code>)}
-            </div>
+      <div className="revision-hero">
+        <div>
+          <p className="eyebrow">Version control</p>
+          <h2>Project changelog</h2>
+          <span>Browse code changes, implementation details, and verification history.</span>
+          <div className="revision-filters">
+            <label>Tag<select value={tag} onChange={(event) => setTag(event.target.value)}><option value="all">All tags</option>{tags.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            {tag !== "all" && <button type="button" onClick={() => setTag("all")}>Clear filter</button>}
           </div>
-          {revision.kind === "publish" ? <button className="command-button secondary" onClick={() => restore(revision.revisionId)}>
-            <RotateCcw size={18} />
-            Restore
-          </button> : <span className="change-verified"><CheckCircle2 size={15} /> Recorded</span>}
-        </article>
-      ))}
+        </div>
+        <div className="revision-orb"><History size={24} /><strong>{filteredEntries.length}</strong><small>Changes</small></div>
       </div>
-      <div className="collection-footer"><span>{filteredEntries.length} changelog entries · {codeChangelog.length} code · {state.revisions.length} published</span><Pager page={page} pageCount={pageCount} onChange={setPage} /></div>
+      <div className="revision-list github-log">
+        {filteredEntries.map((revision) => (
+          <article className="revision-row changelog-row" key={revision.id}>
+            <div className="change-kind-icon code">{"<>"}</div>
+            <button type="button" className="change-main change-open" onClick={() => setSelectedId(revision.id)} aria-label={`Open details for ${revision.title}`}>
+              <div className="change-title"><strong>{revision.title}</strong><code>{revision.id}</code></div>
+              <p>{revision.summary}</p>
+              <div className="change-meta"><span>{revision.author}</span><span>{revision.createdAt}</span><span>Open for details</span></div>
+            </button>
+            <ChevronRight size={18} className="change-open-icon" />
+          </article>
+        ))}
+        {!filteredEntries.length && <div className="revision-empty"><History size={24} /><strong>No changes match this tag</strong><button type="button" onClick={() => setTag("all")}>Show all changes</button></div>}
+      </div>
+      <div className="collection-footer"><span>{filteredEntries.length} of {entries.length} code changes</span><span>Scroll to browse the complete history</span></div>
+      {selected && createPortal(
+        <div className="modal-backdrop changelog-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}>
+          <section className="changelog-detail-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-detail-title">
+            <header><div><p className="eyebrow">Code change · {selected.id}</p><h2 id="changelog-detail-title">{selected.title}</h2></div><button type="button" className="icon-button" onClick={() => setSelectedId(null)} title="Close"><X size={18} /></button></header>
+            <div className="changelog-detail-body">
+              <section><h3>What changed</h3><p>{selected.summary}</p></section>
+              <section><h3>Verification</h3><p>{selected.tests}</p></section>
+              <section><h3>Tags</h3><div className="changelog-detail-tags">{selected.areas.map((area) => <button type="button" key={area} onClick={() => { setTag(area); setSelectedId(null); }}>{area}</button>)}</div></section>
+              <section><h3>Changed files</h3><div className="changelog-file-links">{selected.files.map((file) => <a key={file} href={githubFileUrl(file)} target="_blank" rel="noreferrer"><code>{file}</code><ExternalLink size={14} /></a>)}</div></section>
+            </div>
+            <footer><span>{selected.author} · {selected.createdAt}</span><a className="command-button secondary" href={`${githubRoot}/commits/main`} target="_blank" rel="noreferrer"><ExternalLink size={15} /> GitHub history</a></footer>
+          </section>
+        </div>,
+        document.body
+      )}
     </section>
   );
 }
@@ -5939,9 +5930,9 @@ function scheduleMatchesDate(entry: ScheduleEntry, now: Date) {
   return entry.days.includes(now.getDay());
 }
 
-function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now = new Date()) {
+function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, now = new Date()) {
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const scheduled = state.schedules?.find((entry) =>
+  return state.schedules?.find((entry) =>
     entry.contentType !== "announcement"
     && entry.active
     && scheduleMatchesDate(entry, now)
@@ -5949,12 +5940,44 @@ function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now 
     && time >= entry.startTime
     && time < entry.endTime
   );
+}
+
+function latestPastBoardSchedule(state: LanternState, screenId: ScreenId, now: Date) {
+  let latest: { entry: ScheduleEntry; endedAt: number } | null = null;
+  for (const entry of state.schedules ?? []) {
+    if (entry.contentType === "announcement" || !entry.active || (entry.target !== "all" && entry.target !== screenId)) continue;
+    const candidateDates: Date[] = [];
+    if (entry.recurrence === "once" && entry.scheduleDate) {
+      const [year, month, day] = entry.scheduleDate.split("-").map(Number);
+      candidateDates.push(new Date(year, month - 1, day));
+    } else {
+      for (let offset = 0; offset <= 7; offset += 1) {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+        if (scheduleMatchesDate(entry, date)) {
+          candidateDates.push(date);
+          break;
+        }
+      }
+    }
+    for (const date of candidateDates) {
+      const endMinutes = timeToMinutes(entry.endTime);
+      date.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+      const endedAt = date.getTime();
+      if (endedAt <= now.getTime() && (!latest || endedAt > latest.endedAt)) latest = { entry, endedAt };
+    }
+  }
+  return latest?.entry;
+}
+
+function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now = new Date()) {
+  const scheduled = resolveCurrentBoardSchedule(state, screenId, now) ?? latestPastBoardSchedule(state, screenId, now);
   if (scheduled) {
     const program = state.boardPrograms.find((candidate) => candidate.id === scheduled.boardId && candidate.active);
     if (program) return program;
   }
   const assignedId = state.screens[screenId]?.boardProgramId;
   return state.boardPrograms.find((candidate) => candidate.id === assignedId)
+    ?? state.boardPrograms.find((candidate) => candidate.active && candidate.orientation === state.screens[screenId]?.orientation)
     ?? state.boardPrograms[0];
 }
 
