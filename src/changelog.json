@@ -1,5 +1,26 @@
 [
   {
+    "id": "DEV-0087",
+    "title": "Complete light theme across workspaces",
+    "summary": "Applied light-theme surfaces, borders, controls, and readable text across Dashboard, Donors, Schedule, Announcements, Broadcast, Revisions, and Bugs while preserving dark recognition-display and camera preview stages.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:34 AM",
+    "areas": [
+      "Light theme",
+      "Dashboard",
+      "Donors",
+      "Schedule",
+      "Announcements",
+      "Broadcast",
+      "Revisions",
+      "Bugs"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright visual verification at 1440x900 across Dashboard, Donors, Schedule, Announcements, Broadcast, Revisions, and Bugs; git diff --check"
+  },
+  {
     "id": "DEV-0086",
     "title": "Require scheduled content to target one display",
     "summary": "Removed the redundant edit action from the already-open event editor and removed All displays from board and announcement schedule targets. New and duplicated events now resolve to a specific display.",

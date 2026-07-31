@@ -9843,6 +9843,280 @@ textarea:focus-visible,
 .room-view-device-controls label > span { color: #91a6b5; font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .room-view-device-controls select { width: 100%; min-width: 0; height: 32px; }
 
+/* Complete light-theme coverage for operational workspaces */
+.theme-light .form-panel,
+.theme-light .ops-panel,
+.theme-light .preview-stage,
+.theme-light .studio-sidebar,
+.theme-light .properties-panel,
+.theme-light .screen-card,
+.theme-light .week-calendar,
+.theme-light .calendar-inspector,
+.theme-light .section-commandbar,
+.theme-light .calendar-commandbar,
+.theme-light .revision-row,
+.theme-light .studio-preview-bar,
+.theme-light .announcement-preview-card,
+.theme-light .revision-hero,
+.theme-light .dashboard-display-tile,
+.theme-light .donor-card,
+.theme-light .schedule-commandbar,
+.theme-light .schedule-status-strip,
+.theme-light .schedule-event-editor,
+.theme-light .bug-list,
+.theme-light .bug-detail,
+.theme-light .bug-metrics article {
+  border-color: rgba(45, 64, 94, .14);
+  color: #26334a;
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 10px 28px rgba(44, 62, 88, .09), inset 0 1px 0 rgba(255, 255, 255, .86);
+}
+
+.theme-light .saved-announcement-panel,
+.theme-light .live-inspector {
+  border-color: rgba(45, 64, 94, .14);
+  color: #26334a;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 10px 28px rgba(44, 62, 88, .09);
+}
+.theme-light .saved-announcement-panel > summary > span { color: #087f99; }
+.theme-light .saved-announcement-panel > summary > strong { color: #172033; }
+.theme-light .saved-announcement-panel > summary > svg { color: #69758b; }
+.theme-light .saved-announcement-list { border-top-color: rgba(45, 64, 94, .12); }
+.theme-light .saved-announcement-card {
+  border-color: rgba(45, 64, 94, .12);
+  background: #f5f7fb;
+}
+.theme-light .saved-announcement-card:hover,
+.theme-light .saved-announcement-card.selected {
+  border-color: rgba(0, 127, 167, .28);
+  background: #edf7f9;
+}
+.theme-light .saved-announcement-card strong { color: #172033; }
+.theme-light .saved-announcement-card p { color: #536179; }
+.theme-light .saved-announcement-card small { color: #748096; }
+
+.theme-light .field > span,
+.theme-light .slider-field > span:first-child,
+.theme-light .composer-heading small,
+.theme-light .composer-section header small,
+.theme-light .composer-section summary small,
+.theme-light .dashboard-display-commandbar span,
+.theme-light .dashboard-display-label > div:first-child > span,
+.theme-light .donor-main span,
+.theme-light .donor-main small,
+.theme-light .bugs-toolbar p,
+.theme-light .bug-row small,
+.theme-light .bug-row em,
+.theme-light .bug-detail-head,
+.theme-light .change-meta span,
+.theme-light .change-main > p,
+.theme-light .revision-hero > div > span,
+.theme-light .revision-orb small {
+  color: #69758b;
+}
+
+/* Dashboard: lighten chrome while preserving the actual display artwork. */
+.theme-light .dashboard-display-commandbar,
+.theme-light .dashboard-display-label,
+.theme-light .dashboard-display-summary,
+.theme-light .dashboard-display-actions {
+  border-color: rgba(45, 64, 94, .12);
+  color: #26334a;
+  background: #f6f8fc;
+}
+.theme-light .dashboard-display-commandbar strong,
+.theme-light .dashboard-display-heading > strong,
+.theme-light .dashboard-display-summary strong { color: #172033; }
+.theme-light .dashboard-display-heading .dashboard-assignment-pill {
+  border-color: rgba(0, 127, 167, .22);
+  color: #176c7c;
+  background: #e7f5f7;
+}
+.theme-light .dashboard-display-summary span {
+  border-color: rgba(45, 64, 94, .12);
+  color: #5f6c82;
+  background: #edf1f7;
+}
+.theme-light .dashboard-display-preview,
+.theme-light .dashboard-display-preview::before {
+  background-color: #050d17;
+}
+
+/* Donor catalogue */
+.theme-light .donor-section-heading,
+.theme-light .donor-groups-row,
+.theme-light .donor-card-list {
+  border-color: rgba(45, 64, 94, .12);
+  color: #26334a;
+  background: rgba(255, 255, 255, .72);
+}
+.theme-light .donor-card { border-bottom-color: rgba(45, 64, 94, .1); }
+.theme-light .donor-card:hover,
+.theme-light .donor-card.editing { border-color: rgba(0, 127, 167, .28); background: #f2f8fa; }
+.theme-light .donor-main strong { color: #172033; }
+.theme-light .donor-display-toggle,
+.theme-light .tag-chip {
+  border-color: rgba(0, 117, 130, .22);
+  color: #236574;
+  background: #eaf5f5;
+}
+.theme-light .state-dot { color: #176f51; }
+
+/* Calendar and schedule editor */
+.theme-light .schedule-navigation > strong,
+.theme-light .calendar-nav strong,
+.theme-light .week-header strong { color: #26334a; }
+.theme-light .calendar-view-switch,
+.theme-light .schedule-live-summary,
+.theme-light .schedule-next-summary,
+.theme-light .schedule-type-legend {
+  border-color: rgba(45, 64, 94, .12);
+  color: #68758a;
+  background: #f3f6fa;
+}
+.theme-light .schedule-view-container,
+.theme-light .week-scroll,
+.theme-light .week-columns,
+.theme-light .week-day-column {
+  border-color: rgba(45, 64, 94, .1);
+  background-color: rgba(255, 255, 255, .82);
+}
+.theme-light .week-header { border-bottom-color: rgba(45, 64, 94, .12); background: #f2f5f9; }
+.theme-light .week-header > div,
+.theme-light .week-day-column { border-left-color: rgba(45, 64, 94, .1); }
+.theme-light .week-header span,
+.theme-light .time-gutter span { color: #768198; }
+.theme-light .week-day-column > i { background: rgba(45, 64, 94, .08); }
+.theme-light .week-day-column.is-today { background-color: rgba(0, 148, 181, .055); }
+.theme-light .schedule-event-editor-header {
+  border-bottom-color: rgba(45, 64, 94, .12);
+  background: #f3f6fa;
+}
+.theme-light .schedule-quick-actions,
+.theme-light .schedule-color-row {
+  border-color: rgba(45, 64, 94, .12);
+  background: #f6f8fb;
+}
+.theme-light .schedule-days button { border-color: rgba(45, 64, 94, .16); color: #5e6a80; background: #eef2f7; }
+.theme-light .schedule-days button.selected { color: #fff; background: linear-gradient(135deg, #6544c2, #a642bc); }
+
+/* Announcement composer; display previews intentionally remain dark. */
+.theme-light .announcement-layout.refined > .form-panel,
+.theme-light .composer-section,
+.theme-light .announcement-library-row,
+.theme-light .announcement-character-control,
+.theme-light .optional-image-control,
+.theme-light .announcement-character-editor,
+.theme-light .character-asset-status {
+  border-color: rgba(45, 64, 94, .13);
+  color: #26334a;
+  background: #f7f9fc;
+}
+.theme-light .announcement-library-row { background: #eef4f8; }
+.theme-light .composer-section header strong,
+.theme-light .composer-section summary strong,
+.theme-light .announcement-character-control strong,
+.theme-light .optional-image-control strong,
+.theme-light .announcement-character-heading > div:first-child strong,
+.theme-light .character-asset-status strong { color: #243149; }
+.theme-light .composer-actions {
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .98) 24%);
+}
+.theme-light .announcement-preview-card,
+.theme-light .announcement-monitor,
+.theme-light .announcement-monitor-surface { color: #eaf1f5; background-color: #06101b; }
+
+/* Broadcast controls are light; program and camera preview stages stay dark. */
+.theme-light .live-setup-panel,
+.theme-light .live-toolbox,
+.theme-light .direct-frame-controls,
+.theme-light .recording-panel,
+.theme-light .recording-item,
+.theme-light .source-connection-card {
+  border-color: rgba(45, 64, 94, .14);
+  color: #26334a;
+  background: #f7f9fc;
+}
+.theme-light .direct-live-stage-shell {
+  border-color: rgba(45, 64, 94, .18);
+  color: #617087;
+  background: #e9eef4;
+}
+.theme-light .direct-stage-toolbar { color: #637188; }
+.theme-light .direct-stage-toolbar strong { color: #087b91; }
+.theme-light .direct-live-stage,
+.theme-light .direct-stage-board,
+.theme-light .direct-live-content,
+.theme-light .live-positioned-preview,
+.theme-light .live-preview-box { color: #eaf1f5; background-color: #06101b; }
+.theme-light .direct-live-stage strong,
+.theme-light .direct-stage-board strong,
+.theme-light .direct-live-content strong,
+.theme-light .live-positioned-preview strong,
+.theme-light .live-preview-box strong,
+.theme-light .dashboard-display-preview strong,
+.theme-light .announcement-monitor strong { color: inherit; }
+
+/* Revision history */
+.theme-light .revision-hero { background: linear-gradient(135deg, #fff, #eef4fa); }
+.theme-light .revision-hero::after { border-color: rgba(0, 127, 167, .14); box-shadow: 0 0 0 24px rgba(101, 68, 194, .035), 0 0 0 54px rgba(0, 127, 167, .025); }
+.theme-light .revision-hero h2,
+.theme-light .revision-orb strong,
+.theme-light .revision-row strong,
+.theme-light .change-title > strong { color: #172033; }
+.theme-light .revision-orb {
+  border-color: rgba(0, 127, 167, .2);
+  background: linear-gradient(135deg, #eef0fb, #e7f4f6);
+  box-shadow: none;
+}
+.theme-light .changelog-row { border-color: rgba(45, 64, 94, .13); background: rgba(255, 255, 255, .9); }
+.theme-light .change-kind-icon { color: #087e80; background: #e9f5f4; }
+.theme-light .change-title > code,
+.theme-light .change-details code { color: #58657a; background: #edf1f6; }
+.theme-light .change-details span { color: #17716e; background: #e7f4f2; }
+.theme-light .revision-filters label { color: #5e6b81; }
+.theme-light .revision-filters button { color: #5f6b80; background: #f7f9fc; }
+.theme-light .revision-filters button.active { color: #076f89; background: #e7f4f7; }
+.theme-light .changelog-detail-modal { border-color: rgba(0, 127, 167, .22); color: #26334a; background: #fff; box-shadow: 0 24px 70px rgba(43, 57, 78, .22); }
+.theme-light .changelog-detail-modal > header,
+.theme-light .changelog-detail-modal > footer,
+.theme-light .changelog-detail-body section { border-color: rgba(45, 64, 94, .12); background: #f7f9fc; }
+.theme-light .changelog-detail-body h3 { color: #087b91; }
+.theme-light .changelog-detail-body p { color: #4d5a70; }
+.theme-light .changelog-file-links a { border-color: rgba(45, 64, 94, .13); color: #425069; background: #fff; }
+
+/* Bug catalogue */
+.theme-light .bugs-page { color: #26334a; }
+.theme-light .bug-user-picker,
+.theme-light .bug-launcher-toggle,
+.theme-light .bug-comment-tabs,
+.theme-light .bug-comment-composer {
+  border-color: rgba(45, 64, 94, .14);
+  color: #526077;
+  background: #f4f7fb;
+}
+.theme-light .bug-metrics article b,
+.theme-light .bug-row strong,
+.theme-light .bugs-empty strong { color: #172033; }
+.theme-light .bug-metrics span { color: #68758a; }
+.theme-light .bug-row { border-bottom-color: rgba(45, 64, 94, .1); color: #26334a; }
+.theme-light .bug-row:hover,
+.theme-light .bug-row.active { background: #edf3f8; }
+.theme-light .bug-row-status { border-color: rgba(45, 64, 94, .18); color: #34425a; background: #fff; }
+.theme-light .bug-detail-actions {
+  border-top-color: rgba(45, 64, 94, .12);
+  background: linear-gradient(180deg, rgba(247, 249, 252, .88), #f7f9fc 34%);
+  box-shadow: 0 -8px 20px rgba(44, 62, 88, .08);
+}
+.theme-light .bug-detail-evidence button { border-color: rgba(45, 64, 94, .14); color: #526077; background: #f4f7fb; }
+.theme-light .agent-work-log article { color: #4d5a70; background: #f2f0fb; }
+.theme-light .bug-report-panel { color: #26334a; background: #fff; box-shadow: 0 24px 70px rgba(43, 57, 78, .24); }
+.theme-light .bug-report-dragbar,
+.theme-light .bug-report-footer { border-color: rgba(45, 64, 94, .12); background: #f4f7fb; }
+.theme-light .bug-tag-composer,
+.theme-light .bug-thumbnails { border-color: rgba(45, 64, 94, .18); background: #f7f9fc; }
+
 @media (min-width: 761px) {
   .mobile-preview-label { display: none; }
 }
