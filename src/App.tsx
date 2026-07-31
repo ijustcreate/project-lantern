@@ -77,6 +77,7 @@ import {
 import { BabylonDonorWall } from "./display/BabylonDonorWall";
 import { ChromaVideo } from "./components/ChromaVideo";
 import {
+  canWriteSharedLanternState,
   createHostChannel,
   deleteLanternMedia,
   enableSharedStatePersistence,
@@ -240,10 +241,10 @@ function ControlCenter() {
         // The local browser copy remains usable whenever the shared service is unavailable.
       }
       const hydrated = await hydrateLanternMedia(loaded);
-      const sharedImages = await shareLanternImages(hydrated);
+      const sharedImages = canWriteSharedLanternState() ? await shareLanternImages(hydrated) : hydrated;
       if (!mounted) return;
       setState(sharedImages);
-      enableSharedStatePersistence();
+      if (canWriteSharedLanternState()) enableSharedStatePersistence();
       publishState(sharedImages);
     })();
     return () => { mounted = false; };
@@ -2351,7 +2352,7 @@ function ThemeStudio({
     setSaveStatus("saving");
     try {
       publishState(state);
-      await saveSharedLanternState(state);
+      if (canWriteSharedLanternState()) await saveSharedLanternState(state);
       setSaveStatus("saved");
       window.setTimeout(() => setSaveStatus("idle"), 2600);
     } catch {
@@ -4742,7 +4743,7 @@ function ScheduleCalendarView({
   };
   const duplicateEntry = (entry: ScheduleEntry) => {
     const id = `schedule-${Date.now()}`;
-    updateState((current) => ({ ...current, schedules: [...current.schedules, { ...entry, id, name: `${entry.name} copy` }] }));
+    updateState((current) => ({ ...current, schedules: [...current.schedules, { ...entry, id, name: `${entry.name} copy`, target: entry.target === "all" ? firstDisplayId(current) : entry.target }] }));
     setSelectedId(id);
   };
   const addEntry = (contentType: "board" | "announcement", slot?: { date: Date; start: number }) => {
@@ -4751,7 +4752,7 @@ function ScheduleCalendarView({
     updateState((current) => ({ ...current, schedules: [...current.schedules, {
       id,
       name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : "New scheduled board",
-      target: displayFilter,
+      target: displayFilter === "all" ? firstDisplayId(current) : displayFilter,
       boardId: state.boardPrograms[0]?.id ?? "board-classic",
       contentType,
       announcementId: contentType === "announcement" ? saved?.id : undefined,
@@ -4867,7 +4868,6 @@ function ScheduleCalendarView({
   };
   const quickActions = (entry: ScheduleEntry) => <div className="schedule-quick-actions" aria-label={`Actions for ${entry.name}`}>
     <button type="button" title="Preview on display" onClick={(event) => { event.stopPropagation(); setPreviewEntry(entry); }}><Eye size={13} /></button>
-    <button type="button" title="Edit" onClick={(event) => { event.stopPropagation(); openEditor(entry.id, event); }}><Pencil size={13} /></button>
     <button type="button" title="Duplicate" onClick={(event) => { event.stopPropagation(); duplicateEntry(entry); }}><Plus size={13} /></button>
     <button type="button" title={entry.active ? "Disable" : "Enable"} onClick={(event) => { event.stopPropagation(); patchEntry(entry.id, { active: !entry.active }); }}>{entry.active ? <Power size={13} /> : <Play size={13} />}</button>
     <button type="button" className="danger" title="Delete" onClick={(event) => { event.stopPropagation(); removeEntry(entry.id); }}><Trash2 size={13} /></button>
@@ -4941,7 +4941,7 @@ function ScheduleCalendarView({
       <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - 150)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2 id="schedule-event-editor-title">Edit event</h2></div><button type="button" className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><X size={17} /></button></header>
       <div className="schedule-event-editor-body">{quickActions(selected)}<LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div><LabeledSelect label="Content" info="Choose the scheduled content type." value={selected.contentType ?? "board"} options={["board", "announcement"]} optionLabels={{ board: "Donor board", announcement: "Saved announcement" }} onChange={(value) => patchEntry(selected.id, { contentType: value as "board" | "announcement", announcementId: value === "announcement" ? selected.announcementId ?? state.savedAnnouncements[0]?.id : undefined })} />
         {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
-        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as TargetScreen; patchEntry(selected.id, { target: nextTarget }); if (nextTarget !== "all") setDisplayFilter(nextTarget); }} /><div className="schedule-color-row"><label className="field"><span>Calendar color</span><input type="color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label>{selected.contentType !== "announcement" && <button type="button" className="command-button secondary compact" onClick={() => onEditDisplay(selected.target)}><Palette size={14} /> Edit display</button>}</div><div className="field"><span>Repeats</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => patchEntry(selected.id, { days: selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day] })}>{label.slice(0, 1)}</button>; })}</div></div><label className="switch-row"><input type="checkbox" checked={selected.active} onChange={(event) => patchEntry(selected.id, { active: event.target.checked })} /><span>Active on displays</span></label>
+        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="schedule-color-row"><label className="field"><span>Calendar color</span><input type="color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label>{selected.contentType !== "announcement" && <button type="button" className="command-button secondary compact" onClick={() => onEditDisplay(selected.target === "all" ? firstDisplayId(state) : selected.target)}><Palette size={14} /> Edit display</button>}</div><div className="field"><span>Repeats</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => patchEntry(selected.id, { days: selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day] })}>{label.slice(0, 1)}</button>; })}</div></div><label className="switch-row"><input type="checkbox" checked={selected.active} onChange={(event) => patchEntry(selected.id, { active: event.target.checked })} /><span>Active on displays</span></label>
       </div>
     </aside>, document.body)}
     {contextMenu && createPortal(<div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">{contextMenu.id ? (() => { const entry = state.schedules.find((item) => item.id === contextMenu.id); return entry ? <><button type="button" onClick={() => { setSelectedId(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button><button type="button" onClick={() => { setPreviewEntry(entry); setContextMenu(null); }}><Eye size={14} /> Preview on display</button>{entry.contentType === "announcement" ? <button type="button" disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button type="button" onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button type="button" onClick={() => { duplicateEntry(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button type="button" className="danger" onClick={() => { removeEntry(entry.id); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></> : null; })() : <><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("board", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Plus size={14} /> Add board here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("announcement", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Megaphone size={14} /> Add announcement here</button></>}</div>, document.body)}
@@ -5043,7 +5043,7 @@ function ScheduleView({
       schedules: [...current.schedules, {
         id,
         name: contentType === "announcement" ? savedAnnouncement?.title ?? "Scheduled announcement" : "New scheduled board",
-        target: "all",
+        target: firstDisplayId(current),
         boardId,
         contentType,
         announcementId: contentType === "announcement" ? savedAnnouncement?.id : undefined,
@@ -5226,7 +5226,7 @@ function ScheduleView({
               }} />
               <button type="button" className="command-button secondary schedule-edit-content" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={15} /> Edit full announcement</button>
             </> : <div className="schedule-empty-library"><Megaphone size={18} /><span>Create and save an announcement before scheduling it.</span></div> : <LabeledSelect label="Board" info="Donor board shown during this event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(value) => patchEntry(selected.id, { boardId: value })} />}
-            <LabeledSelect label="Display" info="Target display for this event." value={selected.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(value) => patchEntry(selected.id, { target: value as TargetScreen })} />
+            <LabeledSelect label="Display" info="Target display for this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(value) => patchEntry(selected.id, { target: value as ScreenId })} />
             <div className="schedule-color-row"><label className="field"><span>Calendar color</span><input type="color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label>{selected.contentType !== "announcement" && <button className="command-button secondary" onClick={() => onEditDisplay(selected.target)}><Palette size={15} /> Edit display</button>}</div>
             {selected.contentType !== "announcement" && <LabeledInput label="Message" info="Optional message shown with the scheduled board." value={selected.message ?? ""} onChange={(value) => patchEntry(selected.id, { message: value })} />}
             <div className="field"><span>Repeats</span><div className="schedule-days">{days.map(([day, label]) => <button className={selected.days.includes(day) ? "selected" : ""} key={day} onClick={() => toggleDay(selected, day)}>{label.slice(0, 1)}</button>)}</div></div>
@@ -5856,6 +5856,10 @@ function orientationClass(screen: DisplayProfile) {
 
 function targetOptions(state: LanternState) {
   return ["all", ...Object.keys(state.screens)];
+}
+
+function scheduleTargetOptions(state: LanternState) {
+  return Object.keys(state.screens);
 }
 
 function targetOptionLabels(state: LanternState) {

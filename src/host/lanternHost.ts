@@ -7,10 +7,13 @@ const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
 const DEMO_DATA_VERSION = "5";
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
-const configuredServiceEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
+const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
   || (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
-  || (import.meta.env.DEV ? "/__lantern/bugs" : "");
-const LANTERN_SERVICE_ROOT = configuredServiceEndpoint.replace(/\/bugs\/?$/, "");
+  || "";
+const configuredReadEndpoint = (import.meta.env.VITE_LANTERN_READ_ENDPOINT as string | undefined)?.trim()
+  || configuredWriteEndpoint;
+const LANTERN_READ_SERVICE_ROOT = configuredReadEndpoint.replace(/\/bugs\/?$/, "");
+const LANTERN_WRITE_SERVICE_ROOT = import.meta.env.DEV ? "" : configuredWriteEndpoint.replace(/\/bugs\/?$/, "");
 let sharedPersistenceEnabled = false;
 let sharedSaveTimer: number | undefined;
 
@@ -102,19 +105,20 @@ function serializableSharedState(state: LanternState): LanternState {
 }
 
 export async function loadSharedLanternState(): Promise<LanternState | null> {
-  if (!LANTERN_SERVICE_ROOT) return null;
-  const response = await fetch(`${LANTERN_SERVICE_ROOT}/state`, { headers: { "Accept": "application/json" } });
+  if (!LANTERN_READ_SERVICE_ROOT) return null;
+  const response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, { headers: { "Accept": "application/json" } });
   if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
   const body = await response.json() as { state?: LanternState | null };
   return body.state ? normalizeState({ ...initialState, ...body.state }) : null;
 }
 
 export function enableSharedStatePersistence() {
+  if (!LANTERN_WRITE_SERVICE_ROOT) return;
   sharedPersistenceEnabled = true;
 }
 
 function queueSharedStateSave(state: LanternState) {
-  if (!sharedPersistenceEnabled || !LANTERN_SERVICE_ROOT) return;
+  if (!sharedPersistenceEnabled || !LANTERN_WRITE_SERVICE_ROOT) return;
   window.clearTimeout(sharedSaveTimer);
   sharedSaveTimer = window.setTimeout(() => {
     void saveSharedLanternState(state).catch(() => undefined);
@@ -122,9 +126,9 @@ function queueSharedStateSave(state: LanternState) {
 }
 
 export async function saveSharedLanternState(state: LanternState) {
-  if (!LANTERN_SERVICE_ROOT) throw new Error("Shared project storage is not configured");
+  if (!LANTERN_WRITE_SERVICE_ROOT) throw new Error("Shared project storage is read-only in local development");
   window.clearTimeout(sharedSaveTimer);
-  const response = await fetch(`${LANTERN_SERVICE_ROOT}/state`, {
+  const response = await fetch(`${LANTERN_WRITE_SERVICE_ROOT}/state`, {
     method: "PUT",
     headers: { "Accept": "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ state: serializableSharedState(state) })
@@ -133,8 +137,8 @@ export async function saveSharedLanternState(state: LanternState) {
 }
 
 export async function uploadLanternAsset(file: File) {
-  if (!LANTERN_SERVICE_ROOT) throw new Error("Shared image storage is not configured");
-  const response = await fetch(`${LANTERN_SERVICE_ROOT}/assets`, {
+  if (!LANTERN_WRITE_SERVICE_ROOT) throw new Error("Shared image storage is read-only in local development");
+  const response = await fetch(`${LANTERN_WRITE_SERVICE_ROOT}/assets`, {
     method: "POST",
     headers: { "Accept": "application/json", "Content-Type": file.type },
     body: file
@@ -142,6 +146,10 @@ export async function uploadLanternAsset(file: File) {
   const body = await response.json() as { url?: string; error?: string };
   if (!response.ok || !body.url) throw new Error(body.error ?? `Image service returned ${response.status}`);
   return body.url;
+}
+
+export function canWriteSharedLanternState() {
+  return Boolean(LANTERN_WRITE_SERVICE_ROOT);
 }
 
 async function shareImageUrl(value: string | undefined, name: string) {

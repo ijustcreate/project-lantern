@@ -1,5 +1,39 @@
 [
   {
+    "id": "DEV-0086",
+    "title": "Require scheduled content to target one display",
+    "summary": "Removed the redundant edit action from the already-open event editor and removed All displays from board and announcement schedule targets. New and duplicated events now resolve to a specific display.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:23 AM",
+    "areas": [
+      "Schedule",
+      "Announcements",
+      "Display targeting"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; local schedule browser snapshot; verified display-only schedule option source; git diff --check"
+  },
+  {
+    "id": "DEV-0085",
+    "title": "Keep local testing synced with live museum content",
+    "summary": "Local development now loads the current shared museum state as a read-only snapshot on startup, while all shared-state and asset writes remain disabled so test edits cannot overwrite live content.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:15 AM",
+    "areas": [
+      "Developer workflow",
+      "Shared state",
+      "Safety"
+    ],
+    "files": [
+      ".env.development",
+      "src/host/lanternHost.ts",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; local Vite server restart; production state GET returned shared donors, boards, and schedules with localhost CORS; git diff --check"
+  },
+  {
     "id": "DEV-0084",
     "title": "Make room camera panels movable",
     "summary": "Display settings can now be dragged around the Lantern workspace. The room view now opens as an in-app floating panel instead of a browser popup, and includes live camera and microphone selectors so operators can correct device choices without closing it.",
