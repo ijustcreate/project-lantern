@@ -1,5 +1,51 @@
 [
   {
+    "id": "DEV-0105",
+    "title": "Remove sidebar menu numbers",
+    "summary": "Removed the numeric sequence labels from every desktop primary and utility navigation button for a cleaner main menu.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:41 AM",
+    "areas": [
+      "Navigation"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright verified the sidebar renders no nav number elements"
+  },
+  {
+    "id": "DEV-0104",
+    "title": "Reorganize broadcast canvas styling",
+    "summary": "Moved broadcast background selection out of Source and into Frame & crop, added a saved camera panel fill color, retained color and image canvas backgrounds, and corrected right-edge control clipping.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:41 AM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified Source has no broadcast background control, Frame & crop exposes panel and Board/Color/Image controls, and no controls exceed the inspector right edge"
+  },
+  {
+    "id": "DEV-0103",
+    "title": "Contain broadcast inspector tabs",
+    "summary": "Corrected the Broadcast / Stream inspector tab rail so Source, Frame & crop, and Effects share equal height and the selected tab no longer overflows its container.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:34 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Themes"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified all three tab bounds remain inside the rail and captured the rendered Broadcast workspace"
+  },
+  {
     "id": "DEV-0102",
     "title": "Theme dark Settings form controls",
     "summary": "Replaced bright white Settings inputs and theme selector surfaces in Dark mode with low-glare themed controls and matching focus states.",

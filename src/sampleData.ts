@@ -202,6 +202,7 @@ export const initialState: LanternState = {
     backgroundMode: "board",
     backgroundColor: "#07111e",
     backgroundImage: undefined,
+    panelColor: "#050d17",
     frameBorderColor: "#5fe0eb",
     frameBorderWidth: 0,
     usingCamera: true,

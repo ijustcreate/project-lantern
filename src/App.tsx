@@ -486,24 +486,22 @@ function ControlCenter() {
         </button>
         <nav className="nav-list">
           {navItems.filter((item) => item.id !== "revisions" && item.id !== "bugs" && item.id !== "screens").map((item) => {
-            const index = navItems.findIndex((candidate) => candidate.id === item.id);
             const Icon = item.icon;
             return (
               <button className={view === item.id ? "nav-item active" : "nav-item"} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
                 <span className="nav-icon"><Icon size={18} /></span>
-                <span className="nav-copy"><b>{item.label}</b><small>0{index + 1}</small></span>
+                <span className="nav-copy"><b>{item.label}</b></span>
               </button>
             );
           })}
         </nav>
         <nav className="nav-list nav-utility-list" aria-label="History and support">
           {navItems.filter((item) => item.id === "revisions" || item.id === "bugs").map((item) => {
-            const index = navItems.findIndex((candidate) => candidate.id === item.id);
             const Icon = item.icon;
             return (
               <button className={view === item.id ? "nav-item active" : "nav-item"} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
                 <span className="nav-icon"><Icon size={18} /></span>
-                <span className="nav-copy"><b>{item.label}</b><small>0{index + 1}</small></span>
+                <span className="nav-copy"><b>{item.label}</b></span>
               </button>
             );
           })}
@@ -3635,6 +3633,7 @@ function DirectLiveStage({
         >
           <div className={`direct-live-content mask-${live.frame.maskShape ?? "rectangle"}`} style={{
             ...(live.frame.maskShape === "polygon" ? { clipPath: polygonClip } : {}),
+            backgroundColor: live.panelColor,
             boxShadow: live.frameBorderWidth > 0 ? `inset 0 0 0 ${live.frameBorderWidth}px ${live.frameBorderColor}` : undefined
           }}>
             <div className="live-camera-transform" style={{ transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${live.frame.mirrorX ? -1 : 1}, ${live.frame.mirrorY ? -1 : 1})` }}>
@@ -4055,9 +4054,6 @@ function LivePreviewPanel({
       <LabeledInput label="Title" info="The live presentation title shown on the lower third." value={state.live.title} onChange={(value) => patchLive({ title: value })} />
       <LabeledInput label="Lower third" info="The smaller caption shown under the title." value={state.live.lowerThird} onChange={(value) => patchLive({ lowerThird: value })} />
       <p className="direct-manipulation-hint text-layer-hint">Drag the title and lower-third text directly in either preview to place each one independently.</p>
-      <div className="field broadcast-background-mode"><span>Broadcast background <InfoDot text="Choose the composition shown behind the camera. Board mode uses the preview board selection below." /></span><SegmentedControl value={state.live.backgroundMode} options={[["board", "Board"], ["color", "Color"], ["image", "Image"]]} onChange={(value) => patchLive({ backgroundMode: value as LanternState["live"]["backgroundMode"] })} /></div>
-      {state.live.backgroundMode === "color" && <label className="field broadcast-color-field"><span>Background color</span><input type="color" value={state.live.backgroundColor} onChange={(event) => patchLive({ backgroundColor: event.target.value })} /></label>}
-      {state.live.backgroundMode === "image" && <label className="image-upload broadcast-background-upload"><ImagePlus size={17} /><span>{state.live.backgroundImage ? "Replace broadcast background" : "Choose broadcast background"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ backgroundImage }))} /></label>}
       <div className="two-col">
         <LabeledSelect label="Preview board" info="Board shown behind the broadcast while setting up in this window and its previews." value={previewBoardId} options={["assigned", ...state.boardPrograms.map((program) => program.id)]} optionLabels={{ assigned: "Assigned board for each display", ...Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name])) }} onChange={setPreviewBoardId} />
         <LabeledSelect label="Video source" info="Camera uses a camera, screen share captures a Zoom or Skype window, and demo is a local test feed." value={state.live.source} options={["demo", "camera", "screen"]} optionLabels={{ demo: "Generated test feed", camera: "Camera", screen: "Screen or window share" }} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
@@ -4102,9 +4098,15 @@ function LivePreviewPanel({
             patchLive({ frame: { ...state.live.frame, maskShape, width: size ?? state.live.frame.width, height: size ?? state.live.frame.height, polygonPoints: maskShape === "polygon" ? (state.live.frame.polygonPoints?.length ? state.live.frame.polygonPoints : undefined) : state.live.frame.polygonPoints } });
           }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror camera</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip camera</span></label></div>
           <div className="camera-frame-style-controls">
+            <label className="field"><span>Panel color <InfoDot text="Choose the fill color inside the camera panel, visible whenever the source does not cover the full panel." /></span><input type="color" value={state.live.panelColor} onChange={(event) => patchLive({ panelColor: event.target.value })} /></label>
             <label className="field"><span>Frame color <InfoDot text="Choose the border color around the camera feed." /></span><input type="color" value={state.live.frameBorderColor} onChange={(event) => patchLive({ frameBorderColor: event.target.value })} /></label>
             <Slider label="Frame thickness" info="Set the camera border thickness, or use zero for no frame." value={state.live.frameBorderWidth} min={0} max={20} onChange={(frameBorderWidth) => patchLive({ frameBorderWidth })} />
           </div>
+          <section className="broadcast-canvas-controls">
+            <div className="field broadcast-background-mode"><span>Broadcast background <InfoDot text="Choose what fills the broadcast canvas behind the camera panel." /></span><SegmentedControl value={state.live.backgroundMode} options={[["board", "Board"], ["color", "Color"], ["image", "Image"]]} onChange={(value) => patchLive({ backgroundMode: value as LanternState["live"]["backgroundMode"] })} /></div>
+            {state.live.backgroundMode === "color" && <label className="field broadcast-color-field"><span>Background color</span><input type="color" value={state.live.backgroundColor} onChange={(event) => patchLive({ backgroundColor: event.target.value })} /></label>}
+            {state.live.backgroundMode === "image" && <label className="image-upload broadcast-background-upload"><ImagePlus size={17} /><span>{state.live.backgroundImage ? "Replace broadcast background" : "Choose broadcast background"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ backgroundImage }))} /></label>}
+          </section>
           {(state.live.frame.maskShape === "circle" || state.live.frame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
         </div>
       </div>}
@@ -5764,7 +5766,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         <div className="live-broadcast-background" style={{ backgroundColor: state.live.backgroundColor, backgroundImage: state.live.backgroundMode === "image" && state.live.backgroundImage ? `url(${state.live.backgroundImage})` : undefined }} />
       )}
       {showLive && (
-        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, border: state.live.frameBorderWidth > 0 ? `${state.live.frameBorderWidth}px solid ${state.live.frameBorderColor}` : "none", boxSizing: "border-box" }}>
+        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, border: state.live.frameBorderWidth > 0 ? `${state.live.frameBorderWidth}px solid ${state.live.frameBorderColor}` : "none", backgroundColor: state.live.panelColor, boxSizing: "border-box" }}>
           <div className="live-camera-transform" style={{ transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
             <ChromaVideo stream={stream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
           </div>

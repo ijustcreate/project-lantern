@@ -263,6 +263,7 @@ export interface LivePresentation {
   backgroundMode: "board" | "color" | "image";
   backgroundColor: string;
   backgroundImage?: string;
+  panelColor: string;
   frameBorderColor: string;
   frameBorderWidth: number;
   usingCamera: boolean;
