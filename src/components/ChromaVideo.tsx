@@ -15,11 +15,11 @@ interface PointTransform {
   height: number;
 }
 
-const OUTPUT_WIDTH = 960;
-const OUTPUT_HEIGHT = 540;
-const INFERENCE_WIDTH = 640;
-const INFERENCE_HEIGHT = 360;
-const SEGMENT_INTERVAL_MS = 1000 / 15;
+const OUTPUT_WIDTH = 640;
+const OUTPUT_HEIGHT = 360;
+const INFERENCE_WIDTH = 320;
+const INFERENCE_HEIGHT = 180;
+const SEGMENT_INTERVAL_MS = 1000 / 10;
 const FACE_INTERVAL_MS = 1000 / 30;
 const VISION_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const SEGMENTATION_MODEL_URL = "https://storage.googleapis.com/mediapipe-assets/deeplabv3.tflite?generation=1661875711618421";
@@ -53,6 +53,17 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   const chromaActive = chromaKey.enabled;
   const aiBackgroundActive = !chromaActive && effects.background !== "original";
   const faceEffectsActive = effects.faceTracking && (effects.accessory !== "none" || effects.puppetPreview);
+  const processingActive = chromaActive || aiBackgroundActive || faceEffectsActive;
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = stream;
+    if (stream) void video.play().catch(() => undefined);
+    return () => {
+      video.srcObject = null;
+    };
+  }, [stream]);
 
   useEffect(() => {
     if (!effects.backgroundImage) {
@@ -71,10 +82,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    video.srcObject = stream;
-    if (stream) void video.play().catch(() => undefined);
+    if (!processingActive || !video || !canvas) return;
 
     const context = canvas.getContext("2d");
     const source = document.createElement("canvas");
@@ -310,11 +318,21 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       segmenter?.close();
       faceLandmarker?.close();
-      video.srcObject = null;
     };
-  }, [stream, chromaActive, aiBackgroundActive, faceEffectsActive]);
+  }, [stream, chromaActive, aiBackgroundActive, faceEffectsActive, processingActive]);
 
-  return <><video ref={videoRef} autoPlay playsInline muted className="chroma-source" /><canvas ref={canvasRef} width={OUTPUT_WIDTH} height={OUTPUT_HEIGHT} className={className ?? "chroma-video"} /></>;
+  return <><video
+    ref={videoRef}
+    autoPlay
+    playsInline
+    muted
+    className={processingActive ? "chroma-source" : className ?? "chroma-video"}
+    style={processingActive ? undefined : {
+      objectFit: "fill",
+      transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
+      transformOrigin: "center"
+    }}
+  />{processingActive && <canvas ref={canvasRef} width={OUTPUT_WIDTH} height={OUTPUT_HEIGHT} className={className ?? "chroma-video"} />}</>;
 }
 
 function applyChromaKey(context: CanvasRenderingContext2D, width: number, height: number, chromaKey: ChromaKeySettings) {

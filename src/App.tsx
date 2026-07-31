@@ -101,6 +101,7 @@ import type {
   BoardPanel,
   BoardPanelType,
   Donor,
+  DonorBoardProgram,
   DonationRecord,
   HostMessage,
   LanternState,
@@ -452,6 +453,15 @@ function ControlCenter() {
     if (view !== "donors") setDonorSetupOpen(false);
   }, [view]);
 
+  useEffect(() => {
+    const appearance = state.recognitionSettings.appearance;
+    const classes = ["theme-dark", "theme-light", "theme-ocean", "theme-warm", "theme-contrast", "theme-sparkle"];
+    document.body.classList.remove(...classes);
+    if (appearance === "warm" || appearance === "sparkle") document.body.classList.add("theme-light");
+    document.body.classList.add(`theme-${appearance}`);
+    return () => document.body.classList.remove(...classes);
+  }, [state.recognitionSettings.appearance]);
+
   const openBugReport = async () => {
     setBugReportOpen(true);
     setBugCapture([]);
@@ -468,7 +478,7 @@ function ControlCenter() {
   };
 
   return (
-    <div className={`app-shell theme-${state.recognitionSettings.appearance}`}>
+    <div className={`app-shell ${state.recognitionSettings.appearance === "warm" || state.recognitionSettings.appearance === "sparkle" ? "theme-light " : ""}theme-${state.recognitionSettings.appearance}`}>
       <aside className="sidebar">
         <div className="sidebar-aurora" aria-hidden="true" />
         <button className="brand-lockup" onClick={() => setView("dashboard")} title="Return to Dashboard" aria-label="Children's Museum of Stockton — return to Dashboard">
@@ -507,7 +517,7 @@ function ControlCenter() {
       <main className={`main-panel${showIdeas ? ideasOpen ? " ideas-open" : " ideas-collapsed" : ""}`}>
         <header className={view === "dashboard" ? "topbar dashboard-topbar" : "topbar"}>
           <div className="page-identity">
-            <p className="eyebrow"><span>Lantern control</span><i />Published {state.publishedAt}</p>
+            <p className="eyebrow"><span>Museum Donor Board Control Center</span><i />Published {state.publishedAt}</p>
             <h1>{titleFor(view)}</h1>
           </div>
           <div className="topbar-actions">
@@ -628,10 +638,11 @@ function bugEvidenceImageSource(bugId: string, evidence: BugEvidence) {
   const evidenceBase = !BUG_API_ENDPOINT || BUG_API_ENDPOINT === "/__lantern/bugs" ? "/__lantern/evidence" : `${BUG_API_ENDPOINT}/evidence`;
   return `${evidenceBase}/${encodeURIComponent(bugId)}/${encodeURIComponent(fileName)}`;
 }
-type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
+type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; stepsToReproduce?: string; expectedResult?: string; actualResult?: string; frequency?: string; impact?: string; diagnostics?: Record<string, unknown>; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
 const BUG_USERS_KEY = "project-lantern-bug-users";
 const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
+const BUG_VIEW_PREFS_KEY = "project-lantern-bug-view-preferences";
 const BUG_API_ENDPOINT = (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
   || (import.meta.env.DEV ? "/__lantern/bugs" : "");
 function isTauri() { return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window; }
@@ -672,6 +683,11 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
   const [summary, setSummary] = useState("");
   const [details, setDetails] = useState("");
   const [fixTips, setFixTips] = useState("");
+  const [stepsToReproduce, setStepsToReproduce] = useState("");
+  const [expectedResult, setExpectedResult] = useState("");
+  const [actualResult, setActualResult] = useState("");
+  const [frequency, setFrequency] = useState("every-time");
+  const [impact, setImpact] = useState("medium");
   const [tags, setTags] = useState<string[]>([]);
   const [knownBugTags, setKnownBugTags] = useState<string[]>(() => readWebBugs().flatMap((bug) => bug.tags));
   const [status, setStatus] = useState("");
@@ -747,7 +763,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
     setStatus("Building report package…");
     try {
       const payload = {
-        summary, details, fixTips,
+        summary, details, fixTips, stepsToReproduce, expectedResult, actualResult, frequency, impact,
         tags,
         attachments,
         appState: {
@@ -760,7 +776,16 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
           liveActive: state.live.active,
           scheduleCount: state.schedules.length,
           localStorageBytes: JSON.stringify(localStorage).length,
-          location: window.location.href
+          location: window.location.href,
+          theme: state.recognitionSettings.appearance,
+          viewport: `${window.innerWidth}x${window.innerHeight}`,
+          screen: `${window.screen.width}x${window.screen.height}`,
+          devicePixelRatio: window.devicePixelRatio,
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          online: navigator.onLine,
+          network: (navigator as Navigator & { connection?: { effectiveType?: string; downlink?: number; rtt?: number } }).connection ?? null
         },
         recentEvents: getRecentClientEvents()
       };
@@ -772,7 +797,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         const now = new Date().toISOString();
         const highestBugNumber = bugs.reduce((highest, bug) => Math.max(highest, Number(bug.bugId.match(/\d+/)?.[0] ?? 0)), 0);
         const bugId = `BUG-${String(highestBugNumber + 1).padStart(5, "0")}`;
-        const record: BugRecord = { bugId, summary, details, fixTips, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
+        const record: BugRecord = { bugId, summary, details, fixTips, stepsToReproduce, expectedResult, actualResult, frequency, impact, diagnostics: payload.appState, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
         bugs.unshift(record);
         writeWebBugs(bugs);
         if (BUG_API_ENDPOINT) {
@@ -803,6 +828,15 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
       <div className="bug-report-body">
         <label className="field"><span>Brief description <b>*</b> <InfoDot text="In one sentence, say what went wrong and where. A good example is: “Schedule screen goes blank after I press Publish.”" /></span><input autoFocus value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="What went wrong?" /></label>
         <label className="field"><span>Details <InfoDot text="Tell us the steps you took, what you expected to happen, and what actually happened. Include whether it happens every time or only sometimes." /></span><textarea value={details} onChange={(event) => setDetails(event.target.value)} placeholder="What were you doing? What happened? What did you expect?" /></label>
+        <label className="field"><span>Steps to reproduce <InfoDot text="List the exact clicks or actions that make the problem happen. Numbered steps are easiest to follow." /></span><textarea value={stepsToReproduce} onChange={(event) => setStepsToReproduce(event.target.value)} placeholder={"1. Open…\n2. Select…\n3. Click…"} /></label>
+        <div className="two-col">
+          <label className="field"><span>Expected result</span><textarea value={expectedResult} onChange={(event) => setExpectedResult(event.target.value)} placeholder="What should have happened?" /></label>
+          <label className="field"><span>Actual result</span><textarea value={actualResult} onChange={(event) => setActualResult(event.target.value)} placeholder="What happened instead?" /></label>
+        </div>
+        <div className="two-col">
+          <label className="field"><span>How often</span><select value={frequency} onChange={(event) => setFrequency(event.target.value)}><option value="every-time">Every time</option><option value="often">Often</option><option value="sometimes">Sometimes</option><option value="once">Only once</option></select></label>
+          <label className="field"><span>Impact</span><select value={impact} onChange={(event) => setImpact(event.target.value)}><option value="low">Minor inconvenience</option><option value="medium">Work is slowed down</option><option value="high">Cannot complete the task</option><option value="critical">Live display or data is at risk</option></select></label>
+        </div>
         <label className="field"><span>Tips on how to fix <InfoDot text="Optional: share anything that may help investigate, such as when the problem started, a possible cause, or a workaround you found. It is completely fine to leave this blank." /></span><textarea value={fixTips} onChange={(event) => setFixTips(event.target.value)} placeholder="Optional clues, suspected cause, or suggested solution" /></label>
         <BugTagInput
           tags={tags}
@@ -814,7 +848,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
           {attachments.map((attachment, index) => <figure key={`${attachment.name}-${index}`}><div>{attachment.dataUrl.startsWith("data:image/") ? <img src={attachment.dataUrl} alt="" /> : <span><Upload size={22} /></span>}<button className="bug-attachment-remove" onClick={() => setAttachments((current) => current.filter((_, item) => item !== index))} title="Remove attachment"><X size={13} /></button>{attachment.dataUrl.startsWith("data:image/") && <button className="bug-attachment-edit" onClick={() => setEditingAttachment(index)} title="Annotate image" aria-label={`Annotate ${attachment.name}`}><Pencil size={13} /></button>}</div><figcaption>{attachment.name}</figcaption></figure>)}
           {!attachments.length && <div className="bug-empty-attachments"><Camera size={22} /><span>Screenshots will appear here</span></div>}
         </div>
-        <div className="bug-diagnostics-note"><Activity size={16} /><span>App state, version, platform, recent client errors, and application logs are included automatically for Codex. <InfoDot text="This technical information helps reproduce the problem. You do not need to understand it or collect it yourself." /></span></div>
+        <div className="bug-diagnostics-note"><Activity size={16} /><span>App state, version, active page, theme, board/display status, browser, viewport, screen scale, language, timezone, network state, recent client errors, and application logs are included automatically for Codex. <InfoDot text="This makes the report easier to paste into Codex and reproduce. You do not need to collect it yourself." /></span></div>
       </div>
       <footer className="bug-report-footer"><span>{status}</span><div><button className="command-button secondary" onClick={onClose}>Cancel</button><button className="command-button primary" disabled={saving} onClick={() => void submit()}><Send size={16} /> {saving ? "Saving…" : "Save report"}</button></div></footer>
       {editingAttachment !== null && attachments[editingAttachment] && <ImageAnnotationEditor attachment={attachments[editingAttachment]} onClose={() => setEditingAttachment(null)} onSave={(dataUrl) => { setAttachments((current) => current.map((item, index) => index === editingAttachment ? { ...item, dataUrl } : item)); setEditingAttachment(null); setStatus("Annotation saved to the attachment."); }} />}
@@ -982,6 +1016,17 @@ function EvidenceViewer({ bugId, evidence, onClose }: { bugId: string; evidence:
 }
 
 function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNewBug: () => void; launcherVisible: boolean; onLauncherVisibleChange: (visible: boolean) => void }) {
+  const defaultStatusFilters: BugStatus[] = ["open", "in-progress", "ready-for-test"];
+  const initialActiveUser = localStorage.getItem(ACTIVE_BUG_USER_KEY) || "Felix";
+  const readViewPreferences = (user: string) => {
+    try {
+      const all = JSON.parse(localStorage.getItem(BUG_VIEW_PREFS_KEY) ?? "{}") as Record<string, { statuses?: BugStatus[]; groupByStatus?: boolean; collapsed?: Partial<Record<BugStatus, boolean>> }>;
+      return all[user] ?? {};
+    } catch {
+      return {};
+    }
+  };
+  const initialPreferences = readViewPreferences(initialActiveUser);
   const [bugs, setBugs] = useState<BugRecord[]>([]);
   const [selected, setSelected] = useState<BugRecord | null>(null);
   const [viewingEvidence, setViewingEvidence] = useState<BugEvidence | null>(null);
@@ -990,7 +1035,9 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const splitDrag = useRef<{ startX: number; startWidth: number; containerWidth: number } | null>(null);
   const [sort, setSort] = useState<"newest" | "oldest" | "status">("newest");
-  const [statusFilters, setStatusFilters] = useState<BugStatus[]>([]);
+  const [statusFilters, setStatusFilters] = useState<BugStatus[]>(initialPreferences.statuses ?? defaultStatusFilters);
+  const [groupByStatus, setGroupByStatus] = useState(initialPreferences.groupByStatus ?? true);
+  const [collapsedStatuses, setCollapsedStatuses] = useState<Partial<Record<BugStatus, boolean>>>(initialPreferences.collapsed ?? {});
   const [users, setUsers] = useState<string[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(BUG_USERS_KEY) ?? "[]") as string[];
@@ -999,7 +1046,8 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       return ["Felix"];
     }
   });
-  const [activeUser, setActiveUser] = useState(() => localStorage.getItem(ACTIVE_BUG_USER_KEY) || "Felix");
+  const [activeUser, setActiveUser] = useState(initialActiveUser);
+  const preferencesUserRef = useRef(initialActiveUser);
   const [commentTab, setCommentTab] = useState<"user" | "ai">("user");
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
@@ -1030,6 +1078,21 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   useEffect(() => { localStorage.setItem(BUG_USERS_KEY, JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem(ACTIVE_BUG_USER_KEY, activeUser); }, [activeUser]);
   useEffect(() => {
+    const preferences = readViewPreferences(activeUser);
+    preferencesUserRef.current = activeUser;
+    setStatusFilters(preferences.statuses ?? defaultStatusFilters);
+    setGroupByStatus(preferences.groupByStatus ?? true);
+    setCollapsedStatuses(preferences.collapsed ?? {});
+  }, [activeUser]);
+  useEffect(() => {
+    if (preferencesUserRef.current !== activeUser) return;
+    try {
+      const all = JSON.parse(localStorage.getItem(BUG_VIEW_PREFS_KEY) ?? "{}") as Record<string, unknown>;
+      all[activeUser] = { statuses: statusFilters, groupByStatus, collapsed: collapsedStatuses };
+      localStorage.setItem(BUG_VIEW_PREFS_KEY, JSON.stringify(all));
+    } catch { /* Preferences are optional; the catalogue remains usable without storage. */ }
+  }, [activeUser, statusFilters, groupByStatus, collapsedStatuses]);
+  useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!splitDrag.current) return;
       const next = splitDrag.current.startWidth + ((event.clientX - splitDrag.current.startX) / splitDrag.current.containerWidth) * 100;
@@ -1053,6 +1116,9 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   const toggleStatusFilter = (status: BugStatus) => {
     setStatusFilters((current) => current.includes(status) ? current.filter((value) => value !== status) : [...current, status]);
   };
+  const statusOrder: BugStatus[] = ["open", "in-progress", "ready-for-test", "verified", "closed"];
+  const statusLabel = (status: BugStatus) => status.replace(/-/g, " ");
+  const renderBugRow = (bug: BugRecord) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>;
   const save = async (bug: BugRecord) => {
     const next = { ...bug, updatedAt: new Date().toISOString() };
     try {
@@ -1121,9 +1187,14 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") addUser(); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
     </div>
     <div className="bug-metrics"><article><Bug /><span><b>{counts.open}</b>Open</span></article><article><BadgeCheck /><span><b>{counts.testing}</b>Ready for test</span></article><article><CheckCircle2 /><span><b>{counts.closed}</b>Verified / closed</span></article></div>
-    <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status"><button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button>{(["open", "in-progress", "ready-for-test", "verified", "closed"] as const).map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{value.replace(/-/g, " ")}</button>)}</div><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div>
+    <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status">{statusOrder.map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{statusLabel(value)}</button>)}<button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button></div><div className="bugs-view-options"><label className="bug-group-toggle"><input type="checkbox" checked={groupByStatus} onChange={(event) => setGroupByStatus(event.target.checked)} /><span>Separate by status</span></label><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div></div>
     <div className="bugs-layout" style={{ gridTemplateColumns: `${listWidth}fr 8px ${100 - listWidth}fr` }}>
-      <div className="bug-list">{visible.map((bug) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>)}{!visible.length && <div className="bugs-empty"><Bug size={28} /><strong>No bugs here</strong><span>New reports will appear in this catalogue.</span></div>}</div>
+      <div className="bug-list">{groupByStatus ? statusOrder.filter((status) => !statusFilters.length || statusFilters.includes(status)).map((status) => {
+        const group = visible.filter((bug) => bug.status === status);
+        if (!group.length) return null;
+        const collapsed = collapsedStatuses[status] ?? false;
+        return <section className={`bug-status-group ${collapsed ? "collapsed" : ""}`} key={status}><button type="button" className="bug-status-group-heading" aria-expanded={!collapsed} onClick={() => setCollapsedStatuses((current) => ({ ...current, [status]: !collapsed }))}><ChevronDown size={15} /><span>{statusLabel(status)}</span><b>{group.length}</b></button>{!collapsed && <div className="bug-status-group-items">{group.map(renderBugRow)}</div>}</section>;
+      }) : visible.map(renderBugRow)}{!visible.length && <div className="bugs-empty"><Bug size={28} /><strong>No bugs here</strong><span>New reports will appear in this catalogue.</span></div>}</div>
       <div className="bugs-splitter" role="separator" aria-label="Resize bug list and selected bug" onPointerDown={(event) => {
         const container = event.currentTarget.parentElement;
         if (!container) return;
@@ -1469,7 +1540,7 @@ function DonorsView({
 
   const editDonor = (donor: Donor) => {
     setEditingId(donor.id);
-    setDraft({ ...donor });
+    setDraft({ ...donor, boardIds: state.boardPrograms.filter((board) => board.donorIds.includes(donor.id)).map((board) => board.id) });
     setEditTab("profile");
   };
 
@@ -1478,6 +1549,7 @@ function DonorsView({
     updateState((current) => ({
       ...current,
       donors: current.donors.map((donor) => (donor.id === draft.id ? draft : donor)),
+      boardPrograms: current.boardPrograms.map((board) => ({ ...board, donorIds: draft.boardIds?.includes(board.id) ? [...new Set([...board.donorIds, draft.id])] : board.donorIds.filter((id) => id !== draft.id) })),
       recognitionSettings: { ...current.recognitionSettings, tags: [...new Set([...current.recognitionSettings.tags, ...(draft.tags ?? [])])].sort() }
     }));
     setEditingId(null);
@@ -1501,47 +1573,17 @@ function DonorsView({
     });
   };
 
-  const donorIsOnDisplay = (donor: Donor, screen: DisplayProfile) => {
-    if (screen.donorRosterConfigured) return Boolean(donor.displayIds?.includes(screen.id) && screen.donorIds?.includes(donor.id));
-    const program = state.boardPrograms.find((item) => item.id === screen.boardProgramId) ?? state.boardPrograms[0];
-    return Boolean(donor.displayIds?.includes(screen.id) && (!program || program.donorIds.includes(donor.id)) && (!screen.donorIds?.length || screen.donorIds.includes(donor.id)));
-  };
+  const donorIsOnBoard = (donor: Donor, board: DonorBoardProgram) => board.donorIds.includes(donor.id);
 
-  const toggleDonorDisplay = (donorId: string, screenId: ScreenId) => {
+  const toggleDonorBoard = (donorId: string, boardId: string) => {
     updateState((current) => {
-      const donor = current.donors.find((item) => item.id === donorId);
-      const screen = current.screens[screenId];
-      if (!donor || !screen) return current;
-      const program = current.boardPrograms.find((item) => item.id === screen.boardProgramId) ?? current.boardPrograms[0];
-      const isOn = screen.donorRosterConfigured
-        ? Boolean(donor.displayIds?.includes(screenId) && screen.donorIds?.includes(donorId))
-        : Boolean(donor.displayIds?.includes(screenId) && (!program || program.donorIds.includes(donorId)) && (!screen.donorIds?.length || screen.donorIds.includes(donorId)));
-      const nextDisplayIds = isOn
-        ? (donor.displayIds ?? []).filter((id) => id !== screenId)
-        : [...new Set([...(donor.displayIds ?? []), screenId])];
-      const donorRemainsOnSharedBoard = Boolean(program && Object.values(current.screens).some((otherScreen) =>
-        otherScreen.id !== screenId && (otherScreen.boardProgramId ?? current.boardPrograms[0]?.id) === program.id && nextDisplayIds.includes(otherScreen.id)
-      ));
-
+      const board = current.boardPrograms.find((item) => item.id === boardId);
+      if (!board) return current;
+      const isOn = board.donorIds.includes(donorId);
       return {
         ...current,
-        donors: current.donors.map((item) => item.id === donorId ? { ...item, displayIds: nextDisplayIds } : item),
-        boardPrograms: program ? current.boardPrograms.map((item) => item.id === program.id
-          ? {
-              ...item,
-              donorIds: isOn && !donorRemainsOnSharedBoard
-                ? item.donorIds.filter((id) => id !== donorId)
-                : !isOn
-                  ? [...new Set([...item.donorIds, donorId])]
-                  : item.donorIds
-            }
-          : item) : current.boardPrograms,
-        screens: {
-          ...current.screens,
-          [screenId]: screen.donorRosterConfigured || screen.donorIds?.length
-            ? { ...screen, donorRosterConfigured: true, donorIds: isOn ? (screen.donorIds ?? []).filter((id) => id !== donorId) : [...new Set([...(screen.donorIds ?? []), donorId])] }
-            : screen
-        }
+        donors: current.donors.map((item) => item.id === donorId ? { ...item, boardIds: isOn ? (item.boardIds ?? []).filter((id) => id !== boardId) : [...new Set([...(item.boardIds ?? []), boardId])] } : item),
+        boardPrograms: current.boardPrograms.map((item) => item.id === boardId ? { ...item, donorIds: isOn ? item.donorIds.filter((id) => id !== donorId) : [...new Set([...item.donorIds, donorId])] } : item)
       };
     });
   };
@@ -1646,10 +1688,9 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <div className="donor-title-row"><strong>{donor.name}</strong><div className="donor-display-toggles" aria-label={`${donor.name} display assignments`}>{Object.values(state.screens).map((screen) => {
-                      const isOn = donorIsOnDisplay(donor, screen);
-                      const boardName = state.boardPrograms.find((program) => program.id === screen.boardProgramId)?.name ?? state.boardPrograms[0]?.name ?? "No board";
-                      return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${screen.label} · ${boardName} · ${isOn ? "On" : "Off"}`} key={screen.id} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={screen.label} checked={isOn} onChange={() => toggleDonorDisplay(donor.id, screen.id)} /><Monitor size={11} /><span>{screen.label}</span></label>;
+                    <div className="donor-title-row"><strong>{donor.name}</strong><div className="donor-display-toggles" aria-label={`${donor.name} board assignments`}>{state.boardPrograms.map((board) => {
+                      const isOn = donorIsOnBoard(donor, board);
+                      return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${board.name} · ${isOn ? "Included" : "Not included"}`} key={board.id} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={board.name} checked={isOn} onChange={() => toggleDonorBoard(donor.id, board.id)} /><LayoutDashboard size={11} /><span>{board.name}</span></label>;
                     })}</div></div>
                     <span>{donor.tier} - {donor.category} - Gift {donor.donationDate ?? donor.since}</span>
                     <small>{donor.donationType ?? "Cash"}{donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""} · {donor.basicInfo || donor.note}</small>
@@ -1689,13 +1730,13 @@ function DonorsView({
       {draft && editingId && createPortal(<div className="modal-backdrop donor-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setEditingId(null); setDraft(null); } }}>
         <section className="editor-modal donor-editor-modal" role="dialog" aria-modal="true" aria-labelledby="donor-editor-title">
           <div className="editor-modal-head"><div><p className="eyebrow">Recognition profile</p><h2 id="donor-editor-title">Edit donor</h2></div><button className="icon-button" onClick={() => { setEditingId(null); setDraft(null); }} title="Close editor"><X size={18} /></button></div>
-          <EditorTabs value={editTab} options={[["profile", "Profile"], ["recognition", "Recognition"], ["appearance", "Appearance"], ["history", "Gift history"], ["displays", "Displays"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
+          <EditorTabs value={editTab} options={[["profile", "Profile"], ["recognition", "Recognition"], ["appearance", "Appearance"], ["history", "Gift history"], ["displays", "Boards"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
           <div className="editor-modal-body donor-editor-body">
             {editTab === "profile" && <div className="editor-form-grid"><LabeledInput label="Name" info="Donor or organization display name." value={draft.name} onChange={(name) => setDraft({ ...draft, name })} /><LabeledInput label="Donation date" info="Enter an exact date or only a year." value={draft.donationDate ?? draft.since} onChange={(donationDate) => setDraft({ ...draft, donationDate, since: donationDate })} /><LabeledSelect label="Tier" info="Recognition tier." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} /><LabeledSelect label="Category" info="Donor category." value={draft.category} options={state.recognitionSettings.categories} onChange={(category) => setDraft({ ...draft, category })} /><label className="field span-two"><span>Basic public information <InfoDot text="Short summary used in donor lists." /></span><textarea value={draft.basicInfo ?? ""} onChange={(event) => setDraft({ ...draft, basicInfo: event.target.value })} /></label><label className="field span-two"><span>Expanded donor story <InfoDot text="Longer story shown on the donor profile." /></span><textarea className="expanded-copy" value={draft.expandedInfo ?? ""} onChange={(event) => setDraft({ ...draft, expandedInfo: event.target.value })} /></label><label className="switch-row span-two"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span>{draft.active ? "Active on recognition boards" : "Saved as draft"}</span></label></div>}
             {editTab === "recognition" && <div className="editor-form-grid"><LabeledSelect label="Donation type" info="Kind of contribution." value={draft.donationType ?? "Cash"} options={["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"]} onChange={(donationType) => setDraft({ ...draft, donationType: donationType as Donor["donationType"] })} /><CurrencyInput label="Contribution amount" value={draft.amount} onChange={(amount) => setDraft({ ...draft, amount })} /><LabeledSelect label="Group" info="Organizational group." value={draft.groupId ?? ""} options={["", ...state.donorGroups.map((group) => group.id)]} optionLabels={{ "": "No group", ...Object.fromEntries(state.donorGroups.map((group) => [group.id, group.name])) }} onChange={(groupId) => setDraft({ ...draft, groupId: groupId || undefined })} /><LabeledInput label="Internal note" info="Internal recognition description." value={draft.note} onChange={(note) => setDraft({ ...draft, note })} /><LabeledInput label="Display subtext" info="Optional line shown below the name." value={draft.subtext ?? ""} onChange={(subtext) => setDraft({ ...draft, subtext })} /><TagEditor selected={draft.tags ?? []} available={allTags} onChange={(tags) => setDraft({ ...draft, tags })} /></div>}
             {editTab === "appearance" && <DonorAppearanceEditor donor={draft} onChange={setDraft} />}
             {editTab === "history" && <DonationHistoryEditor donor={draft} onChange={(donations) => setDraft({ ...draft, donations })} />}
-            {editTab === "displays" && <div className="display-assignment-grid">{Object.values(state.screens).map((screen) => <label className={draft.displayIds?.includes(screen.id) ? "display-assignment selected" : "display-assignment"} key={screen.id}><input type="checkbox" checked={draft.displayIds?.includes(screen.id) ?? false} onChange={(event) => setDraft({ ...draft, displayIds: event.target.checked ? [...(draft.displayIds ?? []), screen.id] : (draft.displayIds ?? []).filter((id) => id !== screen.id) })} /><Monitor size={20} /><span><strong>{screen.label}</strong><small>{screen.orientation} · {screen.resolution}</small></span></label>)}</div>}
+            {editTab === "displays" && <div className="display-assignment-grid">{state.boardPrograms.map((board) => <label className={draft.boardIds?.includes(board.id) ? "display-assignment selected" : "display-assignment"} key={board.id}><input type="checkbox" checked={draft.boardIds?.includes(board.id) ?? false} onChange={(event) => setDraft({ ...draft, boardIds: event.target.checked ? [...(draft.boardIds ?? []), board.id] : (draft.boardIds ?? []).filter((id) => id !== board.id) })} /><LayoutDashboard size={20} /><span><strong>{board.name}</strong><small>{board.donorIds.length} assigned donor{board.donorIds.length === 1 ? "" : "s"}</small></span></label>)}</div>}
           </div>
           <div className="editor-modal-actions"><button className="command-button secondary" onClick={() => { setEditingId(null); setDraft(null); }}>Cancel</button><button className="command-button primary" onClick={saveDonor}><Save size={17} /> Save changes</button></div>
         </section>
@@ -2671,10 +2712,9 @@ function LegacyThemeStudio({
   const [donorPage, setDonorPage] = useState(0);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const programDonors = selectedProgram ? state.donors.filter((donor) => selectedProgram.donorIds.includes(donor.id)) : [];
-  const displayDonorIds = displayRosterIds(state, display);
-  const liveProgramDonors = (display.donorRosterConfigured ? state.donors : programDonors).filter(
-    (donor) => donor.active && donor.displayIds?.includes(display.id) && displayDonorIds.includes(donor.id)
-  ).sort((a, b) => display.donorRosterConfigured ? displayDonorIds.indexOf(a.id) - displayDonorIds.indexOf(b.id) : 0);
+  const displayDonorIds = selectedProgram?.donorIds ?? [];
+  const liveProgramDonors = programDonors.filter((donor) => donor.active)
+    .sort((a, b) => displayDonorIds.indexOf(a.id) - displayDonorIds.indexOf(b.id));
   const donorPageSize = 7;
   const donorPageCount = Math.max(1, Math.ceil(state.donors.length / donorPageSize));
   const donorPageItems = state.donors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
@@ -3362,7 +3402,10 @@ function DirectLiveStage({
   previewError,
   boardProgramId,
   showBoard = true,
-  onFrameChange
+  interactive = true,
+  onFrameChange,
+  onTitlePositionChange,
+  onLowerThirdPositionChange
 }: {
   state: LanternState;
   screen: DisplayProfile;
@@ -3372,12 +3415,15 @@ function DirectLiveStage({
   previewError: string | null;
   boardProgramId?: string;
   showBoard?: boolean;
+  interactive?: boolean;
   onFrameChange: (frame: LanternState["live"]["frame"]) => void;
+  onTitlePositionChange: (position: { x: number; y: number }) => void;
+  onLowerThirdPositionChange: (position: { x: number; y: number }) => void;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const dragRef = useRef<{
-    kind: "move" | "resize" | "crop" | "point";
+    kind: "move" | "resize" | "crop" | "crop-resize" | "point";
     edge?: string;
     pointIndex?: number;
     pointerId: number;
@@ -3385,13 +3431,20 @@ function DirectLiveStage({
     y: number;
     frame: LanternState["live"]["frame"];
   } | null>(null);
+  const textDragRef = useRef<{
+    kind: "title" | "lower-third";
+    pointerId: number;
+    x: number;
+    y: number;
+    position: { x: number; y: number };
+  } | null>(null);
 
   const polygonPoints = live.frame.polygonPoints?.length
     ? live.frame.polygonPoints
     : [{ x: 12, y: 4 }, { x: 88, y: 4 }, { x: 100, y: 50 }, { x: 86, y: 96 }, { x: 14, y: 96 }, { x: 0, y: 50 }];
   const polygonClip = `polygon(${polygonPoints.map((point) => `${point.x}% ${point.y}%`).join(", ")})`;
 
-  const beginDrag = (event: React.PointerEvent<HTMLElement>, kind: "move" | "resize" | "crop" | "point", edge = "se", pointIndex?: number) => {
+  const beginDrag = (event: React.PointerEvent<HTMLElement>, kind: "move" | "resize" | "crop" | "crop-resize" | "point", edge = "se", pointIndex?: number) => {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -3445,8 +3498,36 @@ function DirectLiveStage({
       }
       const maskShape = drag.frame.maskShape === "square" && !isCorner ? "rectangle" : drag.frame.maskShape;
       onFrameChange({ ...drag.frame, x, y, width, height, maskShape });
+    } else if (drag.kind === "crop-resize") {
+      const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
+      if (!frameBounds) return;
+      const edge = drag.edge ?? "se";
+      const horizontal = edge.includes("e")
+        ? (event.clientX - drag.x) / Math.max(frameBounds.width, 1)
+        : edge.includes("w")
+          ? (drag.x - event.clientX) / Math.max(frameBounds.width, 1)
+          : 0;
+      const vertical = edge.includes("s")
+        ? (event.clientY - drag.y) / Math.max(frameBounds.height, 1)
+        : edge.includes("n")
+          ? (drag.y - event.clientY) / Math.max(frameBounds.height, 1)
+          : 0;
+      const contributions = [horizontal, vertical].filter((amount) => amount !== 0);
+      const scaleDelta = (contributions.reduce((sum, amount) => sum + amount, 0) / Math.max(contributions.length, 1)) * 2;
+      onFrameChange({ ...drag.frame, crop: { ...drag.frame.crop, scale: clamp(drag.frame.crop.scale + scaleDelta, 1, 3) } });
     } else {
-      onFrameChange({ ...drag.frame, crop: { ...drag.frame.crop, x: clamp(drag.frame.crop.x + dx, -50, 50), y: clamp(drag.frame.crop.y + dy, -50, 50) } });
+      const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
+      if (!frameBounds) return;
+      const cropDx = ((event.clientX - drag.x) / Math.max(frameBounds.width, 1)) * 100;
+      const cropDy = ((event.clientY - drag.y) / Math.max(frameBounds.height, 1)) * 100;
+      onFrameChange({
+        ...drag.frame,
+        crop: {
+          ...drag.frame.crop,
+          x: clamp(drag.frame.crop.x - cropDx / drag.frame.crop.scale, -50, 50),
+          y: clamp(drag.frame.crop.y - cropDy / drag.frame.crop.scale, -50, 50)
+        }
+      });
     }
   };
 
@@ -3478,6 +3559,38 @@ function DirectLiveStage({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const beginTextDrag = (event: React.PointerEvent<HTMLElement>, kind: "title" | "lower-third") => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    textDragRef.current = {
+      kind,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      position: kind === "title" ? live.titlePosition : live.lowerThirdPosition
+    };
+  };
+
+  const moveTextDrag = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = textDragRef.current;
+    const stage = stageRef.current;
+    if (!drag || !stage || drag.pointerId !== event.pointerId) return;
+    const bounds = stage.getBoundingClientRect();
+    const position = {
+      x: clamp(drag.position.x + ((event.clientX - drag.x) / Math.max(bounds.width, 1)) * 100, 0, 90),
+      y: clamp(drag.position.y + ((event.clientY - drag.y) / Math.max(bounds.height, 1)) * 100, 0, 94)
+    };
+    if (drag.kind === "title") onTitlePositionChange(position);
+    else onLowerThirdPositionChange(position);
+  };
+
+  const finishTextDrag = (event: React.PointerEvent<HTMLElement>) => {
+    if (textDragRef.current?.pointerId !== event.pointerId) return;
+    textDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -3492,33 +3605,69 @@ function DirectLiveStage({
   }, [live.frame, mode, onFrameChange]);
 
   return (
-    <div className="direct-live-stage-shell">
-      <div className="direct-stage-toolbar">
+    <div className={`direct-live-stage-shell${interactive ? "" : " presentation"}`}>
+      {interactive && <div className="direct-stage-toolbar">
         <span>{screen.label}</span>
         <strong>{mode === "frame" ? "Drag to move · corner to resize" : "Drag to crop · wheel to zoom"}</strong>
-      </div>
+      </div>}
       <div ref={stageRef} className={`direct-live-stage ${orientationClass(screen)}`}>
         <div className="direct-stage-board">
           {showBoard
             ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={boardProgramId} fitToScreen viewMode="2d" />
             : <div className="broadcast-only-backdrop"><Radio size={24} /><span>Broadcast only</span></div>}
         </div>
+        {live.backgroundMode !== "board" && <div
+          className="direct-broadcast-background"
+          style={{
+            backgroundColor: live.backgroundColor,
+            backgroundImage: live.backgroundMode === "image" && live.backgroundImage ? `url("${live.backgroundImage}")` : undefined
+          }}
+        />}
         <div
           className={`direct-live-frame ${mode === "crop" ? "crop-mode" : ""}`}
           style={{ left: `${live.frame.x}%`, top: `${live.frame.y}%`, width: `${live.frame.width}%`, height: `${live.frame.height}%` }}
-          onPointerDown={(event) => beginDrag(event, mode === "crop" ? "crop" : "move")}
+          onPointerDown={(event) => {
+            if (interactive && mode === "frame") beginDrag(event, "move");
+          }}
           onPointerMove={moveDrag}
           onPointerUp={finishDrag}
           onPointerCancel={finishDrag}
         >
-          <div className={`direct-live-content mask-${live.frame.maskShape ?? "rectangle"}`} style={live.frame.maskShape === "polygon" ? { clipPath: polygonClip } : undefined}>
+          <div className={`direct-live-content mask-${live.frame.maskShape ?? "rectangle"}`} style={{
+            ...(live.frame.maskShape === "polygon" ? { clipPath: polygonClip } : {}),
+            boxShadow: live.frameBorderWidth > 0 ? `inset 0 0 0 ${live.frameBorderWidth}px ${live.frameBorderColor}` : undefined
+          }}>
             <div className="live-camera-transform" style={{ transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${live.frame.mirrorX ? -1 : 1}, ${live.frame.mirrorY ? -1 : 1})` }}>
               {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
             </div>
-            <div className="lower-third preview"><strong>{live.title}</strong><span>{live.lowerThird}</span></div>
           </div>
-          {mode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}`} onPointerDown={(event) => beginDrag(event, "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
-          {mode === "frame" && live.frame.maskShape === "polygon" && <div className="polygon-editor" aria-label="Custom polygon points">
+          {interactive && mode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}`} onPointerDown={(event) => beginDrag(event, "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
+          {interactive && mode === "crop" && <div
+            className="direct-crop-editor"
+            aria-label="Camera image crop"
+            style={{
+              left: `${50 - live.frame.crop.scale * 50 - live.frame.crop.x * live.frame.crop.scale}%`,
+              top: `${50 - live.frame.crop.scale * 50 - live.frame.crop.y * live.frame.crop.scale}%`,
+              width: `${live.frame.crop.scale * 100}%`,
+              height: `${live.frame.crop.scale * 100}%`
+            }}
+            onPointerDown={(event) => beginDrag(event, "crop")}
+            onPointerMove={moveDrag}
+            onPointerUp={finishDrag}
+            onPointerCancel={finishDrag}
+          >
+            {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div
+              key={`crop-${edge}`}
+              className={`direct-crop-resize-handle resize-${edge}`}
+              title={`Resize camera image ${edge}`}
+              onPointerDown={(event) => beginDrag(event, "crop-resize", edge)}
+              onPointerMove={moveDrag}
+              onPointerUp={finishDrag}
+              onPointerCancel={finishDrag}
+            />)}
+            <span className="direct-crop-size">Camera image {Math.round(live.frame.crop.scale * 100)}%</span>
+          </div>}
+          {interactive && mode === "frame" && live.frame.maskShape === "polygon" && <div className="polygon-editor" aria-label="Custom polygon points">
             {polygonPoints.map((point, index) => {
               const next = polygonPoints[(index + 1) % polygonPoints.length];
               return <Fragment key={`polygon-${index}`}>
@@ -3552,8 +3701,10 @@ function DirectLiveStage({
               </Fragment>;
             })}
           </div>}
-          <span className="direct-frame-size">{Math.round(live.frame.width)} × {Math.round(live.frame.height)}</span>
+          {interactive && <span className="direct-frame-size">{Math.round(live.frame.width)} × {Math.round(live.frame.height)}</span>}
         </div>
+        <div className="direct-broadcast-text direct-broadcast-title" aria-label={interactive ? "Move broadcast title" : "Broadcast title"} style={{ left: `${live.titlePosition.x}%`, top: `${live.titlePosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "title") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><strong>{live.title}</strong></div>
+        <div className="direct-broadcast-text direct-broadcast-lower-third" aria-label={interactive ? "Move broadcast lower third" : "Broadcast lower third"} style={{ left: `${live.lowerThirdPosition.x}%`, top: `${live.lowerThirdPosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "lower-third") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><span>{live.lowerThird}</span></div>
       </div>
     </div>
   );
@@ -3672,7 +3823,7 @@ function LivePreviewPanel({
       const stream = source === "screen"
         ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 60 } }, audio: true })
         : await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: state.live.videoDeviceId ? { exact: state.live.videoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
+            video: { deviceId: state.live.videoDeviceId ? { exact: state.live.videoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
             audio: state.live.audioDeviceId ? { deviceId: { exact: state.live.audioDeviceId } } : true
           });
       stream.getVideoTracks().forEach((track) => track.addEventListener("ended", () => {
@@ -3865,7 +4016,10 @@ function LivePreviewPanel({
               previewError={previewError}
               boardProgramId={selectedPreviewBoardId}
               showBoard={popoutMode !== "broadcast"}
+              interactive={false}
               onFrameChange={(frame) => patchLive({ frame })}
+              onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })}
+              onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })}
             />)}
           </div>
           <footer className="live-preview-popout-footer"><span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
@@ -3893,15 +4047,19 @@ function LivePreviewPanel({
           <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>{state.live.active ? "Program output" : "Preview"}</strong><label className="monitor-display-select"><span className="sr-only">Preview display</span><select aria-label="Preview display" value={state.live.target} onChange={(event) => patchLive({ target: event.target.value as TargetScreen })}>{targetOptions(state).map((option) => <option key={option} value={option}>{targetOptionLabels(state)[option]}</option>)}</select></label></div>
           <span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span>
         </div>
-        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} />)}</div>
+        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} />)}</div>
       </section>
       <aside className="live-inspector" aria-label="Broadcast controls">
       <EditorTabs value={liveTab} options={[["setup", "Source"], ["frame", "Frame & crop"], ["effects", "Effects"]]} onChange={(value) => setLiveTab(value as typeof liveTab)} />
       {liveTab === "setup" && <div className="live-tab-panel setup-tab">
       <LabeledInput label="Title" info="The live presentation title shown on the lower third." value={state.live.title} onChange={(value) => patchLive({ title: value })} />
       <LabeledInput label="Lower third" info="The smaller caption shown under the title." value={state.live.lowerThird} onChange={(value) => patchLive({ lowerThird: value })} />
+      <p className="direct-manipulation-hint text-layer-hint">Drag the title and lower-third text directly in either preview to place each one independently.</p>
+      <div className="field broadcast-background-mode"><span>Broadcast background <InfoDot text="Choose the composition shown behind the camera. Board mode uses the preview board selection below." /></span><SegmentedControl value={state.live.backgroundMode} options={[["board", "Board"], ["color", "Color"], ["image", "Image"]]} onChange={(value) => patchLive({ backgroundMode: value as LanternState["live"]["backgroundMode"] })} /></div>
+      {state.live.backgroundMode === "color" && <label className="field broadcast-color-field"><span>Background color</span><input type="color" value={state.live.backgroundColor} onChange={(event) => patchLive({ backgroundColor: event.target.value })} /></label>}
+      {state.live.backgroundMode === "image" && <label className="image-upload broadcast-background-upload"><ImagePlus size={17} /><span>{state.live.backgroundImage ? "Replace broadcast background" : "Choose broadcast background"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ backgroundImage }))} /></label>}
       <div className="two-col">
-        <LabeledSelect label="Board behind broadcast" info="Use each display's assigned board or preview another saved board behind the camera." value={previewBoardId} options={["assigned", ...state.boardPrograms.map((program) => program.id)]} optionLabels={{ assigned: "Assigned board for each display", ...Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name])) }} onChange={setPreviewBoardId} />
+        <LabeledSelect label="Preview board" info="Board shown behind the broadcast while setting up in this window and its previews." value={previewBoardId} options={["assigned", ...state.boardPrograms.map((program) => program.id)]} optionLabels={{ assigned: "Assigned board for each display", ...Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name])) }} onChange={setPreviewBoardId} />
         <LabeledSelect label="Video source" info="Camera uses a camera, screen share captures a Zoom or Skype window, and demo is a local test feed." value={state.live.source} options={["demo", "camera", "screen"]} optionLabels={{ demo: "Generated test feed", camera: "Camera", screen: "Screen or window share" }} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
       </div>
       <div className="two-col">
@@ -3942,12 +4100,20 @@ function LivePreviewPanel({
             const maskShape = value as NonNullable<LanternState["live"]["frame"]["maskShape"]>;
             const size = maskShape === "square" ? Math.min(state.live.frame.width, state.live.frame.height, 100 - state.live.frame.x, 100 - state.live.frame.y) : null;
             patchLive({ frame: { ...state.live.frame, maskShape, width: size ?? state.live.frame.width, height: size ?? state.live.frame.height, polygonPoints: maskShape === "polygon" ? (state.live.frame.polygonPoints?.length ? state.live.frame.polygonPoints : undefined) : state.live.frame.polygonPoints } });
-          }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror camera</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip camera</span></label></div>
+          }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror camera</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip camera</span></label></div>
+          <div className="camera-frame-style-controls">
+            <label className="field"><span>Frame color <InfoDot text="Choose the border color around the camera feed." /></span><input type="color" value={state.live.frameBorderColor} onChange={(event) => patchLive({ frameBorderColor: event.target.value })} /></label>
+            <Slider label="Frame thickness" info="Set the camera border thickness, or use zero for no frame." value={state.live.frameBorderWidth} min={0} max={20} onChange={(frameBorderWidth) => patchLive({ frameBorderWidth })} />
+          </div>
           {(state.live.frame.maskShape === "circle" || state.live.frame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
         </div>
       </div>}
       {liveTab === "effects" && <div className="live-toolbox live-tab-panel effects-tab">
         <div className="effect-section-heading"><h3>Background removal</h3><span>Choose one method</span></div>
+        <label className="switch-row no-screen-removal-toggle">
+          <input type="checkbox" checked={backgroundRemovalMode === "ai"} onChange={(event) => setBackgroundRemovalMode(event.target.checked ? "ai" : "off")} />
+          <span><strong>No-screen removal</strong><small>{backgroundRemovalMode === "ai" ? "On — AI isolates the person" : "Off — camera background stays visible"}</small></span>
+        </label>
         <div className="field removal-method-field"><span>Removal method <InfoDot text="Green screen keying and screenless AI removal are separate pipelines and cannot be stacked." /></span><SegmentedControl value={backgroundRemovalMode} options={[["off", "Off"], ["chroma", "Green screen"], ["ai", "No screen (AI)"]]} onChange={setBackgroundRemovalMode} /></div>
 
         {backgroundRemovalMode === "chroma" && <section className="effect-settings-card chroma-settings-card">
@@ -4001,7 +4167,7 @@ function LivePreviewPanel({
       {previewPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>
-        <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} /></div>
+        <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} /></div>
         <footer><span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
       </div>}
       {sourcePromptOpen && <div className="modal-backdrop preview-source-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSourcePromptOpen(false); }}>
@@ -4746,12 +4912,12 @@ function ScheduleCalendarView({
     updateState((current) => ({ ...current, schedules: [...current.schedules, { ...entry, id, name: `${entry.name} copy`, target: entry.target === "all" ? firstDisplayId(current) : entry.target }] }));
     setSelectedId(id);
   };
-  const addEntry = (contentType: "board" | "announcement", slot?: { date: Date; start: number }) => {
+  const addEntry = (contentType: "board" | "announcement" | "broadcast", slot?: { date: Date; start: number }) => {
     const saved = state.savedAnnouncements[0];
     const id = `schedule-${Date.now()}`;
     updateState((current) => ({ ...current, schedules: [...current.schedules, {
       id,
-      name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : "New scheduled board",
+      name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : contentType === "broadcast" ? "Scheduled broadcast" : "New scheduled board",
       target: displayFilter === "all" ? firstDisplayId(current) : displayFilter,
       boardId: state.boardPrograms[0]?.id ?? "board-classic",
       contentType,
@@ -4761,7 +4927,7 @@ function ScheduleCalendarView({
       scheduleDate: slot ? toDateInputValue(slot.date) : undefined,
       startTime: minutesToTime(slot?.start ?? 540),
       endTime: minutesToTime(Math.min(1440, (slot?.start ?? 540) + 60)),
-      color: contentType === "announcement" ? "#b45a78" : "#4f63cf",
+      color: contentType === "announcement" ? "#b45a78" : contentType === "broadcast" ? "#d17928" : "#4f63cf",
       active: true
     }] }));
     setSelectedId(id);
@@ -4769,6 +4935,7 @@ function ScheduleCalendarView({
   const entriesForDate = (date: Date) => filtered.filter((entry) => entryOccursOnDate(entry, date)).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
   const conflictFor = (entry: ScheduleEntry, date: Date) => entry.active && filtered.some((candidate) =>
     candidate.id !== entry.id && candidate.active && entryOccursOnDate(candidate, date)
+    && (entry.contentType ?? "board") === (candidate.contentType ?? "board")
     && scheduleTargetsConflict(entry.target, candidate.target)
     && timeToMinutes(candidate.startTime) < timeToMinutes(entry.endTime)
     && timeToMinutes(candidate.endTime) > timeToMinutes(entry.startTime)
@@ -4910,12 +5077,13 @@ function ScheduleCalendarView({
         <label className="calendar-selector"><Monitor size={14} /><select aria-label="Display filter" value={displayFilter} onChange={(event) => setDisplayFilter(event.target.value as TargetScreen)}><option value="all">All displays</option>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label>
         <button type="button" className="command-button secondary compact" onClick={() => addEntry("board")}><Plus size={15} /> Board</button>
         <button type="button" className="command-button primary compact" onClick={() => addEntry("announcement")}><Megaphone size={15} /> Announcement</button>
+        <button type="button" className="command-button secondary compact" onClick={() => addEntry("broadcast")}><Radio size={15} /> Broadcast</button>
       </div>
     </header>
     <div className="schedule-status-strip">
       <div className={`schedule-live-summary${liveEntries.length ? " active" : ""}`}><Radio size={14} /><span>{liveEntries.length ? "Live now" : "Nothing live now"}</span>{liveEntries.slice(0, 2).map((entry) => <button key={entry.id} onClick={() => setSelectedId(entry.id)}>{entry.name}</button>)}</div>
       <div className="schedule-next-summary"><Clock3 size={14} /><span>Next up</span>{nextEntry ? <button onClick={() => setSelectedId(nextEntry.id)}><strong>{nextEntry.startTime}</strong> {nextEntry.name}</button> : <small>No more events today</small>}</div>
-      <div className="schedule-type-legend"><span><i className="board" /> Donor board</span><span><i className="announcement" /> Announcement</span><span><AlertTriangle size={12} /> Conflict</span></div>
+      <div className="schedule-type-legend"><span><i className="board" /> Donor board</span><span><i className="announcement" /> Announcement</span><span><i className="broadcast" /> Broadcast</span><span><AlertTriangle size={12} /> Same-type conflict</span></div>
     </div>
     <div className={`schedule-view-container ${visibleMode}`}>
       {visibleMode === "week" && <div className="week-calendar schedule-week" style={{ "--calendar-hour": `${hourHeight}px` } as React.CSSProperties}>
@@ -4928,19 +5096,19 @@ function ScheduleCalendarView({
             const offline = displayIsOffline(entry);
             return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={(event) => openEditor(entry.id, event)} onContextMenu={(event) => openContextMenu(event, entry)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}${offline ? ", target display offline" : ""}`} title="Drag to move. Drag the top or bottom edge to resize.">
               <span className="calendar-resize-handle top" onPointerDown={(event) => beginDrag(event, entry, date, "resize-start")} />
-              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small>{offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
+              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : entry.contentType === "broadcast" ? <Radio size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small>{offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
               <span className="calendar-resize-handle bottom" onPointerDown={(event) => beginDrag(event, entry, date, "resize-end")} />
             </button>;
           })}</div>; })}
         </div></div>
       </div>}
       {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{offline ? <WifiOff size={10} /> : conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
-      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Conflicts on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
+      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : entry.contentType === "broadcast" ? <Radio size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : entry.contentType === "broadcast" ? "Broadcast" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Same-type conflict on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
     </div>
     {selected && createPortal(<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
       <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - 150)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2 id="schedule-event-editor-title">Edit event</h2></div><button type="button" className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><X size={17} /></button></header>
-      <div className="schedule-event-editor-body">{quickActions(selected)}<LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div><LabeledSelect label="Content" info="Choose the scheduled content type." value={selected.contentType ?? "board"} options={["board", "announcement"]} optionLabels={{ board: "Donor board", announcement: "Saved announcement" }} onChange={(value) => patchEntry(selected.id, { contentType: value as "board" | "announcement", announcementId: value === "announcement" ? selected.announcementId ?? state.savedAnnouncements[0]?.id : undefined })} />
-        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
+      <div className="schedule-event-editor-body">{quickActions(selected)}<LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div><LabeledSelect label="Content" info="Choose the scheduled content type." value={selected.contentType ?? "board"} options={["board", "announcement", "broadcast"]} optionLabels={{ board: "Donor board", announcement: "Saved announcement", broadcast: "Broadcast / stream" }} onChange={(value) => patchEntry(selected.id, { contentType: value as NonNullable<ScheduleEntry["contentType"]>, announcementId: value === "announcement" ? selected.announcementId ?? state.savedAnnouncements[0]?.id : undefined })} />
+        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "broadcast" ? <p className="field-note">Uses the current Broadcast / Stream composition when this scheduled broadcast starts.</p> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
         <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="schedule-color-row"><label className="field"><span>Calendar color</span><input type="color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label>{selected.contentType !== "announcement" && <button type="button" className="command-button secondary compact" onClick={() => onEditDisplay(selected.target === "all" ? firstDisplayId(state) : selected.target)}><Palette size={14} /> Edit display</button>}</div><div className="field"><span>Repeats</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => patchEntry(selected.id, { days: selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day] })}>{label.slice(0, 1)}</button>; })}</div></div><label className="switch-row"><input type="checkbox" checked={selected.active} onChange={(event) => patchEntry(selected.id, { active: event.target.checked })} /><span>Active on displays</span></label>
       </div>
     </aside>, document.body)}
@@ -5286,10 +5454,27 @@ function RecognitionSettingsView({ state, updateState }: { state: LanternState; 
           <h2 id="appearance-heading">Choose the control portal theme</h2>
           <span>This changes the editor and dashboard only. Museum board designs keep their saved colors.</span>
         </div>
-        <div className="appearance-toggle" role="group" aria-label="Site color theme">
-          <button type="button" className={state.recognitionSettings.appearance !== "light" ? "active" : ""} aria-pressed={state.recognitionSettings.appearance !== "light"} onClick={() => updateState((current) => ({ ...current, recognitionSettings: { ...current.recognitionSettings, appearance: "dark" } }))}><Moon size={18} /><span><b>Dark</b><small>Current theme</small></span></button>
-          <button type="button" className={state.recognitionSettings.appearance === "light" ? "active" : ""} aria-pressed={state.recognitionSettings.appearance === "light"} onClick={() => updateState((current) => ({ ...current, recognitionSettings: { ...current.recognitionSettings, appearance: "light" } }))}><Sun size={18} /><span><b>Light</b><small>Bright and familiar</small></span></button>
-        </div>
+        <label className="appearance-select">
+          <span>Control portal theme</span>
+          <select
+            aria-label="Control portal theme"
+            value={state.recognitionSettings.appearance}
+            onChange={(event) => updateState((current) => ({
+              ...current,
+              recognitionSettings: {
+                ...current.recognitionSettings,
+                appearance: event.target.value as LanternState["recognitionSettings"]["appearance"]
+              }
+            }))}
+          >
+            <option value="dark">Dark — Low-glare classic</option>
+            <option value="light">Light — Bright and familiar</option>
+            <option value="ocean">Ocean — Calm blue and teal</option>
+            <option value="warm">Warm — Soft cream and coral</option>
+            <option value="contrast">High contrast — Maximum distinction</option>
+            <option value="sparkle">Sparkle Unicorn — Neon rainbow magic</option>
+          </select>
+        </label>
       </section>
       <div className="settings-intro">
         <div>
@@ -5575,18 +5760,19 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
           <span>{scheduledMessage.message}</span>
         </div>
       )}
+      {showLive && state.live.backgroundMode !== "board" && (
+        <div className="live-broadcast-background" style={{ backgroundColor: state.live.backgroundColor, backgroundImage: state.live.backgroundMode === "image" && state.live.backgroundImage ? `url(${state.live.backgroundImage})` : undefined }} />
+      )}
       {showLive && (
-        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined }}>
+        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, border: state.live.frameBorderWidth > 0 ? `${state.live.frameBorderWidth}px solid ${state.live.frameBorderColor}` : "none", boxSizing: "border-box" }}>
           <div className="live-camera-transform" style={{ transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
             <ChromaVideo stream={stream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
-          </div>
-          <div className="lower-third">
-            <strong>{state.live.title}</strong>
-            <span>{state.live.lowerThird}</span>
           </div>
           {!stream && <div className="video-waiting">Waiting for local video signal</div>}
         </div>
       )}
+      {showLive && <div className="live-broadcast-text live-broadcast-title" style={{ left: `${state.live.titlePosition.x}%`, top: `${state.live.titlePosition.y}%` }}><strong>{state.live.title}</strong></div>}
+      {showLive && <div className="live-broadcast-text live-broadcast-lower-third" style={{ left: `${state.live.lowerThirdPosition.x}%`, top: `${state.live.lowerThirdPosition.y}%` }}><span>{state.live.lowerThird}</span></div>}
       {identify && (
         <div className="identify-flash">
           <Monitor size={44} />
@@ -5640,7 +5826,8 @@ function Slider({
   value,
   onChange,
   min = 0,
-  max = 100
+  max = 100,
+  editableValue = false
 }: {
   label: string;
   info: string;
@@ -5648,6 +5835,7 @@ function Slider({
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  editableValue?: boolean;
 }) {
   return (
     <label className="field slider-field">
@@ -5655,7 +5843,12 @@ function Slider({
         {label}
         <InfoDot text={info} />
       </span>
-      <b>{Number.isInteger(value) ? value : value.toFixed(1)}</b>
+      {editableValue
+        ? <input className="slider-number-input" type="number" aria-label={`${label} value`} min={min} max={max} step={1} value={value} onChange={(event) => {
+          const next = event.currentTarget.valueAsNumber;
+          if (Number.isFinite(next)) onChange(Math.min(max, Math.max(min, next)));
+        }} />
+        : <b>{Number.isInteger(value) ? value : value.toFixed(1)}</b>}
       <input type="range" min={min} max={max} step={1} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
@@ -5886,9 +6079,8 @@ function labelForStyle(style: DisplayStyle) {
 }
 
 function displayRosterIds(state: LanternState, screen: DisplayProfile) {
-  if (screen.donorRosterConfigured) return (screen.donorIds ?? []).filter((id) => state.donors.some((donor) => donor.id === id));
-  if (screen.donorIds?.length) return screen.donorIds.filter((id) => state.donors.some((donor) => donor.id === id));
-  return state.donors.filter((donor) => donor.active && donor.displayIds?.includes(screen.id)).map((donor) => donor.id);
+  const board = state.boardPrograms.find((program) => program.id === screen.boardProgramId) ?? state.boardPrograms[0];
+  return (board?.donorIds ?? []).filter((id) => state.donors.some((donor) => donor.id === id && donor.active));
 }
 
 function donorSubtextVisibleForDisplay(screen: DisplayProfile, donorId: string) {

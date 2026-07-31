@@ -1,5 +1,256 @@
 [
   {
+    "id": "DEV-0102",
+    "title": "Theme dark Settings form controls",
+    "summary": "Replaced bright white Settings inputs and theme selector surfaces in Dark mode with low-glare themed controls and matching focus states.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:53 AM",
+    "areas": [
+      "Settings",
+      "Themes"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright screenshot verified Dark Settings controls"
+  },
+  {
+    "id": "DEV-0101",
+    "title": "Make schedule conflicts layer-aware",
+    "summary": "Schedule conflicts now occur only between overlapping items of the same type on the same display, while boards, announcements, and broadcasts can layer together. Broadcast scheduling controls and legend treatment were added.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:52 AM",
+    "areas": [
+      "Schedule",
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified zero conflicts for sample board-announcement overlaps and conflicts after adding two overlapping announcements"
+  },
+  {
+    "id": "DEV-0100",
+    "title": "Add Sparkle Unicorn portal theme",
+    "summary": "Added a fully themed pastel-neon rainbow portal appearance with sparkle accents and complete settings persistence.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:52 AM",
+    "areas": [
+      "Settings",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/host/lanternHost.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified the Sparkle Unicorn selection and rendered Settings page"
+  },
+  {
+    "id": "DEV-0099",
+    "title": "Complete Ocean and high-contrast workspace coverage",
+    "summary": "Applied palette-specific colors to operational panels, nested controls, inputs, buttons, dashboard tiles, schedules, announcements, broadcasts, revisions, and bugs, and preserved every supported theme during state hydration.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:45 AM",
+    "areas": [
+      "Themes",
+      "Dashboard",
+      "Settings"
+    ],
+    "files": [
+      "src/styles.css",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; Playwright visually verified Ocean Settings and Broadcast surfaces; git diff --check"
+  },
+  {
+    "id": "DEV-0098",
+    "title": "Restore broadcast tabs and clean pop-out preview",
+    "summary": "Kept Source, Frame & crop, and Effects visibly selectable in every theme and changed the pop-out into a clean program view without editing handles or toolbars.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:45 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified all three tabs and a clean pop-out; git diff --check"
+  },
+  {
+    "id": "DEV-0097",
+    "title": "Use the preferred broadcast composition by default",
+    "summary": "New installations now begin with the requested camera source, portrait frame geometry, crop, rotation, screenless removal, title, and sub-header placement.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:45 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Defaults"
+    ],
+    "files": [
+      "src/sampleData.ts"
+    ],
+    "tests": "npm run build; Playwright verified a fresh origin loads the requested broadcast defaults"
+  },
+  {
+    "id": "DEV-0096",
+    "title": "Condense theme selection into a dropdown",
+    "summary": "Replaced the five theme cards with one compact dropdown while preserving every portal palette and its description.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:36 AM",
+    "areas": [
+      "Settings",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified all five options and theme switching; git diff --check"
+  },
+  {
+    "id": "DEV-0095",
+    "title": "Remember grouped bug catalogue views per user",
+    "summary": "Moved All to the end of the status filters, made Open, In progress, and Ready for test the first-use defaults, persisted each user's selected statuses and grouping choices, and added collapsible status sections that can be turned off for a flat list.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:33 AM",
+    "areas": [
+      "Bugs",
+      "User preferences"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified default multi-select filters, All-last ordering, grouped status headers, collapse interaction, and persistence after reload; git diff --check"
+  },
+  {
+    "id": "DEV-0094",
+    "title": "Make bug reports Codex-ready across themes",
+    "summary": "Completed light and derived-theme styling for the portal bug form and added structured reproduction steps, expected and actual results, frequency, impact, and richer automatic environment diagnostics.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:17 AM",
+    "areas": [
+      "Bugs",
+      "Themes",
+      "Diagnostics"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright opened and visually verified the bug form in the Warm light-derived theme; git diff --check"
+  },
+  {
+    "id": "DEV-0093",
+    "title": "Assign donors to boards instead of displays",
+    "summary": "Made board donor rosters the source of truth for donor list badges, donor editing, board previews, and display output so assignments follow a board wherever it is shown.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:17 AM",
+    "areas": [
+      "Donors",
+      "Board Editor",
+      "Display output"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; Playwright verified board assignment controls and labels on every donor card"
+  },
+  {
+    "id": "DEV-0092",
+    "title": "Add three complete control-center themes",
+    "summary": "Added Ocean, Warm, and High Contrast theme presets with coordinated portal palettes, navigation, controls, focus states, modal coverage, and the corrected Museum Donor Board Control Center identity.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:17 AM",
+    "areas": [
+      "Settings",
+      "Navigation",
+      "Accessibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; Playwright verified all five theme choices and visually checked the Warm portal"
+  },
+  {
+    "id": "DEV-0091",
+    "title": "Compose broadcast backgrounds frames and text",
+    "summary": "Added independently draggable broadcast title and lower-third layers, selectable board/color/image backdrops, configurable camera border styling, and clearer preview-board behavior so setup previews match the broadcast composition.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:08 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Display output"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; Playwright verified background modes, draggable text layers, editable rotation, frame color/thickness controls, and preview-board labeling; git diff --check"
+  },
+  {
+    "id": "DEV-0090",
+    "title": "Control no-screen removal and speed up camera previews",
+    "summary": "Added an explicit no-screen removal on/off switch and reduced camera slowdown with a direct-video fast path when processing is disabled, 30 FPS capture, smaller effect canvases, and lower-cost AI segmentation inference.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:00 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera performance",
+      "Background removal"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx"
+    ],
+    "tests": "npm run build; Playwright toggled No-screen removal on and confirmed AI controls appeared, then toggled it off and confirmed the original camera background mode returned; git diff --check"
+  },
+  {
+    "id": "DEV-0089",
+    "title": "Directly crop and resize camera footage",
+    "summary": "Separated camera footage manipulation from the cyan placement frame. Pan and zoom mode now shows a yellow camera-image boundary with eight drag handles for resizing the footage and a draggable interior for choosing which face, hand, or other detail fills the selected mask.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:56 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera controls",
+      "Direct manipulation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright verified Pan and zoom renders yellow camera-image bounds on both previews; dragged the southeast footage handle from 140% to 184%; dragged the footage interior and confirmed pan values changed; git diff --check"
+  },
+  {
+    "id": "DEV-0088",
+    "title": "Make camera rotation directly editable",
+    "summary": "Added a synchronized numeric angle field beside the camera rotation slider so operators can enter an exact value from -180 to 180 degrees while retaining quick slider adjustment.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:52 AM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera controls"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright entered 37 in Camera rotation value and confirmed both numeric input and slider updated to 37; git diff --check"
+  },
+  {
     "id": "DEV-0087",
     "title": "Complete light theme across workspaces",
     "summary": "Applied light-theme surfaces, borders, controls, and readable text across Dashboard, Donors, Schedule, Announcements, Broadcast, Revisions, and Bugs while preserving dark recognition-display and camera preview stages.",

@@ -196,6 +196,7 @@ export async function shareLanternImages(state: LanternState): Promise<LanternSt
     announcement: { ...state.announcement, imageUrl: await shareImageUrl(state.announcement.imageUrl, "active-announcement") },
     live: {
       ...state.live,
+      backgroundImage: await shareImageUrl(state.live.backgroundImage, "live-composition-background"),
       effects: {
         ...state.live.effects,
         backgroundImage: await shareImageUrl(state.live.effects.backgroundImage, "live-background")
@@ -438,7 +439,9 @@ export function normalizeState(state: LanternState): LanternState {
       tiers: state.recognitionSettings?.tiers?.length ? state.recognitionSettings.tiers : initialState.recognitionSettings.tiers,
       categories: state.recognitionSettings?.categories?.length ? state.recognitionSettings.categories : initialState.recognitionSettings.categories,
       tags: [...new Set([...(state.recognitionSettings?.tags ?? initialState.recognitionSettings.tags), ...(state.donors ?? initialState.donors).flatMap((donor) => donor.tags ?? [])])].sort(),
-      appearance: state.recognitionSettings?.appearance === "light" ? "light" : "dark"
+      appearance: ["dark", "light", "ocean", "warm", "contrast", "sparkle"].includes(state.recognitionSettings?.appearance ?? "")
+        ? state.recognitionSettings.appearance
+        : "dark"
     },
     announcement: {
       ...initialState.announcement,

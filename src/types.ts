@@ -35,6 +35,8 @@ export interface Donor {
   amount?: number;
   donations?: DonationRecord[];
   displayIds?: ScreenId[];
+  /** Boards whose donor rosters include this donor. Display placement is derived from the board. */
+  boardIds?: string[];
   icon?: "none" | "star" | "heart" | "leaf" | "sparkle" | "diamond" | "crown" | "laurel" | "sun" | "hand";
   customIconImage?: string;
   fontOverride?: DisplayProfile["fontFamily"];
@@ -153,7 +155,7 @@ export interface ScheduleEntry {
   name: string;
   target: TargetScreen;
   boardId: string;
-  contentType?: "board" | "announcement";
+  contentType?: "board" | "announcement" | "broadcast";
   announcementId?: string;
   days: number[];
   recurrence?: "once" | "weekly";
@@ -170,7 +172,7 @@ export interface RecognitionSettings {
   tiers: string[];
   categories: string[];
   tags: string[];
-  appearance: "dark" | "light";
+  appearance: "dark" | "light" | "ocean" | "warm" | "contrast" | "sparkle";
 }
 
 export interface Announcement {
@@ -256,6 +258,13 @@ export interface LivePresentation {
   target: TargetScreen;
   title: string;
   lowerThird: string;
+  titlePosition: { x: number; y: number };
+  lowerThirdPosition: { x: number; y: number };
+  backgroundMode: "board" | "color" | "image";
+  backgroundColor: string;
+  backgroundImage?: string;
+  frameBorderColor: string;
+  frameBorderWidth: number;
   usingCamera: boolean;
   source: LiveSource;
   frame: LiveVideoFrame;
