@@ -71,7 +71,15 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     const video = videoRef.current;
     if (!video) return;
     video.srcObject = stream;
-    if (stream) void video.play().catch(() => undefined);
+    if (stream) {
+      const play = () => void video.play().catch(() => undefined);
+      video.addEventListener("loadedmetadata", play, { once: true });
+      play();
+      return () => {
+        video.removeEventListener("loadedmetadata", play);
+        video.srcObject = null;
+      };
+    }
     return () => {
       video.srcObject = null;
     };

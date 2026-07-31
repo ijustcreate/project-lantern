@@ -1,5 +1,37 @@
 [
   {
+    "id": "DEV-0142",
+    "title": "Restore camera source previews",
+    "summary": "Allow camera preview to connect without a working microphone, refresh device lists when hardware changes, and reliably start video playback after the stream loads.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:26 PM",
+    "areas": [
+      "Camera",
+      "Broadcast / Stream",
+      "Room camera"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0141",
+    "title": "Fix dashboard preview resizing after display additions",
+    "summary": "Ensure display-tile resize events update both the Babylon canvas viewport and 2D camera framing, preventing portrait boards from being clipped when three or four displays are shown.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:24 PM",
+    "areas": [
+      "Dashboard",
+      "Display previews"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0140",
     "title": "Sync shared bug reporters into the current-user dropdown",
     "summary": "Shared reporter names now travel with the roster refresh event so users created on another device, including Edward, appear in the app-wide user dropdown.",

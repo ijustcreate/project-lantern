@@ -193,7 +193,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     // Dashboard tiles can settle through several grid passes when a display
     // is added. Refit once after layout has committed so a newly shortened
     // preview never keeps the previous tile's camera framing.
-    const initialResizeFrame = window.requestAnimationFrame(resizeCamera);
+    let initialResizeFrame = 0;
 
     let redrawPanel: (animationTime?: number) => void = () => undefined;
     prepareBackgroundMedia(screen, () => redrawPanel());
@@ -313,6 +313,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     resizeObserver.observe(canvas);
     if (canvas.parentElement) resizeObserver.observe(canvas.parentElement);
     window.addEventListener("resize", resize);
+    initialResizeFrame = window.requestAnimationFrame(resize);
 
     return () => {
       window.cancelAnimationFrame(resizeFrame);

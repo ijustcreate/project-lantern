@@ -4003,8 +4003,11 @@ function LivePreviewPanel({
   }, [recording]);
 
   useEffect(() => {
-    void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => setDevices([]));
+    const refreshDevices = () => void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => setDevices([]));
+    refreshDevices();
+    navigator.mediaDevices?.addEventListener("devicechange", refreshDevices);
     return () => {
+      navigator.mediaDevices?.removeEventListener("devicechange", refreshDevices);
       previewStreamRef.current?.getTracks().forEach((track) => track.stop());
       if (previewWindowRef.current && !previewWindowRef.current.closed) previewWindowRef.current.close();
       recorderRef.current?.state === "recording" && recorderRef.current.stop();
@@ -4065,12 +4068,24 @@ function LivePreviewPanel({
     }
     setPreviewBusy(true);
     try {
-      const stream = source === "screen"
-        ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 60 } }, audio: true })
-        : await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: state.live.videoDeviceId ? { exact: state.live.videoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
-            audio: state.live.audioDeviceId ? { deviceId: { exact: state.live.audioDeviceId } } : true
-          });
+      let stream: MediaStream;
+      if (source === "screen") {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 60 } }, audio: true });
+      } else {
+        const video = { deviceId: state.live.videoDeviceId ? { exact: state.live.videoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } };
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video, audio: state.live.audioDeviceId ? { deviceId: { exact: state.live.audioDeviceId } } : true });
+        } catch (error) {
+          if (!(error instanceof DOMException) || !["NotFoundError", "NotReadableError", "OverconstrainedError"].includes(error.name)) throw error;
+          stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+          setPreviewError("Camera connected without microphone; check the microphone selection if audio is needed.");
+        }
+      }
+      // A camera must remain usable when the optional microphone is missing or denied.
+      if (source === "camera") {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack) throw new DOMException("No camera track was returned.", "NotFoundError");
+      }
       stream.getVideoTracks().forEach((track) => track.addEventListener("ended", () => {
         setPreviewStream(null);
         setPreviewError(source === "screen" ? "Screen sharing ended. Choose a window again to resume." : "The camera stopped. Reconnect it or choose another camera.");
