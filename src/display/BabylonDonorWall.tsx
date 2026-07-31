@@ -366,31 +366,28 @@ function drawTextureContent(
   const isPortrait = screen.orientation === "Portrait";
   const previewProgram = previewProgramId ? state.boardPrograms.find((program) => program.id === previewProgramId) : undefined;
   const activeProgram = previewProgram ?? resolveActiveProgram(state, screenId, new Date());
-  const rosterIds = screen.donorIds ?? [];
+  // Board programs are the source of truth for a saved board. Display-level
+  // roster/layout fields are retained only for legacy boards without panels.
+  const rosterIds = activeProgram?.donorIds ?? [];
   const donors = state.donors.filter((donor) => {
     if (!donor.active) return false;
+    if (activeProgram) return rosterIds.includes(donor.id);
     if (!donor.displayIds?.includes(screenId)) return false;
     if (screen.donorRosterConfigured && !rosterIds.includes(donor.id)) return false;
-    if (!screen.donorRosterConfigured && rosterIds.length && !rosterIds.includes(donor.id)) return false;
-    if (screen.donorRosterConfigured) return true;
-    return !activeProgram || activeProgram.donorIds.includes(donor.id);
-  }).sort((a, b) => screen.donorRosterConfigured ? rosterIds.indexOf(a.id) - rosterIds.indexOf(b.id) : 0);
+    return !rosterIds.length || rosterIds.includes(donor.id);
+  }).sort((a, b) => rosterIds.indexOf(a.id) - rosterIds.indexOf(b.id));
   const baseProgram = activeProgram ?? state.boardPrograms[0];
-  const displayProgram = previewProgram
-    ? previewProgram
-    : ({
-        ...baseProgram,
-        heading: screen.customHeading || baseProgram?.heading || state.board.portraitHeading,
-        subtitle: screen.customSubheading || baseProgram?.subtitle || state.board.portraitSubtitle,
-        columns: screen.columns ?? baseProgram?.columns ?? state.board.donorColumns,
-        fontFamily: screen.fontFamily ?? baseProgram?.fontFamily,
-        nameSize: screen.nameSize ?? baseProgram?.nameSize,
-        donorScrollEnabled: screen.donorScrollEnabled ?? baseProgram?.donorScrollEnabled,
-        donorScrollSpeed: screen.donorScrollSpeed ?? baseProgram?.donorScrollSpeed,
-        donorScrollDirection: baseProgram?.donorScrollDirection,
-        showIcons: screen.showIcons ?? baseProgram?.showIcons,
-        showSubtext: baseProgram?.showSubtext
-      } as LanternState["boardPrograms"][number]);
+  const displayProgram = previewProgram ?? baseProgram;
+  const renderScreen = displayProgram ? {
+    ...screen,
+    showFrame: displayProgram.showFrame ?? screen.showFrame,
+    showIcons: displayProgram.showIcons ?? screen.showIcons,
+    textFinish: displayProgram.textFinish ?? screen.textFinish,
+    textShadowEnabled: displayProgram.textShadowEnabled ?? screen.textShadowEnabled,
+    textShadowStrength: displayProgram.textShadowStrength ?? screen.textShadowStrength,
+    textShadowAngle: displayProgram.textShadowAngle ?? screen.textShadowAngle,
+    textShadowDistance: displayProgram.textShadowDistance ?? screen.textShadowDistance
+  } : screen;
 
   const draw = () => {
     context.save();
@@ -402,7 +399,7 @@ function drawTextureContent(
       drawHeading(context, width, height, screenId, state.revision, "constellation", displayProgram);
       drawConstellationDonors(context, width, height, donors, isPortrait);
     } else {
-      drawMuseumBoard(context, width, height, state, donors, isPortrait, screen.layoutScale, displayProgram, screen, animationTime);
+      drawMuseumBoard(context, width, height, state, donors, isPortrait, screen.layoutScale, displayProgram, renderScreen, animationTime);
     }
 
     applyBrightness(context, width, height, screen.brightness);
@@ -1429,7 +1426,7 @@ function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date
     return entry.days.includes(date.getDay());
   };
   const schedule = state.schedules?.find((entry) => entry.contentType !== "announcement" && entry.active && matchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
-  if (schedule) return state.boardPrograms?.find((program) => program.id === schedule.boardId && program.active);
+  if (schedule) return state.boardPrograms?.find((program) => program.id === schedule.boardId);
   let latest: { entry: ScheduleEntry; endedAt: number } | null = null;
   for (const entry of state.schedules ?? []) {
     if (entry.contentType === "announcement" || !entry.active || (entry.target !== "all" && entry.target !== screenId)) continue;
@@ -1454,12 +1451,12 @@ function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date
     }
   }
   if (latest) {
-    const program = state.boardPrograms?.find((candidate) => candidate.id === latest!.entry.boardId && candidate.active);
+    const program = state.boardPrograms?.find((candidate) => candidate.id === latest!.entry.boardId);
     if (program) return program;
   }
   const assignedProgramId = state.screens[screenId]?.boardProgramId;
   return state.boardPrograms?.find((program) => program.id === assignedProgramId)
-    ?? state.boardPrograms?.find((program) => program.active && program.orientation === state.screens[screenId]?.orientation)
+    ?? state.boardPrograms?.find((program) => program.orientation === state.screens[screenId]?.orientation)
     ?? state.boardPrograms?.[0];
 }
 

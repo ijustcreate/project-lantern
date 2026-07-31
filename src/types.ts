@@ -129,6 +129,12 @@ export interface DonorBoardProgram {
   backgroundImage?: string;
   backgroundMediaId?: string;
   backgroundCrop?: ImageCrop;
+  showFrame?: boolean;
+  textFinish?: "flat" | "cut-brass";
+  textShadowEnabled?: boolean;
+  textShadowStrength?: number;
+  textShadowAngle?: number;
+  textShadowDistance?: number;
 }
 
 export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image";
@@ -160,6 +166,7 @@ export interface BoardPanel {
   donorDividerThickness?: number;
   donorDividerOpacity?: number;
 }
+export interface BoardWidget { id: string; name: string; panels: BoardPanel[]; defaultImageUrl?: string; }
 
 export interface ScheduleEntry {
   id: string;
@@ -167,6 +174,10 @@ export interface ScheduleEntry {
   target: TargetScreen;
   boardId: string;
   contentType?: "board" | "announcement" | "broadcast";
+  broadcastMode?: "recorded" | "live";
+  broadcastVideoUrl?: string;
+  broadcastVideoName?: string;
+  presenterName?: string;
   announcementId?: string;
   days: number[];
   recurrence?: "once" | "weekly";
@@ -264,6 +275,7 @@ export interface LiveEffectsSettings {
   partyHatEnabled?: boolean;
   faceTracking: boolean;
   puppetPreview: boolean;
+  trackingDebug?: boolean;
 }
 
 export interface LivePresentation {
@@ -370,6 +382,7 @@ export interface LanternState {
   theme: LanternTheme;
   board: BoardContent;
   boardPrograms: DonorBoardProgram[];
+  widgets?: BoardWidget[];
   schedules: ScheduleEntry[];
   savedAnnouncements: SavedAnnouncement[];
   announcement: Announcement;

@@ -1,5 +1,235 @@
 [
   {
+    "id": "DEV-0139",
+    "title": "Expand face, shoulder, and hand tracking",
+    "summary": "Added detailed face-region, gaze, shoulder, palm, finger and fingertip tracking with hand loss/reacquisition state, plus a camera-free colored-node diagnostics mode for testing every landmark.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:16 PM",
+    "areas": [
+      "Broadcast",
+      "Camera effects",
+      "Tracking diagnostics"
+    ],
+    "files": [
+      "src/components/ChromaVideo.tsx",
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0138",
+    "title": "Improve auto-removal hand and finger detection",
+    "summary": "Increased segmentation input detail and made mask smoothing respond faster to moving edges so fingers track more reliably without changing the realtime cadence.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:09 PM",
+    "areas": [
+      "Live video",
+      "Background removal"
+    ],
+    "files": [
+      "src/components/ChromaVideo.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0137",
+    "title": "Hide announcement manipulation controls on deselect",
+    "summary": "Clicking outside an announcement element in the live preview now exits edit mode so the physical display can be inspected without resize handles or outlines.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:07 PM",
+    "areas": [
+      "Announcements",
+      "Live preview",
+      "Announcement editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; BUG-0037 moved to ready-for-test"
+  },
+  {
+    "id": "DEV-0136",
+    "title": "Improve announcements preview workspace",
+    "summary": "Moved Preview and Save announcement actions into the live preview header, gave the preview display more horizontal space, and strengthened announcement manipulation handles.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:59 PM",
+    "areas": [
+      "Announcements",
+      "Live preview",
+      "Announcement editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; bug record BUG-0036 moved to ready-for-test"
+  },
+  {
+    "id": "DEV-0135",
+    "title": "Align live displays with saved board editor programs",
+    "summary": "Made live display rendering use the assigned board program roster and composition instead of legacy display-level overrides; board frame and donor icon settings now save with the board.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:52 PM",
+    "areas": [
+      "Board Editor",
+      "Live Display Rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0134",
+    "title": "Separate display and board editing actions",
+    "summary": "Added Edit Display to each display card header and kept Edit Board in the bottom action row for the active board.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:43 PM",
+    "areas": [
+      "Dashboard",
+      "Display editing"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0133",
+    "title": "Move user selector to shared header",
+    "summary": "Moved the current-user dropdown from the sidebar into the shared top header, immediately after How to use on the dashboard and available on every control-center page while preserving the existing persisted selection.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:40 PM",
+    "areas": [
+      "Navigation",
+      "User workflow"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0132",
+    "title": "Sync bug reporters into user dropdowns",
+    "summary": "Automatically add names found in local or shared bug records to the saved user roster and refresh user dropdowns across the app.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:36 PM",
+    "areas": [
+      "Bug reporting",
+      "User management"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0131",
+    "title": "Prevent narrow sidebar overlap",
+    "summary": "Keep sidebar navigation scrollable at constrained heights so user, theme, utility, and status controls remain separated when the site is shrunk.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:35 PM",
+    "areas": [
+      "Responsive layout",
+      "Sidebar navigation"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0130",
+    "title": "Add scheduled broadcast source selection",
+    "summary": "Scheduled broadcasts default to recorded video with upload support; live broadcasts can name a presenter and prompt them at showtime while highlighting Broadcast / Stream.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:34 PM",
+    "areas": [
+      "Schedule calendar",
+      "Broadcast / Stream",
+      "Navigation"
+    ],
+    "files": [
+      "src/types.ts",
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0129",
+    "title": "Improve scheduled event recurrence editing",
+    "summary": "Scheduled events now preview across selected weekdays before save, support from/to date ranges, use a compact themed color swatch, and keep content type fixed by the creation action.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:29 PM",
+    "areas": [
+      "Schedule calendar",
+      "Schedule event editor",
+      "Theme styling"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0128",
+    "title": "Board editor widgets and selection",
+    "summary": "Added empty-board support, responsive save alignment, multi-selection/group deletion, and reusable widgets with cloned image defaults.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:24 PM",
+    "areas": [
+      "Board editor",
+      "Widgets"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0127",
+    "title": "Simplify board and display settings",
+    "summary": "Removed the board schedule-availability toggle and board-editor particle popup; consolidated all particle controls in Display Configure and made boards always eligible for resolution.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 1:13 PM",
+    "areas": [
+      "Board Editor",
+      "Display Configure",
+      "Scheduling"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; rg verification for removed board controls and particle popup"
+  },
+  {
+    "id": "DEV-0126",
+    "title": "Stop browser popup blocking for Open displays",
+    "summary": "Browser fallback now navigates the current tab to the display route instead of opening popup windows, preventing the browser blocked-popup indicator.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 12:56 PM",
+    "areas": [
+      "Display hosting",
+      "Browser fallback"
+    ],
+    "files": [
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0125",
     "title": "Improve display editing and user workflows",
     "summary": "Added per-user bug launcher positioning and user selection, safer donor deletion and unsaved-change handling, direct board/display opening controls, and expanded board presentation settings.",

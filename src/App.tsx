@@ -100,6 +100,7 @@ import type {
   DisplayProfile,
   DisplayStyle,
   BoardPanel,
+  BoardWidget,
   BoardPanelType,
   Donor,
   DonorBoardProgram,
@@ -235,8 +236,20 @@ function ControlCenter() {
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const [displayEditorOpen, setDisplayEditorOpen] = useState(false);
+  const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<ScheduleEntry | null>(null);
   const videoBridge = useRef<DirectorVideoBridge | null>(null);
   const showIdeas = false;
+
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const due = state.schedules.find((entry) => entry.active && entry.contentType === "broadcast" && entry.broadcastMode === "live" && entryOccursOnDate(entry, now) && timeToMinutes(entry.startTime) <= now.getHours() * 60 + now.getMinutes() && timeToMinutes(entry.endTime) > now.getHours() * 60 + now.getMinutes());
+      setScheduledBroadcastPrompt(due ?? null);
+    };
+    check();
+    const timer = window.setInterval(check, 15_000);
+    return () => window.clearInterval(timer);
+  }, [state.schedules]);
 
   useEffect(() => {
     const roster = users.includes(activeUser) ? users : [...users, activeUser];
@@ -244,6 +257,12 @@ function ControlCenter() {
     localStorage.setItem(ACTIVE_BUG_USER_KEY, activeUser);
     localStorage.setItem(BUG_USERS_KEY, JSON.stringify(roster));
   }, [activeUser, users]);
+
+  useEffect(() => {
+    const refreshUsers = () => setUsers(readBugUsers());
+    window.addEventListener(BUG_USERS_UPDATED_EVENT, refreshUsers);
+    return () => window.removeEventListener(BUG_USERS_UPDATED_EVENT, refreshUsers);
+  }, []);
 
   const addMenuUser = () => {
     const name = window.prompt("New user name")?.trim();
@@ -530,20 +549,13 @@ function ControlCenter() {
           {navItems.filter((item) => item.id !== "revisions" && item.id !== "bugs").map((item) => {
             const Icon = item.icon;
             return (
-              <button className={view === item.id ? "nav-item active" : "nav-item"} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
+              <button className={`${view === item.id ? "nav-item active" : "nav-item"}${item.id === "live" && scheduledBroadcastPrompt ? " scheduled-live-nav" : ""}`} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
                 <span className="nav-icon"><Icon size={18} /></span>
                 <span className="nav-copy"><b>{item.label}</b></span>
               </button>
             );
           })}
         </nav>
-        <label className="sidebar-user-control">
-          <span><Users size={15} /> User</span>
-          <select aria-label="Current user" value={activeUser} onChange={(event) => event.target.value === "__new__" ? addMenuUser() : setActiveUser(event.target.value)}>
-            {users.map((user) => <option key={user} value={user}>{user}</option>)}
-            <option value="__new__">+ Create user…</option>
-          </select>
-        </label>
         <label className="sidebar-theme-control">
           <span><Palette size={15} /> Site theme</span>
           <select
@@ -603,12 +615,20 @@ function ControlCenter() {
               </button>
               </>
             )}
+            <label className="header-user-control">
+              <span><Users size={15} /> User</span>
+              <select aria-label="Current user" value={activeUser} onChange={(event) => event.target.value === "__new__" ? addMenuUser() : setActiveUser(event.target.value)}>
+                {users.map((user) => <option key={user} value={user}>{user}</option>)}
+                <option value="__new__">+ Create user…</option>
+              </select>
+            </label>
           </div>
         </header>
         <nav className="mobile-primary-nav" aria-label="Primary navigation">
           {navItems.filter((item) => ["dashboard", "donors", "theme", "schedule", "announcements", "live", "settings"].includes(item.id)).map((item) => {
             const Icon = item.icon;
-            return <button type="button" key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><Icon size={17} /><span>{item.label}</span></button>;
+            const scheduledLive = item.id === "live" && scheduledBroadcastPrompt;
+            return <button type="button" key={item.id} className={`${view === item.id ? "active " : ""}${scheduledLive ? "scheduled-live-nav" : ""}`} onClick={() => setView(item.id)} aria-current={view === item.id ? "page" : undefined}><Icon size={17} /><span>{item.label}</span></button>;
           })}
         </nav>
 
@@ -620,9 +640,10 @@ function ControlCenter() {
             updateState={updateState}
             deleteDisplay={deleteDisplay}
             identifyDisplay={identifyDisplay}
-            editDisplay={(screenId) => {
-              setSelectedDisplayId(screenId);
+            editDisplay={(screenId) => openDisplayEditor(screenId)}
+            editBoard={(boardId) => {
               setView("theme");
+              window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0);
             }}
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room")}
             scheduleBoardNow={scheduleBoardNow}
@@ -678,6 +699,7 @@ function ControlCenter() {
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
       </main>
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
+      {scheduledBroadcastPrompt && <div className="modal-backdrop scheduled-broadcast-backdrop"><section className="editor-modal scheduled-broadcast-prompt" role="dialog" aria-modal="true" aria-labelledby="scheduled-broadcast-prompt-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled broadcast</p><h2 id="scheduled-broadcast-prompt-title">Scheduled broadcast</h2></div></div><p><strong>{scheduledBroadcastPrompt.name}</strong> is scheduled to start now{scheduledBroadcastPrompt.presenterName ? ` for ${scheduledBroadcastPrompt.presenterName}` : ""}. Do you wish to start?</p><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setScheduledBroadcastPrompt(null)}>Not now</button><button type="button" className="command-button primary" onClick={() => { setScheduledBroadcastPrompt(null); setView("live"); }}>Open Broadcast / Stream</button></div></section></div>}
       {bugLauncherVisible && <button className="bug-report-fab" style={{ left: bugLauncherPosition.x, top: bugLauncherPosition.y }}
         onPointerDown={(event) => { bugLauncherDrag.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bugLauncherPosition.x, originY: bugLauncherPosition.y, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }}
         onPointerMove={moveBugLauncher}
@@ -718,6 +740,7 @@ const BUG_USERS_KEY = "project-lantern-bug-users";
 const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
 const BUG_VIEW_PREFS_KEY = "project-lantern-bug-view-preferences";
 const BUG_LAUNCHER_POSITIONS_KEY = "project-lantern-bug-launcher-positions";
+const BUG_USERS_UPDATED_EVENT = "project-lantern-bug-users-updated";
 const DEFAULT_BUG_USERS = ["Felix", "Codex"];
 const UNATTRIBUTED_BUG_USER = "Unattributed";
 const BUG_API_ENDPOINT = (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
@@ -729,6 +752,9 @@ function readBugUsers() {
     const saved = JSON.parse(localStorage.getItem(BUG_USERS_KEY) ?? "[]") as unknown;
     return Array.from(new Set([...DEFAULT_BUG_USERS, ...(Array.isArray(saved) ? saved.filter((user): user is string => typeof user === "string") : [])].map((user) => user.trim()).filter(Boolean)));
   } catch { return [...DEFAULT_BUG_USERS]; }
+}
+function notifyBugUsersUpdated() {
+  window.dispatchEvent(new Event(BUG_USERS_UPDATED_EVENT));
 }
 function readBugLauncherPosition(user: string): { x: number; y: number } {
   try {
@@ -1161,6 +1187,13 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
     }
     const local = readWebBugs();
     setBugs(local);
+    const localReporters = local.map(bugEnteredBy).filter((user) => user !== UNATTRIBUTED_BUG_USER);
+    const localRoster = Array.from(new Set([...readBugUsers(), ...localReporters]));
+    if (localRoster.length !== readBugUsers().length) {
+      localStorage.setItem(BUG_USERS_KEY, JSON.stringify(localRoster));
+      setUsers((current) => Array.from(new Set([...current, ...localReporters])));
+      notifyBugUsersUpdated();
+    }
     if (!BUG_API_ENDPOINT) {
       setMessage(local.length ? "Reports are saved on this device. Use Export all to share them." : "");
       return;
@@ -1172,6 +1205,13 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
       shared = await readBridgeBugs();
       writeWebBugs(shared);
       setBugs(shared);
+      const reporters = shared.map(bugEnteredBy).filter((user) => user !== UNATTRIBUTED_BUG_USER);
+      const roster = Array.from(new Set([...readBugUsers(), ...reporters]));
+      if (roster.length !== readBugUsers().length) {
+        localStorage.setItem(BUG_USERS_KEY, JSON.stringify(roster));
+        setUsers((current) => Array.from(new Set([...current, ...reporters])));
+        notifyBugUsersUpdated();
+      }
       setMessage("");
     } catch {
       setMessage("Shared bug service unavailable. Reports on this device are still available and can be exported.");
@@ -1609,6 +1649,7 @@ function Dashboard({
   deleteDisplay,
   identifyDisplay,
   editDisplay,
+  editBoard,
   editRoomCamera,
   scheduleBoardNow
 }: {
@@ -1619,6 +1660,7 @@ function Dashboard({
   deleteDisplay: (screenId: ScreenId) => void;
   identifyDisplay: (screenId: ScreenId) => void;
   editDisplay: (screenId: ScreenId) => void;
+  editBoard: (boardId: string) => void;
   editRoomCamera: (screenId: ScreenId) => void;
   scheduleBoardNow: (screenId: ScreenId, boardId: string) => void;
 }) {
@@ -1654,7 +1696,7 @@ function Dashboard({
                     </div>
                     <span>{screen.orientation} · {screen.resolution}</span>
                   </div>
-                  <div className="dashboard-display-status">{noScheduledBoard && activeBoard && <button className="command-button secondary compact dashboard-schedule-now" onClick={() => scheduleBoardNow(screen.id, activeBoard.id)}><CalendarDays size={15} /> Add schedule</button>}<button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
+                  <div className="dashboard-display-status">{noScheduledBoard && activeBoard && <button className="command-button secondary compact dashboard-schedule-now" onClick={() => scheduleBoardNow(screen.id, activeBoard.id)}><CalendarDays size={15} /> Add schedule</button>}<button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="command-button secondary compact" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`}><Settings2 size={15} /> Edit Display</button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
                 <div className={`dashboard-display-preview ${orientationClass(screen)} mode-${preview3d[screen.id] ? "3d" : "2d"}${previewDimmed ? " dimmed" : ""}`}>
                   {noScheduledBoard && <button type="button" className={`preview-dim-toggle${previewDimmed ? "" : " active"}`} onClick={() => setUndimmedDisplays((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={previewDimmed ? "Show this unscheduled preview at full brightness" : "Dim this unscheduled preview"}><Eye size={15} /></button>}
@@ -1662,7 +1704,7 @@ function Dashboard({
                   <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
                   <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
                 </div>
-                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" onClick={() => editDisplay(screen.id)}><Settings2 size={16} /> Edit</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
+                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!activeBoard} onClick={() => activeBoard && editBoard(activeBoard.id)} title={activeBoard ? `Edit ${activeBoard.name}` : "No active board assigned"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
             );})}
           </div>
@@ -2372,43 +2414,19 @@ function ThemeStudio({
     return () => window.removeEventListener("lantern:open-board", openBoard);
   }, []);
   const [selectedPanelId, setSelectedPanelId] = useState("");
+  const [selectedPanelIds, setSelectedPanelIds] = useState<string[]>([]);
   const [newPanelType, setNewPanelType] = useState<BoardPanelType>("message");
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [particleEditorOpen, setParticleEditorOpen] = useState(false);
-  const [particleEditorPosition, setParticleEditorPosition] = useState(() => ({
-    x: Math.max(16, window.innerWidth - 450),
-    y: 130
-  }));
-  const particleEditorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const boardDisplay = selectedProgram ? { ...display, orientation: selectedProgram.orientation } : display;
-  const panels = selectedProgram?.panels?.length ? selectedProgram.panels : selectedProgram ? defaultBoardPanels(selectedProgram) : [];
+  const panels = selectedProgram?.panels ?? [];
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
   const donorPageSize = 8;
   const donorPageCount = Math.max(1, Math.ceil(state.donors.length / donorPageSize));
   const donorPageItems = state.donors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
-  const moveParticleEditor = (event: React.PointerEvent<HTMLElement>) => {
-    const drag = particleEditorDragRef.current;
-    if (!drag) return;
-    setParticleEditorPosition({
-      x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 410)),
-      y: clamp(drag.y + event.clientY - drag.pointerY, 72, Math.max(72, window.innerHeight - 120))
-    });
-  };
-
-  useEffect(() => {
-    if (!selectedProgram || selectedProgram.panels?.length) return;
-    const migrated = defaultBoardPanels(selectedProgram);
-    updateState((current) => ({
-      ...current,
-      boardPrograms: current.boardPrograms.map((program) => program.id === selectedProgram.id ? { ...program, panels: migrated } : program)
-    }));
-    setSelectedPanelId("");
-  }, [selectedProgram?.id, selectedProgram?.panels?.length, updateState]);
-
   useEffect(() => {
     if (!selectedProgram?.panels?.some((panel) => panel.x == null || panel.y == null || panel.width == null || panel.height == null)) return;
     const fallback = defaultBoardPanels(selectedProgram);
@@ -2488,13 +2506,21 @@ function ThemeStudio({
     setSelectedPanelId(panel.id);
     setPlacingPanelType(null);
   };
+  const addWidget = (widget: BoardWidget) => {
+    const cloned = widget.panels.map((panel) => ({ ...panel, id: `${widget.id}-${Date.now()}-${panel.id}`, imageUrl: panel.imageUrl ?? widget.defaultImageUrl }));
+    patchProgram({ panels: [...panels, ...cloned] }); setSelectedPanelIds(cloned.map((panel) => panel.id)); setSelectedPanelId(cloned[0]?.id ?? "");
+  };
+  const saveWidget = (name: string) => {
+    const chosen = panels.filter((panel) => selectedPanelIds.includes(panel.id)); if (!chosen.length) return;
+    const widget: BoardWidget = { id: `widget-${Date.now()}`, name, panels: chosen.map((panel) => ({ ...panel, id: `${panel.id}-template` })), defaultImageUrl: chosen.find((panel) => panel.type === "image" && panel.imageUrl)?.imageUrl };
+    updateState((current) => ({ ...current, widgets: [...(current.widgets ?? []), widget] }));
+  };
 
   const removePanel = (panelId: string) => {
-    if (panels.length <= 1) return;
-    const index = panels.findIndex((panel) => panel.id === panelId);
-    const nextPanels = panels.filter((panel) => panel.id !== panelId);
+    const ids = selectedPanelIds.includes(panelId) ? selectedPanelIds : [panelId];
+    const nextPanels = panels.filter((panel) => !ids.includes(panel.id));
     patchProgram({ panels: nextPanels });
-    setSelectedPanelId("");
+    setSelectedPanelId(""); setSelectedPanelIds([]);
   };
 
   const duplicateProgram = () => {
@@ -2517,7 +2543,7 @@ function ThemeStudio({
       name: "Untitled board",
       active: false,
       donorIds: [],
-      panels: defaultBoardPanels({ ...selectedProgram, id, name: "Untitled board" })
+      panels: []
     };
     updateState((current) => ({ ...current, boardPrograms: [...current.boardPrograms, next] }));
     setSelectedProgramId(id);
@@ -2660,13 +2686,17 @@ function ThemeStudio({
             program={selectedProgram}
             panels={panels}
             selectedPanelId={selectedPanel?.id ?? ""}
-            onSelect={setSelectedPanelId}
+            selectedPanelIds={selectedPanelIds}
+            onSelect={(id, additive) => { setSelectedPanelId(id); setSelectedPanelIds((current) => additive ? (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]) : [id]); }}
             onPatch={patchPanel}
             onRemove={removePanel}
             onRenameDonor={renameDonor}
             placingPanelType={placingPanelType}
             onBeginPlace={setPlacingPanelType}
             onAdd={addPanel}
+            widgets={state.widgets ?? []}
+            onAddWidget={addWidget}
+            onSaveWidget={saveWidget}
             editorZoom={boardEditorZoom}
           />
         </main>
@@ -2704,7 +2734,7 @@ function ThemeStudio({
             <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
-              <label className="switch-row"><input type="checkbox" checked={display.showFrame ?? true} onChange={(event) => patchDisplay({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
+              <label className="switch-row"><input type="checkbox" checked={selectedProgram.showFrame ?? display.showFrame ?? true} onChange={(event) => patchProgram({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
               <div className="board-background-controls">
                 <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {display.backgroundImage ? "Replace background" : "Add background image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
                 {display.backgroundImage && <button type="button" className="command-button danger compact" onClick={removeBoardBackground}><Trash2 size={15} /> Remove background</button>}
@@ -2721,45 +2751,12 @@ function ThemeStudio({
                 <Slider label="Shadow angle" info="Sets the direction the shadow falls, in degrees." value={display.textShadowAngle ?? 135} min={0} max={360} onChange={(textShadowAngle) => patchDisplay({ textShadowAngle })} />
                 <Slider label="Shadow distance" info="Sets how far the text appears lifted from the board." value={display.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchDisplay({ textShadowDistance })} />
               </>}
-              <label className="switch-row"><input type="checkbox" checked={display.showIcons ?? false} onChange={(event) => patchDisplay({ showIcons: event.target.checked })} /><span>Show donor icons</span></label>
-              <div className="particle-editor-launch">
-                <label className="switch-row"><input type="checkbox" checked={display.particleAnimationEnabled ?? false} onChange={(event) => { patchDisplay({ particleAnimationEnabled: event.target.checked }); if (!event.target.checked) setParticleEditorOpen(false); }} /><span>Animate board particles</span></label>
-                <button type="button" className="command-button secondary compact" disabled={!display.particleAnimationEnabled} onClick={() => setParticleEditorOpen(true)}><SlidersHorizontal size={15} /> Adjust particles</button>
-              </div>
+              <label className="switch-row"><input type="checkbox" checked={selectedProgram.showIcons ?? display.showIcons ?? false} onChange={(event) => patchProgram({ showIcons: event.target.checked })} /><span>Show donor icons</span></label>
               <p className="field-note">Donor subtext is controlled per name in Displays &gt; Assigned names.</p>
-              <label className="switch-row"><input type="checkbox" checked={selectedProgram.active} onChange={(event) => patchProgram({ active: event.target.checked })} /><span>Available to schedules</span></label>
             </div></details></>}
           </div>
         </aside>
       </div>
-      {particleEditorOpen && display.particleAnimationEnabled && createPortal(<aside className="particle-editor-popup" style={{ left: particleEditorPosition.x, top: particleEditorPosition.y }} aria-label="Particle settings">
-        <header className="particle-editor-popup-header" onPointerDown={(event) => {
-          if ((event.target as Element).closest("button")) return;
-          particleEditorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...particleEditorPosition };
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }} onPointerMove={moveParticleEditor} onPointerUp={() => { particleEditorDragRef.current = null; }} onPointerCancel={() => { particleEditorDragRef.current = null; }}>
-          <div><p className="eyebrow">Board effects</p><h2>Adjust particles</h2></div>
-          <button type="button" className="icon-button" onClick={() => setParticleEditorOpen(false)} title="Close particle settings"><X size={17} /></button>
-        </header>
-        <div className="particle-editor-popup-body">
-          <section className="particle-settings-group">
-            <h3>Appearance</h3>
-            <LabeledSelect label="Particle colors" info="Warm uses white and gold; primary uses classic red, yellow, and blue." value={display.particleColorStyle ?? "warm"} options={["warm", "primary"]} optionLabels={{ warm: "White + warm gold", primary: "Primary colors" }} onChange={(particleColorStyle) => patchDisplay({ particleColorStyle: particleColorStyle as DisplayProfile["particleColorStyle"] })} />
-            <div className="two-col"><Slider label="Particle count" info="How many particles are visible." value={display.particleCount ?? 34} min={4} max={120} onChange={(particleCount) => patchDisplay({ particleCount })} /><Slider label="Particle size" info="Average particle size." value={display.particleSize ?? 4} min={1} max={12} onChange={(particleSize) => patchDisplay({ particleSize })} /></div>
-            <Slider label="Dispersion" info="How widely particles are scattered across the board." value={display.particleSpread ?? 100} min={10} max={100} onChange={(particleSpread) => patchDisplay({ particleSpread })} />
-          </section>
-          <section className="particle-settings-group">
-            <h3>Motion</h3>
-            <LabeledSelect label="Drift direction" info="Sets the overall air-current direction." value={display.particleDriftDirection ?? "natural"} options={["natural", "left", "right", "up", "down", "wander"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right", up: "Float up", down: "Fall down", wander: "Random wander" }} onChange={(particleDriftDirection) => patchDisplay({ particleDriftDirection: particleDriftDirection as DisplayProfile["particleDriftDirection"] })} />
-            <div className="two-col"><Slider label="Drift speed" info="How quickly the dust moves across the board." value={display.particleDriftSpeed ?? 4} min={1} max={10} onChange={(particleDriftSpeed) => patchDisplay({ particleDriftSpeed })} /><Slider label="Gravity" info="How strongly particles settle toward the bottom of the board." value={display.particleGravity ?? 3} min={0} max={10} onChange={(particleGravity) => patchDisplay({ particleGravity })} /></div>
-            <Slider label="Wander" info="How far particles deviate from their main direction." value={display.particleWander ?? 5} min={0} max={10} onChange={(particleWander) => patchDisplay({ particleWander })} />
-          </section>
-          <section className="particle-settings-group">
-            <h3>Timing</h3>
-            <div className="two-col"><Slider label="Lifetime" info="Base time before each particle fades and restarts." value={display.particleLifetime ?? 12} min={2} max={30} onChange={(particleLifetime) => patchDisplay({ particleLifetime })} /><Slider label="Lifetime range" info="Adds random variation around the base lifetime." value={display.particleLifetimeRange ?? 4} min={0} max={20} onChange={(particleLifetimeRange) => patchDisplay({ particleLifetimeRange })} /></div>
-          </section>
-        </div>
-      </aside>, document.body)}
     </section>
   );
 }
@@ -2778,13 +2775,15 @@ function DirectBoardCanvas({
   onBeginPlace,
   onAdd,
   editorZoom
+  ,selectedPanelIds = [], widgets = [], onAddWidget, onSaveWidget
 }: {
   state: LanternState;
   display: DisplayProfile;
   program: LanternState["boardPrograms"][number];
   panels: BoardPanel[];
   selectedPanelId: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, additive?: boolean) => void;
+  selectedPanelIds?: string[];
   onPatch: (id: string, patch: Partial<BoardPanel>) => void;
   onRemove: (id: string) => void;
   onRenameDonor: (id: string, name: string) => void;
@@ -2792,6 +2791,7 @@ function DirectBoardCanvas({
   onBeginPlace: (type: BoardPanelType | null) => void;
   onAdd: (type?: BoardPanelType, position?: { x: number; y: number }) => void;
   editorZoom: number;
+  widgets?: BoardWidget[]; onAddWidget?: (widget: BoardWidget) => void; onSaveWidget?: (name: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -2899,7 +2899,7 @@ function DirectBoardCanvas({
         "--donor-divider-color": panel.donorDividerColor ?? "#d9a657",
         "--donor-divider-thickness": `${panel.donorDividerThickness ?? 1}px`,
         "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
-      } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id); }}>
+      } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
@@ -2917,7 +2917,7 @@ function DirectBoardCanvas({
       </section>)}
     </div>
     {placingPanelType && <div className="placement-hint"><Plus size={14} /> Click where the {boardPanelLabel(placingPanelType).toLowerCase()} should go</div>}
-    {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}</div>}
+    {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}{widgets.map((widget) => <button key={widget.id} type="button" onClick={() => { onAddWidget?.(widget); setContextMenu(null); }}>{widget.name}</button>)}{selectedPanelIds.length > 1 && <button type="button" onClick={() => { const name = window.prompt("Widget name", "Saved widget"); if (name) onSaveWidget?.(name); setContextMenu(null); }}>Save selection as widget</button>}</div>}
   </div>;
 }
 
@@ -3570,7 +3570,7 @@ function AnnouncementsView({
               <div className="sound-pickers"><SoundPicker label="Sound at start" value={state.announcement.startSoundUrl} onChange={(value) => patchAnnouncement({ startSoundUrl: value })} /><SoundPicker label="Sound at finish" value={state.announcement.endSoundUrl} onChange={(value) => patchAnnouncement({ endSoundUrl: value })} /></div>
             </div>
           </details>
-          <div className="announcement-actions composer-actions"><div><small>{previewLabel} · {state.announcement.durationMinutes ? `${state.announcement.durationMinutes} minutes` : "Manual end"}</small></div><button type="button" className="command-button secondary" onClick={openAnnouncementDemo}><ExternalLink size={17} /> Preview</button><button className={state.announcement.active ? "command-button danger" : "command-button primary"} onClick={toggleAnnouncement}><Megaphone size={18} />{state.announcement.active ? "End announcement" : "Send announcement"}</button></div>
+          <div className="announcement-actions composer-actions"><div><small>{previewLabel} · {state.announcement.durationMinutes ? `${state.announcement.durationMinutes} minutes` : "Manual end"}</small></div><button className={state.announcement.active ? "command-button danger" : "command-button primary"} onClick={toggleAnnouncement}><Megaphone size={18} />{state.announcement.active ? "End announcement" : "Send announcement"}</button></div>
           <details className="saved-announcement-panel" aria-label="Saved announcements">
             <summary><span><Save size={15} /> Saved announcements</span><strong>{state.savedAnnouncements.find((item) => item.id === selectedSavedId)?.title ?? `${state.savedAnnouncements.length} created`}</strong><div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={(event) => { event.preventDefault(); newAnnouncement(); }}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={(event) => { event.preventDefault(); saveAnnouncement(); }}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div><ChevronDown size={15} /></summary>
             <div className="saved-announcement-list">
@@ -3588,7 +3588,10 @@ function AnnouncementsView({
           </details>
         </div>
         <div className="announcement-preview-card">
-          <div className="announcement-preview-tools"><label className="announcement-preview-display-select"><Monitor size={15} /><span>Preview display</span><select aria-label="Preview display" value={previewScreen.id} onChange={(event) => setPreviewScreenId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div>
+          <header className="announcement-preview-header">
+            <div className="announcement-preview-tools"><label className="announcement-preview-display-select"><Monitor size={15} /><span>Preview display</span><select aria-label="Preview display" value={previewScreen.id} onChange={(event) => setPreviewScreenId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div>
+            <div className="announcement-preview-actions"><button type="button" className="command-button secondary compact" onClick={openAnnouncementDemo}><ExternalLink size={15} /> Preview</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save announcement"}</button></div>
+          </header>
           <p className="eyebrow">Live preview · {previewLabel}</p>
           <div className={`announcement-preview-stage ${orientationClass(previewScreen)}`}>
             <AnnouncementMonitorSurface state={state} screen={previewScreen} announcement={state.announcement} onPatch={patchAnnouncement} />
@@ -4379,7 +4382,7 @@ function LivePreviewPanel({
 
         <section className="effect-settings-card face-settings-card">
           <div className="effect-card-heading"><div><strong>Face effects</strong><span>High-frequency, stabilized landmark tracking</span></div><b>30 FPS</b></div>
-          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, puppetPreview: event.target.checked && state.live.effects.puppetPreview } })} /><ScanFace size={16} /><span><strong>Face tracking</strong><small>Track eyes, head, and mouth</small></span></label>
+          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, puppetPreview: event.target.checked && state.live.effects.puppetPreview, trackingDebug: event.target.checked && state.live.effects.trackingDebug } })} /><ScanFace size={16} /><span><strong>Face, body & hand tracking</strong><small>Head, ears, brows, eyes, mouth, chin, shoulders, hands and fingers</small></span></label>
           <div className="accessory-options">
             <button type="button" className={!(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses") && !(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat") ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "none", glassesEnabled: false, partyHatEnabled: false } })}>None</button>
             <button type="button" className={(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses") ? "selected" : ""} aria-pressed={state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses"} onClick={() => {
@@ -4394,6 +4397,7 @@ function LivePreviewPanel({
             }}><PartyPopper size={17} /> Party hat</button>
           </div>
           <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span><strong>Puppet preview</strong><small>Mouth movement drives the sample character</small></span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
+          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.trackingDebug ?? false} onChange={(event) => patchLive({ effects: { ...state.live.effects, trackingDebug: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span><strong>Colored tracking nodes</strong><small>Testing view: show every detected point without camera video</small></span><InfoDot text="Colors separate face regions, gaze, shoulders, palms, finger joints and fingertips. Hand status shows detected, briefly lost, or off camera." /></label>
         </section>
       </div>}
       </aside>
@@ -4464,6 +4468,9 @@ function AnnouncementMonitorSurface({
   };
   const beginViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as Element).closest(".monitor-view-controls, .announcement-edit-handle, [contenteditable='true'], .announcement-image.editable")) return;
+    // Clicking the display background clears the physical-editing chrome so the
+    // user can inspect the actual board without handles and resize edges.
+    if (editing) setEditing(false);
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, view, pan: viewMode === "2d" || event.shiftKey || event.button === 1 };
@@ -5019,7 +5026,18 @@ function ScreensView({
         <div className="screen-editor-grid">
           <LabeledInput label="Display name" info="User-facing name for this physical display, such as Entrance Display - Portrait." value={editingScreen.label} onChange={(value) => patchDisplay(editingScreen.id, { label: value })} />
           <LabeledSelect label="Orientation" info="Physical screen orientation." value={editingScreen.orientation} options={["Portrait", "Landscape"]} onChange={(value) => patchDisplay(editingScreen.id, { orientation: value as DisplayProfile["orientation"], resolution: value === "Portrait" ? "1080 x 1920" : "1920 x 1080" })} />
-          <div className="display-particle-controls"><label className="switch-row"><input type="checkbox" checked={editingScreen.particleAnimationEnabled ?? false} onChange={(event) => patchDisplay(editingScreen.id, { particleAnimationEnabled: event.target.checked })} /><span>Particle animation</span></label>{editingScreen.particleAnimationEnabled && <><LabeledSelect label="Drift direction" info="Direction particles travel." value={editingScreen.particleDriftDirection ?? "natural"} options={["natural", "left", "right"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right" }} onChange={(value) => patchDisplay(editingScreen.id, { particleDriftDirection: value as DisplayProfile["particleDriftDirection"] })} /><Slider label="Drift speed" info="How quickly the particles travel." min={1} max={10} value={editingScreen.particleDriftSpeed ?? 4} onChange={(value) => patchDisplay(editingScreen.id, { particleDriftSpeed: value })} /><Slider label="Gravity" info="How strongly particles settle downward." min={0} max={10} value={editingScreen.particleGravity ?? 3} onChange={(value) => patchDisplay(editingScreen.id, { particleGravity: value })} /></>}</div>
+          <div className="display-particle-controls">
+            <label className="switch-row"><input type="checkbox" checked={editingScreen.particleAnimationEnabled ?? false} onChange={(event) => patchDisplay(editingScreen.id, { particleAnimationEnabled: event.target.checked })} /><span>Particle animation</span></label>
+            {editingScreen.particleAnimationEnabled && <>
+              <LabeledSelect label="Particle colors" info="Choose the particle color palette." value={editingScreen.particleColorStyle ?? "warm"} options={["warm", "primary"]} optionLabels={{ warm: "White + warm gold", primary: "Primary colors" }} onChange={(value) => patchDisplay(editingScreen.id, { particleColorStyle: value as DisplayProfile["particleColorStyle"] })} />
+              <div className="two-col"><Slider label="Particle count" info="How many particles are visible." value={editingScreen.particleCount ?? 34} min={4} max={120} onChange={(value) => patchDisplay(editingScreen.id, { particleCount: value })} /><Slider label="Particle size" info="Average particle size." value={editingScreen.particleSize ?? 4} min={1} max={12} onChange={(value) => patchDisplay(editingScreen.id, { particleSize: value })} /></div>
+              <Slider label="Dispersion" info="How widely particles are scattered across the board." value={editingScreen.particleSpread ?? 100} min={10} max={100} onChange={(value) => patchDisplay(editingScreen.id, { particleSpread: value })} />
+              <LabeledSelect label="Drift direction" info="Sets the overall air-current direction." value={editingScreen.particleDriftDirection ?? "natural"} options={["natural", "left", "right", "up", "down", "wander"]} optionLabels={{ natural: "Natural", left: "Drift left", right: "Drift right", up: "Float up", down: "Fall down", wander: "Random wander" }} onChange={(value) => patchDisplay(editingScreen.id, { particleDriftDirection: value as DisplayProfile["particleDriftDirection"] })} />
+              <div className="two-col"><Slider label="Drift speed" info="How quickly the particles travel." min={1} max={10} value={editingScreen.particleDriftSpeed ?? 4} onChange={(value) => patchDisplay(editingScreen.id, { particleDriftSpeed: value })} /><Slider label="Gravity" info="How strongly particles settle downward." min={0} max={10} value={editingScreen.particleGravity ?? 3} onChange={(value) => patchDisplay(editingScreen.id, { particleGravity: value })} /></div>
+              <Slider label="Wander" info="How far particles deviate from their main direction." value={editingScreen.particleWander ?? 5} min={0} max={10} onChange={(value) => patchDisplay(editingScreen.id, { particleWander: value })} />
+              <div className="two-col"><Slider label="Lifetime" info="Base time before each particle fades and restarts." value={editingScreen.particleLifetime ?? 12} min={2} max={30} onChange={(value) => patchDisplay(editingScreen.id, { particleLifetime: value })} /><Slider label="Lifetime range" info="Adds random variation around the base lifetime." value={editingScreen.particleLifetimeRange ?? 4} min={0} max={20} onChange={(value) => patchDisplay(editingScreen.id, { particleLifetimeRange: value })} /></div>
+            </>}
+          </div>
         </div>}
         {editorTab === "room" && <div className="room-device-editor">
           <div className="room-device-heading"><div><strong>Camera at this display</strong><span>Assign the USB camera and microphone facing the room.</span></div><button type="button" className="command-button secondary compact" onClick={() => void detectRoomDevices()}><RefreshCcw size={15} /> Detect devices</button></div>
@@ -5178,6 +5196,7 @@ function ScheduleCalendarView({
       target: displayFilter === "all" ? firstDisplayId(current) : displayFilter,
       boardId: state.boardPrograms[0]?.id ?? "board-classic",
       contentType,
+      broadcastMode: contentType === "broadcast" ? "recorded" : undefined,
       announcementId: contentType === "announcement" ? saved?.id : undefined,
       days: slot ? [slot.date.getDay()] : [1, 2, 3, 4, 5],
       recurrence: slot ? "once" : undefined,
@@ -5363,9 +5382,9 @@ function ScheduleCalendarView({
     </div>
     {selected && createPortal(<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
       <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - 150)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2 id="schedule-event-editor-title">Edit event</h2></div><button type="button" className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><X size={17} /></button></header>
-      <div className="schedule-event-editor-body">{quickActions(selected)}<LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div><LabeledSelect label="Content" info="Choose the scheduled content type." value={selected.contentType ?? "board"} options={["board", "announcement", "broadcast"]} optionLabels={{ board: "Donor board", announcement: "Saved announcement", broadcast: "Broadcast / stream" }} onChange={(value) => patchEntry(selected.id, { contentType: value as NonNullable<ScheduleEntry["contentType"]>, announcementId: value === "announcement" ? selected.announcementId ?? state.savedAnnouncements[0]?.id : undefined })} />
-        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "broadcast" ? <p className="field-note">Uses the current Broadcast / Stream composition when this scheduled broadcast starts.</p> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
-        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="schedule-color-row"><label className="field"><span>Calendar color</span><input type="color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label></div><div className="field"><span>Repeats</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => patchEntry(selected.id, { days: selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day] })}>{label.slice(0, 1)}</button>; })}</div></div><button type="button" className="command-button primary schedule-save-button" onClick={() => setSelectedId(null)}>Save event</button>
+      <div className="schedule-event-editor-body">{quickActions(selected)}<div className="schedule-name-color-row"><LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><label className="schedule-color-swatch" title="Choose calendar color"><span>Color</span><input type="color" aria-label="Calendar color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label></div><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div>
+        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "broadcast" ? <><LabeledSelect label="Broadcast source" info="Recorded video is the default scheduled broadcast source." value={selected.broadcastMode ?? "recorded"} options={["recorded", "live"]} optionLabels={{ recorded: "Recorded broadcast video", live: "Live feed" }} onChange={(value) => patchEntry(selected.id, { broadcastMode: value as ScheduleEntry["broadcastMode"] })} />{(selected.broadcastMode ?? "recorded") === "recorded" ? <label className="image-upload command-button secondary compact"><Upload size={15} /><span>{selected.broadcastVideoName ?? "Choose recorded broadcast video"}</span><input type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchEntry(selected.id, { broadcastVideoUrl: String(reader.result), broadcastVideoName: file.name }); reader.readAsDataURL(file); }} /></label> : <LabeledInput label="Presenter" info="User responsible for starting this live broadcast." value={selected.presenterName ?? ""} onChange={(presenterName) => patchEntry(selected.id, { presenterName })} />}</> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
+        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="field"><span>Display on</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => { const days = selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day]; patchEntry(selected.id, { days, recurrence: "weekly", scheduleDate: selected.scheduleDate ?? toDateInputValue(new Date()) }); }}>{label.slice(0, 1)}</button>; })}</div></div><div className="two-col schedule-date-range"><label className="field"><span>From date</span><input type="date" value={selected.scheduleDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleDate: event.target.value || undefined, recurrence: event.target.value ? "weekly" : selected.recurrence })} /></label><label className="field"><span>To date</span><input type="date" min={selected.scheduleDate} value={selected.scheduleEndDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleEndDate: event.target.value || undefined, recurrence: "weekly" })} /></label></div><button type="button" className="command-button primary schedule-save-button" onClick={() => setSelectedId(null)}>Save event</button>
       </div>
     </aside>, document.body)}
     {contextMenu && createPortal(<div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">{contextMenu.id ? (() => { const entry = state.schedules.find((item) => item.id === contextMenu.id); return entry ? <><button type="button" onClick={() => { setSelectedId(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button><button type="button" onClick={() => { setPreviewEntry(entry); setContextMenu(null); }}><Eye size={14} /> Preview on display</button>{entry.contentType === "announcement" ? <button type="button" disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button type="button" onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button type="button" onClick={() => { duplicateEntry(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button type="button" className="danger" onClick={() => { removeEntry(entry.id); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></> : null; })() : <><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("board", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Plus size={14} /> Add board here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("announcement", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Megaphone size={14} /> Add announcement here</button></>}</div>, document.body)}

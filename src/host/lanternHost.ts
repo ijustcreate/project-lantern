@@ -324,15 +324,14 @@ export function nextRevision(state: LanternState, note: string): LanternState {
 
 export function openBrowserDisplayWindows(screens = Object.values(loadLanternState().screens)) {
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  const screen = screens[0];
+  if (!screen) return;
 
-  screens.forEach((screen, index) => {
-    const isPortrait = screen.orientation === "Portrait";
-    window.open(
-      `${appUrl}#/display/${screen.id}`,
-      `lantern-${screen.id}`,
-      `popup=yes,width=${isPortrait ? 540 : 1280},height=${isPortrait ? 920 : 760},left=${60 + index * 580},top=${40 + index * 30}`
-    );
-  });
+  // Browser mode cannot safely create one popup per display: popup blockers
+  // reject window.open calls even when they originate from a user action.
+  // Navigate in the current tab instead; the display route remains shareable
+  // and the browser never treats this as a popup.
+  window.location.assign(`${appUrl}#/display/${screen.id}`);
 }
 
 export async function openDisplayWindows(screens = Object.values(loadLanternState().screens)) {

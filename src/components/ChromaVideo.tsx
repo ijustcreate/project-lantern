@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { FaceLandmarker, ImageSegmenter, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import type { FaceLandmarker, HandLandmarker, ImageSegmenter, NormalizedLandmark, PoseLandmarker } from "@mediapipe/tasks-vision";
 import type { ChromaKeySettings, ImageCrop, LiveEffectsSettings } from "../types";
 
 interface ChromaVideoProps {
@@ -17,13 +17,17 @@ interface PointTransform {
 
 const OUTPUT_WIDTH = 640;
 const OUTPUT_HEIGHT = 360;
-const INFERENCE_WIDTH = 320;
-const INFERENCE_HEIGHT = 180;
+// A little more source detail helps the selfie model preserve thin fingers and
+// hair. Keep the working canvas small enough that segmentation remains realtime.
+const INFERENCE_WIDTH = 384;
+const INFERENCE_HEIGHT = 216;
 const SEGMENT_INTERVAL_MS = 1000 / 10;
 const FACE_INTERVAL_MS = 1000 / 30;
 const VISION_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const SEGMENTATION_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite";
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task";
+const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task";
+const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
 
 type VisionModule = typeof import("@mediapipe/tasks-vision");
 type VisionFileset = Awaited<ReturnType<VisionModule["FilesetResolver"]["forVisionTasks"]>>;
@@ -55,7 +59,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   const aiBackgroundActive = !chromaActive && effects.background !== "original";
   const glassesEnabled = effects.glassesEnabled ?? effects.accessory === "glasses";
   const partyHatEnabled = effects.partyHatEnabled ?? effects.accessory === "party-hat";
-  const faceEffectsActive = effects.faceTracking && (glassesEnabled || partyHatEnabled || effects.puppetPreview);
+  const faceEffectsActive = effects.faceTracking && (glassesEnabled || partyHatEnabled || effects.puppetPreview || effects.trackingDebug);
   const cropStyle = {
     objectFit: "cover" as const,
     transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
@@ -118,10 +122,16 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     let disposed = false;
     let segmenter: ImageSegmenter | null = null;
     let faceLandmarker: FaceLandmarker | null = null;
+    let handLandmarker: HandLandmarker | null = null;
+    let poseLandmarker: PoseLandmarker | null = null;
     let personMaskIndex = 15;
     let maskReady = false;
     let smoothedMask: Float32Array | null = null;
     let landmarks: NormalizedLandmark[] | null = null;
+    let poseLandmarks: NormalizedLandmark[] | null = null;
+    let handLandmarks: NormalizedLandmark[][] = [];
+    let lastHandsSeenAt = -Infinity;
+    let handsWereSeen = false;
     let lastSegmentAt = -Infinity;
     let lastFaceAt = -Infinity;
     let lastFaceSeenAt = -Infinity;
@@ -129,7 +139,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     const initializeVision = async () => {
       if (!aiBackgroundActive && !faceEffectsActive) return;
       try {
-        const [{ ImageSegmenter, FaceLandmarker }, vision] = await Promise.all([
+        const [{ ImageSegmenter, FaceLandmarker, HandLandmarker, PoseLandmarker }, vision] = await Promise.all([
           import("@mediapipe/tasks-vision"),
           getVisionFileset()
         ]);
@@ -185,11 +195,28 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
           }
           if (disposed) nextLandmarker.close();
           else faceLandmarker = nextLandmarker;
+
+          if (settingsRef.current.effects.trackingDebug) {
+            const common = { runningMode: "VIDEO" as const, minTrackingConfidence: 0.55 };
+            const createTracker = async <T,>(gpu: () => Promise<T>, cpu: () => Promise<T>) => { try { return await gpu(); } catch { return cpu(); } };
+            const nextHands = await createTracker(
+              () => HandLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" }, numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5 }),
+              () => HandLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" }, numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5 })
+            );
+            const nextPose = await createTracker(
+              () => PoseLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "GPU" }, numPoses: 1, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5 }),
+              () => PoseLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" }, numPoses: 1, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5 })
+            );
+            if (disposed) { nextHands.close(); nextPose.close(); }
+            else { handLandmarker = nextHands; poseLandmarker = nextPose; }
+          }
         }
       } catch (error) {
         console.error("Background removal could not start.", error);
         segmenter?.close();
         faceLandmarker?.close();
+        handLandmarker?.close();
+        poseLandmarker?.close();
         segmenter = null;
         faceLandmarker = null;
         if (aiBackgroundActive && !disposed) setAiStatus("error");
@@ -214,7 +241,12 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
       const image = maskContext.createImageData(width, height);
       for (let index = 0; index < confidence.length; index += 1) {
         const previous = smoothedMask[index];
-        const next = previous + (confidence[index] - previous) * 0.52;
+        // Let large changes (hands/fingers moving) catch up quickly, while
+        // retaining stronger smoothing for nearly-static pixels. A fixed
+        // response makes moving fingers visibly trail behind the source frame.
+        const delta = Math.abs(confidence[index] - previous);
+        const response = delta > 0.08 ? 0.82 : 0.58;
+        const next = previous + (confidence[index] - previous) * response;
         smoothedMask[index] = next;
         const normalized = Math.max(0, Math.min(1, (next - lower) / range));
         const alpha = normalized * normalized * (3 - 2 * normalized);
@@ -269,13 +301,25 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
           } else if (now - lastFaceSeenAt > 140) {
             landmarks = null;
           }
+          if (currentEffects.trackingDebug) {
+            poseLandmarks = poseLandmarker?.detectForVideo(inference, now).landmarks[0] ?? null;
+            const detectedHands = handLandmarker?.detectForVideo(inference, now).landmarks ?? [];
+            if (detectedHands.length) {
+              handLandmarks = detectedHands.map((hand, index) => smoothLandmarks(handLandmarks[index] ?? null, hand));
+              lastHandsSeenAt = now;
+              handsWereSeen = true;
+            } else if (now - lastHandsSeenAt > 180) handLandmarks = [];
+          }
         }
 
         context.globalCompositeOperation = "source-over";
         context.filter = "none";
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-        if (aiBackgroundActive && currentEffects.background === "blur" && !maskReady) {
+        if (currentEffects.trackingDebug) {
+          context.fillStyle = "#050914";
+          context.fillRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        } else if (aiBackgroundActive && currentEffects.background === "blur" && !maskReady) {
           const overscan = Math.max(12, currentEffects.blur * 2);
           context.save();
           context.filter = `blur(${currentEffects.blur}px)`;
@@ -307,15 +351,16 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
         }
 
         const transform = { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT };
-        if (landmarks && currentEffects.faceTracking) {
+        if (landmarks && currentEffects.faceTracking && !currentEffects.trackingDebug) {
           const showGlasses = currentEffects.glassesEnabled ?? currentEffects.accessory === "glasses";
           const showPartyHat = currentEffects.partyHatEnabled ?? currentEffects.accessory === "party-hat";
           if (showGlasses) drawAccessory(context, landmarks, transform, "glasses");
           if (showPartyHat) drawAccessory(context, landmarks, transform, "party-hat");
         }
-        if (landmarks && currentEffects.faceTracking && currentEffects.puppetPreview) {
+        if (landmarks && currentEffects.faceTracking && currentEffects.puppetPreview && !currentEffects.trackingDebug) {
           drawPuppetPreview(context, landmarks, transform);
         }
+        if (currentEffects.trackingDebug) drawTrackingNodes(context, landmarks, poseLandmarks, handLandmarks, transform, handsWereSeen ? (handLandmarks.length ? "detected" : now - lastHandsSeenAt <= 180 ? "briefly lost" : "off camera") : "not detected");
       } else {
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       }
@@ -339,6 +384,8 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       segmenter?.close();
       faceLandmarker?.close();
+      handLandmarker?.close();
+      poseLandmarker?.close();
     };
   }, [stream, chromaActive, aiBackgroundActive, faceEffectsActive, processingActive]);
 
@@ -454,4 +501,51 @@ function drawPuppetPreview(context: CanvasRenderingContext2D, landmarks: Normali
   context.fillStyle = "#f2c46d"; context.beginPath(); context.arc(x, y, radius, 0, Math.PI * 2); context.fill();
   context.fillStyle = "#07111e"; context.beginPath(); context.arc(x - radius * 0.32, y - radius * 0.22, radius * 0.08, 0, Math.PI * 2); context.arc(x + radius * 0.32, y - radius * 0.22, radius * 0.08, 0, Math.PI * 2); context.fill();
   context.beginPath(); context.ellipse(x, y + radius * 0.3, radius * 0.34, radius * (0.05 + openness * 0.28), 0, 0, Math.PI * 2); context.fill();
+}
+
+const FACE_MOUTH = new Set([0, 11, 12, 13, 14, 15, 16, 17, 37, 39, 40, 61, 78, 80, 81, 82, 84, 87, 88, 91, 95, 146, 178, 181, 185, 191, 267, 269, 270, 291, 308, 310, 311, 312, 314, 317, 318, 321, 324, 375, 402, 405, 409, 415]);
+const FACE_BROWS = new Set([46, 52, 53, 55, 63, 65, 66, 70, 105, 107, 276, 282, 283, 285, 293, 295, 296, 300, 334, 336]);
+const FACE_IRISES = new Set([468, 469, 470, 471, 472, 473, 474, 475, 476, 477]);
+const FACE_EARS = new Set([93, 127, 132, 234, 323, 356, 361, 454]);
+const FACE_CHIN = new Set([148, 149, 150, 152, 176, 377, 378, 379]);
+const FACE_NOSE = new Set([1, 2, 4, 5, 6, 19, 94, 168, 195, 197]);
+const HAND_TIPS = new Set([4, 8, 12, 16, 20]);
+const HAND_PALM = new Set([0, 1, 2, 5, 9, 13, 17]);
+
+function drawTrackingNodes(
+  context: CanvasRenderingContext2D,
+  face: NormalizedLandmark[] | null,
+  pose: NormalizedLandmark[] | null,
+  hands: NormalizedLandmark[][],
+  transform: PointTransform,
+  handStatus: "detected" | "briefly lost" | "off camera" | "not detected"
+) {
+  const dot = (landmark: NormalizedLandmark, color: string, radius = 1.5) => {
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(landmark.x * transform.width, landmark.y * transform.height, radius, 0, Math.PI * 2);
+    context.fill();
+  };
+
+  face?.forEach((landmark, index) => {
+    let color = "#36d6ff"; // side of head and general face mesh
+    let radius = 1.25;
+    if (FACE_MOUTH.has(index)) { color = index === 13 || index === 14 ? "#ffffff" : "#ff4f91"; radius = 2; }
+    else if (FACE_BROWS.has(index)) color = "#ffb43b";
+    else if (FACE_IRISES.has(index)) { color = "#8aff66"; radius = 2.2; }
+    else if (FACE_EARS.has(index)) { color = "#ad7cff"; radius = 2.4; }
+    else if (FACE_CHIN.has(index)) { color = "#ff704d"; radius = 2; }
+    else if (FACE_NOSE.has(index)) { color = "#fff06a"; radius = index === 1 ? 2.8 : 1.8; }
+    dot(landmark, color, radius);
+  });
+
+  pose?.forEach((landmark, index) => dot(landmark, index === 11 || index === 12 ? "#00f0b5" : "#3188ff", index === 11 || index === 12 ? 4 : 2));
+  hands.forEach((hand, handIndex) => hand.forEach((landmark, index) => {
+    const sideColor = handIndex === 0 ? "#ffcf33" : "#ff7b33";
+    dot(landmark, HAND_TIPS.has(index) ? "#ff3b3b" : HAND_PALM.has(index) ? "#38e8d1" : sideColor, HAND_TIPS.has(index) ? 3.2 : HAND_PALM.has(index) ? 2.6 : 2);
+  }));
+
+  context.font = "600 12px system-ui, sans-serif";
+  context.fillStyle = handStatus === "detected" ? "#38e8d1" : handStatus === "briefly lost" ? "#ffcf33" : "#ff7085";
+  context.fillText(`Hands: ${handStatus}${hands.length ? ` (${hands.length})` : ""}`, 12, transform.height - 14);
 }
