@@ -1,5 +1,556 @@
 [
   {
+    "id": "DEV-0169",
+    "title": "Use saved recordings as a Broadcast video source",
+    "summary": "Added Saved recording to Video source, replaced camera and microphone controls with a recording selector for that source, routed looping saved clips through preview and live presentation, and cleaned up temporary playback media safely.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 8:21 PM",
+    "areas": [
+      "Broadcast",
+      "Recordings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/host/lanternHost.ts",
+      "src/recordingSource.ts",
+      "src/styles.css",
+      "scripts/test-recording-source.mjs",
+      "IMPLEMENTATION_REPORT.md"
+    ],
+    "tests": "Recording source, recording library, and Broadcast composition fixtures; live browser record-save-select-play workflow"
+  },
+  {
+    "id": "DEV-0168",
+    "title": "Keep donor boards aligned in Broadcast pop-outs",
+    "summary": "Made the 2D donor-board canvas follow the pop-out window's resize lifecycle so the board background stays fitted behind the source frame when the preview is moved or resized.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 8:21 PM",
+    "areas": [
+      "Broadcast",
+      "Board preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css",
+      "scripts/test-broadcast-popout-layout.mjs",
+      "IMPLEMENTATION_REPORT.md"
+    ],
+    "tests": "Focused Broadcast pop-out layout fixture; browser pop-out open and shared-stage geometry check"
+  },
+  {
+    "id": "DEV-0167",
+    "title": "Pop out room cameras to another monitor",
+    "summary": "Changed Dashboard room-camera viewing from an app-bound floating panel to a true resizable window while reusing the existing camera lease; retained the embedded panel when pop-ups are blocked.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 7:54 PM",
+    "areas": [
+      "Dashboard",
+      "Room camera"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/roomCameraPopout.ts",
+      "scripts/test-room-camera-popout.mjs",
+      "IMPLEMENTATION_REPORT.md"
+    ],
+    "tests": "Room camera pop-out fixture; Dashboard browser interaction with no console errors; full npm run build; live preview HTTP 200 with final asset hash"
+  },
+  {
+    "id": "DEV-0166",
+    "title": "Give wrapped donor names collision-free rows",
+    "summary": "Kept one shared donor-name size per panel, converted ampersands and conjunctions to three-line names, and made each logical donor row receive space based on its tallest wrapped name so long entries wrap without shrinking or colliding.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 7:06 PM",
+    "areas": [
+      "Recognition boards",
+      "Donor names",
+      "Layout"
+    ],
+    "files": [
+      "src/donorNameLayout.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "src/App.tsx",
+      "src/styles.css",
+      "scripts/test-donor-name-layout.mjs"
+    ],
+    "tests": "Donor-name layout fixture; App, Babylon wall, and layout syntax transforms; portrait display Playwright screenshot confirmed equal-size wrapped names without collisions"
+  },
+  {
+    "id": "DEV-0165",
+    "title": "Open every browser display in one click",
+    "summary": "Added a browser-safe display wall that opens every configured display inside the single popup Chrome permits per user gesture, while preserving separate native windows in the desktop build. The wall keeps both live outputs visible and reports both displays linked after one click.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 7:06 PM",
+    "areas": [
+      "Displays",
+      "Dashboard",
+      "Browser runtime"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/host/lanternHost.ts",
+      "scripts/test-display-window-open.mjs"
+    ],
+    "tests": "Display-window fixture; App and host syntax transforms; Playwright first-click launch produced one display-wall popup with two live output frames and 2/2 linked status"
+  },
+  {
+    "id": "DEV-0164",
+    "title": "Polish vocabulary control labels",
+    "summary": "Corrected generated category labels so the managed vocabulary controls consistently say category rather than categorie.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 6:43 PM",
+    "areas": [
+      "Settings",
+      "Copy"
+    ],
+    "files": [
+      "src/App.tsx",
+      "scripts/test-settings-vocabulary-layout.mjs"
+    ],
+    "tests": "Settings vocabulary/layout fixture; App esbuild syntax transform; targeted diff check"
+  },
+  {
+    "id": "DEV-0163",
+    "title": "Restore donor-card contrast across themes",
+    "summary": "Made the refined donor-card hierarchy inherit each portal theme's ink and muted colors so names, recognition details, and overflow tags remain readable on Warm, Light, Dark, and Ocean surfaces.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 6:34 PM",
+    "areas": [
+      "Donors",
+      "Themes",
+      "Accessibility"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Warm-theme Playwright screenshot; all 12 rendered donor rows passed direct-child containment checks; CSS diff validation"
+  },
+  {
+    "id": "DEV-0162",
+    "title": "Simplify recognition vocabulary settings",
+    "summary": "Replaced the always-expanded tier, category, and tag lists with compact dropdowns that let staff select, edit, delete, or add a value; collapsed giving programs by default; and corrected the Settings grid so expanded program details stay in document flow instead of layering over nearby controls.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 6:23 PM",
+    "areas": [
+      "Settings",
+      "Recognition vocabulary",
+      "Layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "scripts/test-settings-vocabulary-layout.mjs"
+    ],
+    "tests": "Settings vocabulary/layout fixture; App esbuild syntax transform; targeted git diff check"
+  },
+  {
+    "id": "DEV-0161",
+    "title": "Expand the Broadcast preview and compact recording access",
+    "summary": "Made the Broadcast monitor default to a maximum-size, aspect-fit 2D board preview with an optional interactive 3D mode; moved recording into the preview header with a compact saved-file dropdown and hover thumbnails; removed the space-consuming recording footer; and preserved browser activation until all display windows are requested so both displays open on the first click.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 6:22 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Recording",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/components/RecordingLibrary.tsx",
+      "src/components/RecordingLibrary.css",
+      "src/host/lanternHost.ts",
+      "scripts/test-display-window-open.mjs"
+    ],
+    "tests": "Display-window ordering fixture; recording-library fixture; App, RecordingLibrary, and host esbuild syntax transforms; targeted git diff check"
+  },
+  {
+    "id": "DEV-0160",
+    "title": "Simplify donor rows and clarify announcement tools",
+    "summary": "Rebuilt donor rows around a contained visual hierarchy with fewer visible tags and readable paging; replaced long-name font shrinking with deterministic one-to-three-line wrapping at a shared type size, including dedicated Name / and / Name treatment; and added concise Message-versus-Blip guidance above their controls.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 6:11 PM",
+    "areas": [
+      "Donors",
+      "Board Editor",
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx",
+      "src/donorNameLayout.ts",
+      "scripts/test-donor-name-layout.mjs"
+    ],
+    "tests": "Donor-name layout fixture passed for and, ampersand, short, and long names; App, board renderer, and CSS esbuild parses passed; targeted git diff --check passed"
+  },
+  {
+    "id": "DEV-0159",
+    "title": "Clarify and fit the operating schedule",
+    "summary": "Kept schedule colors visible while displays are offline, strengthened the distinct Board/Announcement/Blip/Broadcast visual signatures, labeled every week item by type, fit the relevant operating-day range vertically, removed horizontal week scrolling, and removed the private Revisions material from How to Use.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 6:03 PM",
+    "areas": [
+      "Schedule",
+      "Help"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Phase 3 migration fixture passed; App/CSS esbuild bundle parse passed; git diff --check passed"
+  },
+  {
+    "id": "DEV-0158",
+    "title": "Complete tracking, costumes, and recording refinement",
+    "summary": "Added cached adaptive tracking with face, hand, body, blink, occlusion, glasses, and spring-hat rendering; migration-backed Effect Studio calibration and teddy/skeleton costumes; and a persistent IndexedDB recording library with live-preview capture instrumentation. Responsive Broadcast inspector layouts now remain usable in the narrow desktop panel.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 5:19 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Tracking",
+      "Costumes",
+      "Recording"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/stateManagement.ts",
+      "src/components/ChromaVideo.tsx",
+      "src/trackingRuntime.ts",
+      "src/trackingEffects.ts",
+      "src/visionResources.ts",
+      "src/effectStudio.ts",
+      "src/costumeRenderer.ts",
+      "src/components/EffectStudio.tsx",
+      "src/components/EffectStudio.css",
+      "src/recordingLibrary.ts",
+      "src/components/RecordingLibrary.tsx",
+      "src/components/RecordingLibrary.css",
+      "src/styles.css",
+      "scripts/test-tracking-runtime.mjs",
+      "scripts/phase4-effect-studio-fixture.mjs",
+      "scripts/test-recording-library.mjs"
+    ],
+    "tests": "npm run build completed TypeScript and Vite (fresh 2026-08-06 17:13 bundle); tracking, Effect Studio, and recording fixtures passed; production Chromium verified responsive Effect Studio geometry, IndexedDB reload, rename, live preview, control locks, and warm recording starts; git diff --check passed"
+  },
+  {
+    "id": "DEV-0157",
+    "title": "Keep archived demo schedules out of calendar lanes",
+    "summary": "Preserved the two disabled v5 full-day seed records in storage while removing only those archived defaults from the visible week layout, giving the new Welcome Gallery and Discovery Hall tracks usable width.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 3:36 PM",
+    "areas": [
+      "Schedule",
+      "Data migration"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "Migrated browser state retained both inactive records, rendered zero archived seed events, showed 140 intended week events, captured .playwright-cli/page-2026-08-06T22-35-30-728Z.png, and passed git diff --check."
+  },
+  {
+    "id": "DEV-0156",
+    "title": "Complete calendar, announcement, and broadcast refinement",
+    "summary": "Added a preserved v6 demo schedule and Art Center content, moved Blips under Announcements with transactional drafts, replaced native dialogs, simplified local background removal, and expanded Broadcast with shared frame, gradient, branded-background, fit, Control-crop, and four-edge manipulation controls.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 3:31 PM",
+    "areas": [
+      "Schedule",
+      "Announcements",
+      "Blips",
+      "Broadcast",
+      "Background removal",
+      "Dialogs",
+      "Data migration"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/styles.css",
+      "src/phase3Schedule.ts",
+      "src/broadcastComposition.ts",
+      "src/backgroundRemoval.ts",
+      "src/components/BroadcastCompositionControls.tsx",
+      "src/components/BroadcastBackgroundLayer.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/components/ChromaKeySampler.tsx",
+      "src/components/ChromaKeySampler.css",
+      "src/components/LanternDialog.tsx",
+      "src/components/LanternDialog.css",
+      "public/assets/announcements/art-center-paintbrush.svg",
+      "public/assets/broadcast/cms-portrait.svg",
+      "public/assets/broadcast/cms-landscape.svg",
+      "scripts/phase3-schedule-fixture.mjs",
+      "scripts/test-broadcast-composition.mjs"
+    ],
+    "tests": "Phase 3 migration and broadcast fixtures; zero native-dialog assertion; full-tree TypeScript before Vite; git diff --check; production dist served and browsed with zero console errors/warnings; Playwright migration, event/Blip cancel, navigation, backgrounds, Control mode, independent crop-edge, and removal-visibility checks."
+  },
+  {
+    "id": "DEV-0155",
+    "title": "Refine Brigade, donor profiles, and board-owned presentation",
+    "summary": "Moved the Brigade into the Dashboard, added editable child-drawn content and a persistent 42-message visitor pool, migrated donor presentation into board-owned styles, expanded pledge and received-gift reconciliation, and synchronized donor-board editing without resetting existing content.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 2:29 PM",
+    "areas": [
+      "Dashboard",
+      "Toy Soldier Brigade",
+      "Visitor messages",
+      "Donors",
+      "Pledges",
+      "Donation history",
+      "Board Editor",
+      "Data migration"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/stateManagement.ts",
+      "src/donorDomain.ts",
+      "src/visitorMessages.ts",
+      "src/boardPresentation.ts",
+      "src/components/BrigadeView.tsx",
+      "src/components/BrigadeView.css",
+      "src/components/VisitorMessageManager.tsx",
+      "src/components/VisitorMessageManager.css",
+      "src/components/VisitorMessageFooter.tsx",
+      "src/components/VisitorMessageFooter.css",
+      "src/components/BoardDonorPresentationEditor.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css",
+      "public/assets/brigade"
+    ],
+    "tests": "Deterministic v4-to-v5 migration and visitor-shuffle fixtures; npm run build; git diff --check; Playwright exercised Dashboard, Brigade, visitor-message schedule/cancel, Donors, Donation History, and Board Editor with zero console errors or warnings."
+  },
+  {
+    "id": "DEV-0154",
+    "title": "Protect local state and repair core operator workflows",
+    "summary": "Added versioned user, preference, audit, and reminder state; persistent donor ordering; safe schedule drafts and themed event dialogs; reliable display pop-outs; and a movable room monitor with shared camera access and visible audio state, while preserving existing version-3 content and media.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 1:39 PM",
+    "areas": [
+      "Data migration",
+      "Users",
+      "Audit history",
+      "Donors",
+      "Schedule",
+      "Displays",
+      "Room camera"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/stateManagement.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/components/AuditHistoryPanel.tsx",
+      "src/components/AudioLevelMeter.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Migration fixture; media-manager mock suite; npm run build; git diff --check; Playwright user/theme persistence, draft cancel, color Escape/Apply, delete cancel, audit attribution, individual/all display pop-outs, portrait/landscape preview, and room-camera fallback UI"
+  },
+  {
+    "id": "DEV-0153",
+    "title": "Centralize media-device acquisition",
+    "summary": "Added a browser-safe shared capture manager so room view and Broadcast can reuse physical inputs, switch without dropping a working source first, fall back from missing saved devices, and present actionable device errors.",
+    "author": "Codex",
+    "createdAt": "Aug 6, 2026, 12:25 PM",
+    "areas": [
+      "Displays",
+      "Broadcast",
+      "Room Camera"
+    ],
+    "files": [
+      "src/host/mediaDeviceManager.ts"
+    ],
+    "tests": "Mock-browser behavioral suite; npx tsc --noEmit; npm run build; whitespace check"
+  },
+  {
+    "id": "DEV-0152",
+    "title": "Readable editor menus on phones",
+    "summary": "Improved Board Actions and Add Content contrast across themes and kept the Board Actions popover inside narrow phone viewports so staff controls remain clear and reachable.",
+    "author": "Codex",
+    "createdAt": "Aug 5, 2026, 8:20 AM",
+    "areas": [
+      "Board Editor",
+      "Accessibility",
+      "Responsive UI"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npx vite build; git diff --check; Playwright Warm-theme checks at 390px for Board Actions and Add Content"
+  },
+  {
+    "id": "DEV-0151",
+    "title": "Classy supporter spotlights and news ticker",
+    "summary": "Added six portrait and landscape supporter spotlight boards, a reusable Museum News ticker with pace and direction controls, and a calmer staff editor with grouped templates, direct content fields, visible add/actions controls, and progressive settings.",
+    "author": "Codex",
+    "createdAt": "Aug 5, 2026, 8:17 AM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Announcements",
+      "Board Editor",
+      "Accessibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/sampleData.ts",
+      "src/types.ts",
+      "src/styles.css",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit --incremental false; npx vite build; git diff --check; Playwright desktop, tablet, and phone QA; Gallery Portrait and Member Honor visual review; ticker loop, saved template, edit pause, speed/direction, and reduced-motion checks"
+  },
+  {
+    "id": "DEV-0150",
+    "title": "Launch Toy Soldier Brigade donor experience",
+    "summary": "Added the complete Class of 2026 giving-society system so museum staff can recognize all official members, explain the program with care, create level-aware boards, and run tasteful announcements and good-deed moments without treating pledges as received gifts.",
+    "author": "Codex",
+    "createdAt": "Aug 4, 2026, 9:30 PM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Donor data",
+      "Board templates",
+      "Announcements",
+      "Display runtime",
+      "Responsive UI"
+    ],
+    "files": [
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "src/App.tsx",
+      "src/styles.css",
+      "src/changelog.json"
+    ],
+    "tests": "npx tsc --noEmit --incremental false; npm run build; git diff --check; Playwright desktop, mobile, 768px tablet, donor editor, level reassignment, portrait/landscape visitor displays, accessibility roster, console, and focused migration fixture"
+  },
+  {
+    "id": "DEV-0149",
+    "title": "Add Blips and 2026 supporter boards",
+    "summary": "Added customizable saved Blips for jokes, quizzes, and guest celebrations with immediate or scheduled display runs, staged countdown reveals, optional media and sound, and safe content precedence. Added portrait and landscape Toy Soldier Brigade and Supporter Spotlight board templates.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 11:21 PM",
+    "areas": [
+      "Broadcast",
+      "Blips",
+      "Schedule",
+      "Displays",
+      "Board Editor",
+      "Sample Data"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/styles.css",
+      "src/host/lanternHost.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; git diff --check; Playwright UI and display checks at 1440x960 and 900x1600; zero browser console errors"
+  },
+  {
+    "id": "DEV-0148",
+    "title": "Respect assigned display board after schedules end",
+    "summary": "Stopped ended schedules from overriding a display's assigned board and aligned dashboard/render fallback rules, so both return to the board selected for that display whenever no valid board schedule is currently active.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 10:01 PM",
+    "areas": [
+      "Displays",
+      "Scheduling",
+      "Board rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0147",
+    "title": "Remove assigned names display configuration view",
+    "summary": "Removed the Assigned names tab and roster panel from display configuration so display settings only expose configuration and room camera controls.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:06 PM",
+    "areas": [
+      "Displays",
+      "Dashboard"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0146",
+    "title": "Broaden bug report form language",
+    "summary": "Updated bug report copy for bugs, feedback, and ideas; changed Details to an open information dump with guidance, and reordered/renamed result fields.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 3:02 PM",
+    "areas": [
+      "Bug reporting",
+      "Feedback capture"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0145",
+    "title": "Verify rendered application evidence control",
+    "summary": "Corrected the evidence toolbar JSX after changing the action from camera/file capture to the rendered application-window Screenshot button.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:57 PM",
+    "areas": [
+      "Bug reporting"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0144",
+    "title": "Render application windows for bug evidence",
+    "summary": "Changed bug report Screenshot evidence to use the desktop app renderer for every visible Project Lantern window, attaching separate named images without browser screen sharing.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:56 PM",
+    "areas": [
+      "Bug reporting",
+      "Evidence capture"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0143",
+    "title": "Add camera photo evidence to bug reports",
+    "summary": "Added a Take photo evidence control that uses the device camera/file input without invoking browser screen sharing, while retaining Capture and Add files.",
+    "author": "Codex",
+    "createdAt": "Jul 31, 2026, 2:53 PM",
+    "areas": [
+      "Bug reporting",
+      "Evidence capture"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0142",
     "title": "Restore camera source previews",
     "summary": "Allow camera preview to connect without a working microphone, refresh device lists when hardware changes, and reliably start video playback after the stream loads.",

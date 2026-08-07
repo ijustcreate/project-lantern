@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" role="img" aria-labelledby="title desc">
+  <title id="title">Child-drawn Art Center paintbrush</title>
+  <desc id="desc">A cheerful imperfect paintbrush, paint splashes, and a tiny toy-soldier friend drawn with crayon-like lines.</desc>
+  <defs>
+    <filter id="wobble" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3"/>
+    </filter>
+  </defs>
+  <g filter="url(#wobble)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M78 284c55-26 114-37 179-29 59 8 117 31 181 12" fill="none" stroke="#f3c74f" stroke-width="18" opacity=".82"/>
+    <path d="M116 282 323 82c13-12 35-8 45 6 9 13 6 31-7 42L144 306z" fill="#e9a03c" stroke="#173f61" stroke-width="9"/>
+    <path d="m321 84 18-18c10-10 26-10 36-1l12 12c10 10 9 27-2 37l-20 18z" fill="#ef8157" stroke="#173f61" stroke-width="9"/>
+    <path d="m118 282-15 45c-3 10 7 18 16 13l39-23z" fill="#53b9aa" stroke="#173f61" stroke-width="9"/>
+    <path d="m108 325 10-28 22 20z" fill="#2f80b6"/>
+    <circle cx="93" cy="87" r="17" fill="#ef8157"/>
+    <circle cx="425" cy="207" r="14" fill="#53b9aa"/>
+    <path d="M52 169c31-4 42-20 46-50 6 29 21 42 48 45-27 7-40 23-43 48-8-25-23-38-51-43z" fill="#f3c74f" stroke="#173f61" stroke-width="6"/>
+    <path d="M401 265c18-7 34-5 47 9-14 13-30 16-48 7" fill="#ef8157" stroke="#173f61" stroke-width="6"/>
+    <g transform="translate(384 63)">
+      <path d="M28 38h74l-8 34H36z" fill="#c74432" stroke="#173f61" stroke-width="7"/>
+      <path d="M37 72h56v65H37z" fill="#f3c74f" stroke="#173f61" stroke-width="7"/>
+      <circle cx="65" cy="103" r="20" fill="#f8e7b7" stroke="#173f61" stroke-width="6"/>
+      <circle cx="58" cy="100" r="2.8" fill="#173f61"/><circle cx="72" cy="100" r="2.8" fill="#173f61"/>
+      <path d="M56 111c6 5 12 5 18 0" fill="none" stroke="#173f61" stroke-width="4"/>
+      <path d="M43 138 28 170m59-32 15 32M52 137l-4 50m30-50 4 50" fill="none" stroke="#173f61" stroke-width="8"/>
+    </g>
+    <path d="M203 64c12-18 25-19 39-2M242 51c9-14 20-14 31-1" fill="none" stroke="#2f80b6" stroke-width="9"/>
+  </g>
+</svg>

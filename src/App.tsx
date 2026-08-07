@@ -77,6 +77,30 @@ import {
 } from "lucide-react";
 import { BabylonDonorWall } from "./display/BabylonDonorWall";
 import { ChromaVideo } from "./components/ChromaVideo";
+import { EffectStudio } from "./components/EffectStudio";
+import { ChromaKeySampler } from "./components/ChromaKeySampler";
+import { AuditHistoryPanel } from "./components/AuditHistoryPanel";
+import { AudioLevelMeter } from "./components/AudioLevelMeter";
+import { BroadcastBackgroundLayer } from "./components/BroadcastBackgroundLayer";
+import { BroadcastCompositionControls } from "./components/BroadcastCompositionControls";
+import { RecordingLibrary } from "./components/RecordingLibrary";
+import { BrigadeView as BrigadeLandingPageView } from "./components/BrigadeView";
+import { VisitorMessageFooter } from "./components/VisitorMessageFooter";
+import { VisitorMessageManager } from "./components/VisitorMessageManager";
+import { LanternConfirmDialog, LanternNotice, LanternTextPromptDialog } from "./components/LanternDialog";
+import { parseCurrencyAmount } from "./donorDomain";
+import { buildDonorNameGridLayout, splitDonorNameLines } from "./donorNameLayout";
+import { AnimatedDonorName, BoardDonorPresentationEditor, recognitionIconGlyph } from "./components/BoardDonorPresentationEditor";
+import { clearBoardDonorStyle, patchBoardDonorStyle, resolveBoardDonorPresentation } from "./boardPresentation";
+import { formatMediaDeviceError, mediaDeviceManager, type MediaDeviceLease } from "./host/mediaDeviceManager";
+import { openRoomCameraPopout, ROOM_CAMERA_POPOUT_ROOT_ID } from "./roomCameraPopout";
+import {
+  defaultUserPreferences,
+  reminderMayPrompt,
+  scheduleOccurrenceKey,
+  updateReminderAcknowledgement,
+  withAuditHistory
+} from "./stateManagement";
 import {
   canWriteSharedLanternState,
   createHostChannel,
@@ -100,12 +124,16 @@ import type {
   DisplayProfile,
   DisplayStyle,
   BoardPanel,
+  BoardDonorPresentation,
   BoardWidget,
   BoardPanelType,
   Donor,
   DonorBoardProgram,
   DonationRecord,
+  GivingLevel,
+  GivingProgram,
   HostMessage,
+  LanternUser,
   LanternState,
   LanternTheme,
   ScreenId,
@@ -114,11 +142,29 @@ import type {
 } from "./types";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import codeChangelog from "./changelog.json";
+import { nextVisitorMessage, normalizeVisitorMessageRotation } from "./visitorMessages";
+import { CHROMA_KEY_PRESETS, createBackgroundRemovalPatch, resolveBackgroundRemoval, SCREENLESS_REMOVAL_TECHNOLOGY, type BackgroundRemovalMethod } from "./backgroundRemoval";
+import { frameSurfaceStyle, normalizeBroadcastComposition, normalizeCropEdges } from "./broadcastComposition";
+import { renderCostumeOverlay } from "./costumeRenderer";
+import { resolveCalibrationProfile } from "./effectStudio";
+import type { TrackingRuntimeStatus } from "./trackingRuntime";
+import {
+  captureRecordingThumbnail,
+  createDemoRecordingCapture,
+  normalizeRecordingTitle,
+  recordingLibraryStore,
+  recordingTimingMetrics,
+  sortRecordingLibrary,
+  type DemoRecordingCapture,
+  type RecordingLibraryRecord
+} from "./recordingLibrary";
+import { createRecordingSourcePlayback } from "./recordingSource";
 
-type View = "dashboard" | "donors" | "theme" | "schedule" | "announcements" | "live" | "revisions" | "bugs" | "settings";
+type View = "dashboard" | "brigade" | "donors" | "theme" | "schedule" | "announcements" | "live" | "revisions" | "bugs" | "settings";
 
 const navItems: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "brigade", label: "Toy Soldier Brigade", icon: Star },
   { id: "donors", label: "Donors", icon: Users },
   { id: "theme", label: "Board Editor", icon: Palette },
   { id: "schedule", label: "Schedule", icon: CalendarDays },
@@ -182,20 +228,6 @@ const boardFontLabels: Record<BoardFontFamily, string> = {
   "Source Serif 4": "Source Serif 4 — Formal & readable"
 };
 
-const donorIconOptions: NonNullable<Donor["icon"]>[] = ["none", "star", "heart", "leaf", "sparkle", "diamond", "crown", "laurel", "sun"];
-const donorIconLabels: Record<NonNullable<Donor["icon"]>, string> = {
-  none: "No icon",
-  star: "Star",
-  heart: "Heart",
-  leaf: "Leaf",
-  sparkle: "Sparkle",
-  diamond: "Diamond",
-  crown: "Crown",
-  laurel: "Laurel",
-  sun: "Sun",
-  hand: "Helping hand"
-};
-
 const announcementSfxSources = {
   ding: "/assets/sfx/announcement-ding.wav",
   chime: "/assets/sfx/announcement-chime.ogg"
@@ -205,6 +237,11 @@ export function App() {
   const announcementDemoMatch = window.location.hash.match(/^#\/announcement-demo\/([^/?#]+)/);
   if (announcementDemoMatch) {
     return <AnnouncementDemoApp screenId={decodeURIComponent(announcementDemoMatch[1])} />;
+  }
+
+  const displayWallMatch = window.location.hash.match(/^#\/display-wall\/([^?#]+)/);
+  if (displayWallMatch) {
+    return <DisplayWallApp screenIds={displayWallMatch[1].split(",").map((screenId) => decodeURIComponent(screenId)).filter(Boolean)} />;
   }
 
   const displayMatch = window.location.hash.match(/^#\/display\/([^/?#]+)/);
@@ -226,8 +263,9 @@ function ControlCenter() {
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const [bugCapture, setBugCapture] = useState<BugAttachment[]>([]);
   const [bugCaptureStatus, setBugCaptureStatus] = useState("");
-  const [activeUser, setActiveUser] = useState(() => currentBugUser());
-  const [users, setUsers] = useState<string[]>(() => readBugUsers());
+  const [activeUserId, setActiveUserId] = useState(() => readActiveLanternUserId(loadLanternState()));
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
   const [bugLauncherVisible, setBugLauncherVisible] = useState(() => localStorage.getItem("project-lantern-bug-launcher-visible") !== "false");
   const [bugLauncherPosition, setBugLauncherPosition] = useState(() => readBugLauncherPosition(currentBugUser()));
   const bugLauncherDrag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
@@ -236,44 +274,63 @@ function ControlCenter() {
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const [displayEditorOpen, setDisplayEditorOpen] = useState(false);
-  const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<ScheduleEntry | null>(null);
+  const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<{ entry: ScheduleEntry; occurrenceKey: string } | null>(null);
+  const [displayOpenNotice, setDisplayOpenNotice] = useState<string | null>(null);
+  const [announcementTab, setAnnouncementTab] = useState<"messages" | "blips">("messages");
+  const visitorPageEntryRef = useRef<View | null>(null);
   const videoBridge = useRef<DirectorVideoBridge | null>(null);
   const showIdeas = false;
+  const activeUser = state.users.find((user) => user.id === activeUserId) ?? state.users[0];
+  const activeUserName = activeUser?.name ?? currentBugUser();
+  const activePreferences = state.userPreferences.find((preferences) => preferences.userId === activeUser?.id);
+  const activeVisitorMessage = state.visitorMessages.find((message) => message.id === state.visitorMessageRotation.currentId)
+    ?? state.visitorMessages.find((message) => message.active);
 
   useEffect(() => {
     const check = () => {
       const now = new Date();
       const due = state.schedules.find((entry) => entry.active && entry.contentType === "broadcast" && entry.broadcastMode === "live" && entryOccursOnDate(entry, now) && timeToMinutes(entry.startTime) <= now.getHours() * 60 + now.getMinutes() && timeToMinutes(entry.endTime) > now.getHours() * 60 + now.getMinutes());
-      setScheduledBroadcastPrompt(due ?? null);
+      if (!due) {
+        setScheduledBroadcastPrompt(null);
+        return;
+      }
+      const occurrenceKey = scheduleOccurrenceKey(due, now);
+      setScheduledBroadcastPrompt((current) => {
+        if (current?.occurrenceKey === occurrenceKey) return current;
+        return reminderMayPrompt(state.broadcastReminderAcknowledgements, occurrenceKey, now) ? { entry: due, occurrenceKey } : null;
+      });
     };
     check();
     const timer = window.setInterval(check, 15_000);
     return () => window.clearInterval(timer);
-  }, [state.schedules]);
+  }, [state.broadcastReminderAcknowledgements, state.schedules]);
 
   useEffect(() => {
-    const roster = users.includes(activeUser) ? users : [...users, activeUser];
-    if (roster.length !== users.length) setUsers(roster);
-    localStorage.setItem(ACTIVE_BUG_USER_KEY, activeUser);
-    localStorage.setItem(BUG_USERS_KEY, JSON.stringify(roster));
-  }, [activeUser, users]);
+    if (!activeUser) return;
+    localStorage.setItem(ACTIVE_LANTERN_USER_KEY, activeUser.id);
+    localStorage.setItem(ACTIVE_BUG_USER_KEY, activeUser.name);
+    const bugRoster = Array.from(new Set([...readBugUsers(), ...state.users.map((user) => user.name)]));
+    localStorage.setItem(BUG_USERS_KEY, JSON.stringify(bugRoster));
+    notifyBugUsersUpdated(bugRoster);
+  }, [activeUser, state.users]);
 
   useEffect(() => {
-    const refreshUsers = (event: Event) => {
-      const discovered = event instanceof CustomEvent && Array.isArray(event.detail)
-        ? event.detail.filter((user): user is string => typeof user === "string")
-        : [];
-      setUsers((current) => Array.from(new Set([...current, ...readBugUsers(), ...discovered])));
+    const handleDisplayOpenResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ opened: string[]; blocked: string[] }>).detail;
+      if (!detail?.blocked?.length) {
+        setDisplayOpenNotice(null);
+        return;
+      }
+      const blockedNames = detail.blocked.map((id) => state.screens[id]?.label ?? id);
+      setDisplayOpenNotice(`The browser blocked ${blockedNames.join(", ")}. Allow pop-ups for this local site, then choose Open displays again.`);
     };
-    window.addEventListener(BUG_USERS_UPDATED_EVENT, refreshUsers);
-    return () => window.removeEventListener(BUG_USERS_UPDATED_EVENT, refreshUsers);
-  }, []);
+    window.addEventListener("lantern:display-open-result", handleDisplayOpenResult);
+    return () => window.removeEventListener("lantern:display-open-result", handleDisplayOpenResult);
+  }, [state.screens]);
 
   const addMenuUser = () => {
-    const name = window.prompt("New user name")?.trim();
-    if (!name) return;
-    setUsers((current) => current.some((user) => user.toLowerCase() === name.toLowerCase()) ? current : [...current, name]);
-    setActiveUser(name);
+    setNewUserName("");
+    setCreateUserOpen(true);
   };
 
   useEffect(() => {
@@ -355,23 +412,221 @@ function ControlCenter() {
     return () => window.clearTimeout(timer);
   }, [state.announcement.active, state.announcement.startedAt, state.announcement.durationMinutes]);
 
+  useEffect(() => {
+    const blip = state.activeBlip;
+    if (!blip.active || !blip.startedAt || blip.durationMinutes <= 0) return;
+    const expiresIn = Date.parse(blip.startedAt) + blip.durationMinutes * 60_000 - Date.now();
+    const timer = window.setTimeout(() => updateState((current) => ({ ...current, activeBlip: { ...current.activeBlip, active: false } })), Math.max(0, expiresIn));
+    return () => window.clearTimeout(timer);
+  }, [state.activeBlip.active, state.activeBlip.startedAt, state.activeBlip.durationMinutes]);
+
   const updateState = useCallback((updater: (current: LanternState) => LanternState) => {
     setState((current) => {
       const next = updater(current);
-      publishState(next);
-      return next;
+      if (next === current) return current;
+      const actor = current.users.find((user) => user.id === activeUserId) ?? current.users[0] ?? {
+        id: "local-operator",
+        name: currentBugUser()
+      };
+      const audited = withAuditHistory(current, next, { id: actor.id, name: actor.name });
+      publishState(audited);
+      return audited;
     });
-  }, []);
+  }, [activeUserId]);
+
+  const advanceVisitorMessage = useCallback(() => {
+    updateState((current) => {
+      const selection = nextVisitorMessage(current.visitorMessages, current.visitorMessageRotation);
+      return { ...current, visitorMessages: selection.messages, visitorMessageRotation: selection.rotation };
+    });
+  }, [updateState]);
+
+  const chooseVisitorMessage = useCallback((messageId: string) => {
+    updateState((current) => {
+      const message = current.visitorMessages.find((candidate) => candidate.id === messageId && candidate.active);
+      if (!message) return current;
+      const shownAt = new Date().toISOString();
+      return {
+        ...current,
+        visitorMessages: current.visitorMessages.map((candidate) => candidate.id === message.id ? { ...candidate, lastShownAt: shownAt } : candidate),
+        visitorMessageRotation: {
+          ...current.visitorMessageRotation,
+          currentId: message.id,
+          recentIds: [...current.visitorMessageRotation.recentIds.filter((id) => id !== message.id), message.id].slice(-6)
+        }
+      };
+    });
+  }, [updateState]);
+
+  const changeVisitorMessages = useCallback((messages: LanternState["visitorMessages"]) => {
+    updateState((current) => ({
+      ...current,
+      visitorMessages: messages,
+      visitorMessageRotation: normalizeVisitorMessageRotation(current.visitorMessageRotation, messages)
+    }));
+  }, [updateState]);
+
+  const sendVisitorMessage = useCallback((messageId: string, target: TargetScreen) => {
+    updateState((current) => {
+      const message = current.visitorMessages.find((candidate) => candidate.id === messageId);
+      if (!message) return current;
+      const startedAt = new Date().toISOString();
+      return {
+        ...current,
+        announcement: {
+          ...current.announcement,
+          id: `visitor-message-live-${message.id}`,
+          title: "A message for every young visitor",
+          message: message.text,
+          details: message.category,
+          target,
+          targets: target === "all" ? Object.keys(current.screens) : [target],
+          active: true,
+          startedAt
+        }
+      };
+    });
+  }, [updateState]);
+
+  const scheduleVisitorMessage = useCallback((messageId: string, target: TargetScreen) => {
+    const announcementId = `visitor-message-${messageId}`;
+    updateState((current) => {
+      const message = current.visitorMessages.find((candidate) => candidate.id === messageId);
+      if (!message) return current;
+      const { active: _active, startedAt: _startedAt, ...announcementTemplate } = current.announcement;
+      const saved = {
+        ...announcementTemplate,
+        id: announcementId,
+        title: "Visitor message",
+        message: message.text,
+        details: message.category,
+        target,
+        targets: target === "all" ? Object.keys(current.screens) : [target]
+      };
+      return {
+        ...current,
+        savedAnnouncements: current.savedAnnouncements.some((item) => item.id === announcementId)
+          ? current.savedAnnouncements.map((item) => item.id === announcementId ? saved : item)
+          : [...current.savedAnnouncements, saved]
+      };
+    });
+    setAnnouncementTab("messages");
+    setView("announcements");
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:schedule-announcement", { detail: announcementId })), 0);
+  }, [setView, updateState]);
+
+  useEffect(() => {
+    if (view !== "dashboard" && view !== "brigade") {
+      visitorPageEntryRef.current = null;
+      return;
+    }
+    if (visitorPageEntryRef.current === view) return;
+    visitorPageEntryRef.current = view;
+    advanceVisitorMessage();
+  }, [advanceVisitorMessage, view]);
+
+  useEffect(() => {
+    const legacyNames = readBugUsers();
+    const missing = legacyNames.filter((name) => !state.users.some((user) => user.name.localeCompare(name, undefined, { sensitivity: "base" }) === 0));
+    if (!missing.length) return;
+    updateState((current) => {
+      const now = new Date().toISOString();
+      const additions: LanternUser[] = missing.map((name) => ({
+        id: localUserId(name, current.users),
+        name,
+        createdAt: now,
+        updatedAt: now,
+        accessMode: "local-demo"
+      }));
+      return {
+        ...current,
+        users: [...current.users, ...additions],
+        userPreferences: [
+          ...current.userPreferences,
+          ...additions.map((user) => defaultUserPreferences(user, current.recognitionSettings.appearance))
+        ]
+      };
+    });
+  }, [state.users, updateState]);
+
+  useEffect(() => {
+    if (!activeUser || activePreferences?.lastDisplayId === selectedDisplayId) return;
+    updateState((current) => ({
+      ...current,
+      userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUser.id
+        ? { ...preferences, lastDisplayId: selectedDisplayId }
+        : preferences)
+    }));
+  }, [activePreferences?.lastDisplayId, activeUser, selectedDisplayId, updateState]);
+
+  const selectActiveUser = (userId: string) => {
+    const user = state.users.find((candidate) => candidate.id === userId);
+    if (!user) return;
+    const preferences = state.userPreferences.find((candidate) => candidate.userId === user.id);
+    setActiveUserId(user.id);
+    localStorage.setItem(ACTIVE_LANTERN_USER_KEY, user.id);
+    if (preferences?.lastDisplayId && state.screens[preferences.lastDisplayId]) setSelectedDisplayId(preferences.lastDisplayId);
+    if (preferences?.theme && preferences.theme !== state.recognitionSettings.appearance) {
+      updateState((current) => ({
+        ...current,
+        recognitionSettings: { ...current.recognitionSettings, appearance: preferences.theme }
+      }));
+    }
+  };
+
+  const createLocalUser = () => {
+    const name = newUserName.trim();
+    if (!name) return;
+    const existing = state.users.find((user) => user.name.localeCompare(name, undefined, { sensitivity: "base" }) === 0);
+    if (existing) {
+      selectActiveUser(existing.id);
+      setCreateUserOpen(false);
+      return;
+    }
+    const now = new Date().toISOString();
+    const user: LanternUser = { id: localUserId(name, state.users), name, createdAt: now, updatedAt: now, accessMode: "local-demo" };
+    updateState((current) => ({
+      ...current,
+      users: [...current.users, user],
+      userPreferences: [...current.userPreferences, defaultUserPreferences(user, current.recognitionSettings.appearance)]
+    }));
+    setActiveUserId(user.id);
+    setCreateUserOpen(false);
+    setNewUserName("");
+  };
+
+  const setReminderStatus = (status: "dismissed" | "acknowledged" | "cleared", snoozeMinutes = 0) => {
+    const prompt = scheduledBroadcastPrompt;
+    if (!prompt) return;
+    const now = new Date();
+    updateState((current) => ({
+      ...current,
+      broadcastReminderAcknowledgements: updateReminderAcknowledgement(current.broadcastReminderAcknowledgements, {
+        occurrenceKey: prompt.occurrenceKey,
+        scheduleId: prompt.entry.id,
+        status,
+        updatedAt: now.toISOString(),
+        userId: activeUser?.id,
+        snoozedUntil: snoozeMinutes ? new Date(now.getTime() + snoozeMinutes * 60_000).toISOString() : undefined
+      })
+    }));
+    setScheduledBroadcastPrompt(null);
+  };
+
+  useEffect(() => {
+    if (view === "live" && scheduledBroadcastPrompt) setReminderStatus("acknowledged");
+  }, [view, scheduledBroadcastPrompt?.occurrenceKey]);
 
   const warnings = useMemo(() => fitWarnings(state), [state]);
   const filteredDonors = useMemo(
     () =>
       state.donors.filter((donor) => {
         const group = state.donorGroups.find((item) => item.id === donor.groupId)?.name ?? "";
-        const haystack = `${donor.name} ${donor.tier} ${donor.category} ${donor.note} ${donor.subtext ?? ""} ${(donor.tags ?? []).join(" ")} ${group} ${donor.donationType ?? ""} ${donor.amount ?? ""}`.toLowerCase();
+        const givingProgram = state.givingPrograms.find((program) => program.id === donor.givingProgramId)?.name ?? "";
+        const haystack = `${donor.name} ${donor.tier} ${donor.category} ${donor.note} ${donor.subtext ?? ""} ${(donor.tags ?? []).join(" ")} ${group} ${givingProgram} ${donor.pledgeAnnualAmount ?? ""} ${donor.pledgeStatus ?? ""} ${donor.donationType ?? ""} ${donor.amount ?? ""}`.toLowerCase();
         return haystack.includes(query.toLowerCase());
       }),
-    [query, state.donors, state.donorGroups]
+    [query, state.donors, state.donorGroups, state.givingPrograms]
   );
 
   const openDisplays = async () => {
@@ -420,6 +675,7 @@ function ControlCenter() {
   };
 
   const startLive = async () => {
+    if (scheduledBroadcastPrompt) setReminderStatus("cleared");
     updateState((current) => ({ ...current, live: { ...current.live, active: true } }));
     await videoBridge.current?.start(state.live.target, state.live.source, state.live.videoDeviceId, state.live.audioDeviceId);
     await Promise.all(
@@ -430,6 +686,7 @@ function ControlCenter() {
   };
 
   const startLiveStream = async (stream: MediaStream, detail: string) => {
+    if (scheduledBroadcastPrompt) setReminderStatus("cleared");
     updateState((current) => ({ ...current, live: { ...current.live, active: true } }));
     await videoBridge.current?.startMediaStream(state.live.target, stream, detail);
     await Promise.all(
@@ -469,7 +726,7 @@ function ControlCenter() {
   const identifyDisplay = (screenId: ScreenId) => {
     const connectedDisplays = Object.values(state.screens).filter((screen) => screen.status !== "offline");
     if (!connectedDisplays.length) {
-      window.alert("There are no open/connected displays.");
+      setDisplayOpenNotice("There are no open or connected displays to identify. Open a display window, then try again.");
       return;
     }
     const channel = new BroadcastChannel("project-lantern-host-v1");
@@ -496,6 +753,7 @@ function ControlCenter() {
         startedAt: undefined
       }
     }));
+    setAnnouncementTab("messages");
     setView("announcements");
   };
 
@@ -551,7 +809,7 @@ function ControlCenter() {
           <img className="museum-brand-image" src={`${import.meta.env.BASE_URL}assets/childrens-museum-stockton.png`} alt="Children's Museum of Stockton" />
         </button>
         <nav className="nav-list">
-          {navItems.filter((item) => item.id !== "revisions" && item.id !== "bugs").map((item) => {
+          {navItems.filter((item) => item.id !== "revisions" && item.id !== "bugs" && item.id !== "brigade").map((item) => {
             const Icon = item.icon;
             return (
               <button className={`${view === item.id ? "nav-item active" : "nav-item"}${item.id === "live" && scheduledBroadcastPrompt ? " scheduled-live-nav" : ""}`} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
@@ -566,13 +824,16 @@ function ControlCenter() {
           <select
             aria-label="Site theme"
             value={state.recognitionSettings.appearance}
-            onChange={(event) => updateState((current) => ({
-              ...current,
-              recognitionSettings: {
-                ...current.recognitionSettings,
-                appearance: event.target.value as LanternState["recognitionSettings"]["appearance"]
-              }
-            }))}
+            onChange={(event) => {
+              const appearance = event.target.value as LanternState["recognitionSettings"]["appearance"];
+              updateState((current) => ({
+                ...current,
+                recognitionSettings: { ...current.recognitionSettings, appearance },
+                userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUser?.id
+                  ? { ...preferences, theme: appearance }
+                  : preferences)
+              }));
+            }}
           >
             <option value="dark">Dark</option>
             <option value="light">Light</option>
@@ -599,7 +860,7 @@ function ControlCenter() {
         </div>
       </aside>
 
-      <main className={`main-panel${showIdeas ? ideasOpen ? " ideas-open" : " ideas-collapsed" : ""}`}>
+      <main className={`main-panel${view === "brigade" ? " brigade-main" : ""}${showIdeas ? ideasOpen ? " ideas-open" : " ideas-collapsed" : ""}`}>
         <header className={view === "dashboard" ? "topbar dashboard-topbar" : "topbar"}>
           <div className="page-identity">
             <p className="eyebrow"><span>Museum Donor Board Control Center</span><i />Published {state.publishedAt}</p>
@@ -611,19 +872,22 @@ function ControlCenter() {
               <button className="header-operation-button" onClick={openDisplays} title="Open every recognition display">
                 <Monitor size={16} /><span>Open displays</span>
               </button>
-              <button className="header-operation-button" onClick={addDisplay} title="Add a recognition display">
-                <Plus size={16} /><span>Add display</span>
-              </button>
               <button className="command-button secondary help-launch-button" onClick={() => setHelpOpen(true)} title="Open the Project Lantern walkthrough">
                 <BookOpen size={18} />
                 How to use
               </button>
+              <button className="header-operation-button dashboard-brigade-entry" onClick={() => setView("brigade")} title="Open the Toy Soldier Brigade hub">
+                <Star size={16} /><span>Toy Soldier Brigade</span>
+              </button>
+              <button className="header-operation-button" onClick={addDisplay} title="Add a recognition display">
+                <Plus size={16} /><span>Add display</span>
+              </button>
               </>
             )}
             <label className="header-user-control">
-              <span><Users size={15} /> User</span>
-              <select aria-label="Current user" value={activeUser} onChange={(event) => event.target.value === "__new__" ? addMenuUser() : setActiveUser(event.target.value)}>
-                {users.map((user) => <option key={user} value={user}>{user}</option>)}
+              <span><Users size={15} /> User <small>Local mode</small></span>
+              <select aria-label="Current user (local non-secure mode)" value={activeUser?.id ?? ""} onChange={(event) => event.target.value === "__new__" ? addMenuUser() : selectActiveUser(event.target.value)}>
+                {state.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                 <option value="__new__">+ Create user…</option>
               </select>
             </label>
@@ -637,7 +901,7 @@ function ControlCenter() {
           })}
         </nav>
 
-        {view === "dashboard" && (
+        {view === "dashboard" && (<>
           <Dashboard
             state={state}
             selectedDisplayId={selectedDisplayId}
@@ -653,10 +917,18 @@ function ControlCenter() {
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room")}
             scheduleBoardNow={scheduleBoardNow}
           />
-        )}
+          <VisitorMessageFooter
+            message={activeVisitorMessage}
+            displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
+            onNext={advanceVisitorMessage}
+            onManage={() => { setView("brigade"); window.setTimeout(() => document.getElementById("visitor-message-pool")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0); }}
+            onSend={(target) => activeVisitorMessage && sendVisitorMessage(activeVisitorMessage.id, target)}
+          />
+        </>)}
         {view === "donors" && (
           <DonorsView
             state={state}
+            activeUserId={activeUser?.id}
             query={query}
             setQuery={setQuery}
             donors={filteredDonors}
@@ -677,25 +949,72 @@ function ControlCenter() {
           onEditAnnouncement={(announcementId) => {
             const saved = state.savedAnnouncements.find((item) => item.id === announcementId);
             if (saved) updateState((current) => ({ ...current, announcement: { ...saved, active: false, startedAt: undefined } }));
+            setAnnouncementTab("messages");
             setView("announcements");
           }}
         />}
         {view === "announcements" && (
-          <AnnouncementsView state={state} updateState={updateState} toggleAnnouncement={toggleAnnouncement} />
-        )}
-        {view === "live" && (
-          <section className="comms-workspace go-live-workspace">
-            <LivePreviewPanel
-              state={state}
-              patchLive={(patch) => updateState((current) => ({ ...current, live: { ...current.live, ...patch } }))}
-              startLive={startLive}
-              startLiveStream={startLiveStream}
-              stopLive={stopLive}
-            />
+          <section className="announcements-workspace">
+            <nav className="announcement-mode-tabs" aria-label="Announcement tools">
+              <button type="button" className={announcementTab === "messages" ? "active" : ""} onClick={() => setAnnouncementTab("messages")}><Megaphone size={16} /> Messages</button>
+              <button type="button" className={announcementTab === "blips" ? "active" : ""} onClick={() => setAnnouncementTab("blips")}><Sparkles size={16} /> Blips</button>
+            </nav>
+            <div className="announcement-tool-explainer" aria-label="Difference between Messages and Blips">
+              <button type="button" className={announcementTab === "messages" ? "active" : ""} onClick={() => setAnnouncementTab("messages")}><Megaphone size={17} /><span><strong>Message</strong><small>A fuller, timed notice for directions, closures, welcomes, or museum information. It can include layouts, imagery, sound, and a countdown.</small></span></button>
+              <button type="button" className={announcementTab === "blips" ? "active" : ""} onClick={() => setAnnouncementTab("blips")}><Sparkles size={17} /><span><strong>Blip</strong><small>A brief, playful interruption—such as a quiz, joke, celebration, or visitor prompt—that appears over the current board and gets out of the way quickly.</small></span></button>
+            </div>
+            {announcementTab === "messages"
+              ? <AnnouncementsView state={state} updateState={updateState} toggleAnnouncement={toggleAnnouncement} />
+              : <BlipsView state={state} updateState={updateState} onOpenSchedule={(id) => { setScheduleFocusId(id); setView("schedule"); }} />}
           </section>
         )}
-        {view === "dashboard" && displayEditorOpen && <ScreensView state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} editorOnly onClose={() => setDisplayEditorOpen(false)} />}
-        {view === "revisions" && <RevisionsView />}
+        {view === "live" && (
+          <section className="broadcast-workspace broadcast-only-workspace">
+            <div className="comms-workspace go-live-workspace"><LivePreviewPanel
+                state={state}
+                activeUserId={activeUser?.id}
+                patchLive={(patch) => updateState((current) => ({ ...current, live: { ...current.live, ...patch } }))}
+                updateState={updateState}
+                startLive={startLive}
+                startLiveStream={startLiveStream}
+                stopLive={stopLive}
+              /></div>
+          </section>
+        )}
+        {view === "brigade" && <BrigadeLandingPageView
+          state={state}
+          updateState={updateState}
+          onManageDonors={() => setView("donors")}
+          onOpenBoard={(boardId) => { setView("theme"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0); }}
+          onUseAnnouncement={(announcementId) => {
+            const saved = state.savedAnnouncements.find((item) => item.id === announcementId);
+            if (saved) updateState((current) => ({ ...current, announcement: { ...saved, active: false, startedAt: undefined } }));
+            setAnnouncementTab("messages");
+            setView("announcements");
+          }}
+          onOpenBlips={() => { setAnnouncementTab("blips"); setView("announcements"); }}
+          visitorMessagePanel={<>
+            <VisitorMessageManager
+              messages={state.visitorMessages}
+              currentId={state.visitorMessageRotation.currentId}
+              displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
+              onChange={(messages) => changeVisitorMessages(messages)}
+              onUse={chooseVisitorMessage}
+              onNext={advanceVisitorMessage}
+              onSend={sendVisitorMessage}
+              onSchedule={scheduleVisitorMessage}
+            />
+            <VisitorMessageFooter
+              message={activeVisitorMessage}
+              displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
+              onNext={advanceVisitorMessage}
+              onManage={() => document.getElementById("visitor-message-pool")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              onSend={(target) => activeVisitorMessage && sendVisitorMessage(activeVisitorMessage.id, target)}
+            />
+          </>}
+        />}
+        {view === "dashboard" && displayEditorOpen && <ScreensView state={state} activeUserId={activeUser?.id} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} editorOnly onClose={() => setDisplayEditorOpen(false)} />}
+        {view === "revisions" && <RevisionsView state={state} />}
         {view === "bugs" && <BugsView onNewBug={() => void openBugReport()} launcherVisible={bugLauncherVisible} onLauncherVisibleChange={(visible) => {
           setBugLauncherVisible(visible);
           localStorage.setItem("project-lantern-bug-launcher-visible", String(visible));
@@ -704,7 +1023,9 @@ function ControlCenter() {
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
       </main>
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
-      {scheduledBroadcastPrompt && <div className="modal-backdrop scheduled-broadcast-backdrop"><section className="editor-modal scheduled-broadcast-prompt" role="dialog" aria-modal="true" aria-labelledby="scheduled-broadcast-prompt-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled broadcast</p><h2 id="scheduled-broadcast-prompt-title">Scheduled broadcast</h2></div></div><p><strong>{scheduledBroadcastPrompt.name}</strong> is scheduled to start now{scheduledBroadcastPrompt.presenterName ? ` for ${scheduledBroadcastPrompt.presenterName}` : ""}. Do you wish to start?</p><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setScheduledBroadcastPrompt(null)}>Not now</button><button type="button" className="command-button primary" onClick={() => { setScheduledBroadcastPrompt(null); setView("live"); }}>Open Broadcast / Stream</button></div></section></div>}
+      {createUserOpen && <div className="modal-backdrop local-user-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateUserOpen(false); }}><form className="editor-modal local-user-modal" role="dialog" aria-modal="true" aria-labelledby="local-user-title" onSubmit={(event) => { event.preventDefault(); createLocalUser(); }}><div className="editor-modal-head"><div><p className="eyebrow">Local operator profile</p><h2 id="local-user-title">Create user</h2></div><button type="button" className="icon-button" title="Close" onClick={() => setCreateUserOpen(false)}><X size={18} /></button></div><label className="field"><span>Name</span><input autoFocus value={newUserName} onChange={(event) => setNewUserName(event.target.value)} placeholder="Operator name" maxLength={80} /></label><p className="field-note local-mode-note"><Lock size={14} /> Local mode is passwordless and is intended for trusted operators on this device. It records who made changes; it is not an authentication system.</p><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setCreateUserOpen(false)}>Cancel</button><button type="submit" className="command-button primary" disabled={!newUserName.trim()}><Plus size={15} /> Create user</button></div></form></div>}
+      {scheduledBroadcastPrompt && <div className="modal-backdrop scheduled-broadcast-backdrop"><section className="editor-modal scheduled-broadcast-prompt" role="dialog" aria-modal="true" aria-labelledby="scheduled-broadcast-prompt-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled broadcast</p><h2 id="scheduled-broadcast-prompt-title">Scheduled broadcast</h2></div></div><p><strong>{scheduledBroadcastPrompt.entry.name}</strong> is scheduled to start now{scheduledBroadcastPrompt.entry.presenterName ? ` for ${scheduledBroadcastPrompt.entry.presenterName}` : ""}. Do you wish to start?</p><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setReminderStatus("dismissed", 15)}>Not now</button><button type="button" className="command-button primary" onClick={() => { setReminderStatus("acknowledged"); setView("live"); }}>Open Broadcast / Stream</button></div></section></div>}
+      {displayOpenNotice && <LanternNotice message={displayOpenNotice} onDismiss={() => setDisplayOpenNotice(null)} />}
       {bugLauncherVisible && <button className="bug-report-fab" style={{ left: bugLauncherPosition.x, top: bugLauncherPosition.y }}
         onPointerDown={(event) => { bugLauncherDrag.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bugLauncherPosition.x, originY: bugLauncherPosition.y, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }}
         onPointerMove={moveBugLauncher}
@@ -743,6 +1064,7 @@ type BugRecord = { bugId: string; summary: string; details: string; fixTips: str
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
 const BUG_USERS_KEY = "project-lantern-bug-users";
 const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
+const ACTIVE_LANTERN_USER_KEY = "project-lantern-active-user";
 const BUG_VIEW_PREFS_KEY = "project-lantern-bug-view-preferences";
 const BUG_LAUNCHER_POSITIONS_KEY = "project-lantern-bug-launcher-positions";
 const BUG_USERS_UPDATED_EVENT = "project-lantern-bug-users-updated";
@@ -752,6 +1074,21 @@ const BUG_API_ENDPOINT = (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | 
   || (import.meta.env.DEV ? "/__lantern/bugs" : "");
 function isTauri() { return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window; }
 function currentBugUser() { return localStorage.getItem(ACTIVE_BUG_USER_KEY)?.trim() || DEFAULT_BUG_USERS[0]; }
+function readActiveLanternUserId(state: LanternState) {
+  const saved = localStorage.getItem(ACTIVE_LANTERN_USER_KEY)?.trim();
+  if (saved && state.users.some((user) => user.id === saved)) return saved;
+  const legacyName = currentBugUser();
+  return state.users.find((user) => user.name.localeCompare(legacyName, undefined, { sensitivity: "base" }) === 0)?.id
+    ?? state.users[0]?.id
+    ?? "local-operator";
+}
+function localUserId(name: string, users: LanternUser[]) {
+  const base = `user-${name.toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "operator"}`;
+  if (!users.some((user) => user.id === base)) return base;
+  let suffix = 2;
+  while (users.some((user) => user.id === `${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
+}
 function readBugUsers() {
   try {
     const saved = JSON.parse(localStorage.getItem(BUG_USERS_KEY) ?? "[]") as unknown;
@@ -861,13 +1198,14 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
     setStatus("Choose the area you want to attach…");
     try {
       if (isTauri()) {
-        const capture = await invoke<BugAttachment>("capture_bug_snip");
-        setAttachments((current) => [...current, capture]);
+        const result = await invoke<{ screenshots: BugAttachment[] }>("capture_bug_windows");
+        setAttachments((current) => [...current, ...result.screenshots]);
+        setStatus(result.screenshots.length ? `${result.screenshots.length} application window${result.screenshots.length === 1 ? "" : "s"} attached.` : "No visible application windows found.");
+        return;
       } else {
-        if (!navigator.mediaDevices?.getDisplayMedia) {
-          setStatus("Screen capture is not available in this browser. Use Add files to attach a screenshot.");
-          return;
-        }
+        setStatus("Application rendering is available in the desktop app. Use Add files or paste an image here.");
+        return;
+        /*
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const video = document.createElement("video");
         video.srcObject = stream;
@@ -879,7 +1217,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         canvas.getContext("2d")?.drawImage(video, 0, 0);
         stream.getTracks().forEach((track) => track.stop());
-        setAttachments((current) => [...current, { name: `screen-capture-${Date.now()}.png`, dataUrl: canvas.toDataURL("image/png") }]);
+        setAttachments((current) => [...current, { name: `screen-capture-${Date.now()}.png`, dataUrl: canvas.toDataURL("image/png") }]); */
       }
       setStatus("Screenshot attached.");
     } catch (error) {
@@ -959,8 +1297,8 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
       </header>
       <div className="bug-report-body">
         <div className="bug-entered-by-note"><Users size={15} /><span>Entered by <strong>{enteredBy}</strong></span></div>
-        <label className="field"><span>Brief description <b>*</b> <InfoDot text="In one sentence, say what went wrong and where. A good example is: “Schedule screen goes blank after I press Publish.”" /></span><input autoFocus value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="What went wrong?" /></label>
-        <label className="field"><span>Details <InfoDot text="Tell us the steps you took, what you expected to happen, and what actually happened. Include whether it happens every time or only sometimes." /></span><textarea value={details} onChange={(event) => setDetails(event.target.value)} placeholder="What were you doing? What happened? What did you expect?" /></label>
+        <label className="field"><span>Summary <b>*</b> <InfoDot text="Give this bug, piece of feedback, or idea a short, recognizable title. Say what you noticed or what you would like to improve." /></span><input autoFocus value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="What should we know or improve?" /></label>
+        <label className="field"><span>Details <InfoDot text="Use this as an information dump. Include anything that may help: context, examples, what you were trying to do, what you noticed, why it matters, relevant people or displays, possible causes, and ideas for improvement. Do not worry about organizing it perfectly." /></span><textarea value={details} onChange={(event) => setDetails(event.target.value)} placeholder="Share everything you can think of about the bug, feedback, or idea…" /></label>
         <label className="field"><span>Steps to reproduce <InfoDot text="List the exact clicks or actions that make the problem happen. Numbered steps are easiest to follow." /></span><textarea value={stepsToReproduce} onChange={(event) => setStepsToReproduce(event.target.value)} placeholder={"1. Open…\n2. Select…\n3. Click…"} /></label>
         <div className="two-col">
           <label className="field"><span>Expected result</span><textarea value={expectedResult} onChange={(event) => setExpectedResult(event.target.value)} placeholder="What should have happened?" /></label>
@@ -976,7 +1314,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
           available={[...state.recognitionSettings.tags, ...knownBugTags]}
           onChange={setTags}
         />
-        <div className="bug-attachments-head"><div><strong>Attached evidence <InfoDot text="A screenshot, GIF, video, or small log file can show the exact problem. Please avoid including passwords, private donor information, or anything sensitive." /></strong><small>Capture a region, paste an image, or add files.</small></div><div className="bug-evidence-actions"><button className="command-button secondary compact" onClick={() => void captureSnip()} title="Capture a screen region"><Camera size={15} /> Capture</button><label className="command-button secondary compact"><ImagePlus size={15} /> Add files<input type="file" multiple accept="image/*,video/*,.mov,.mpeg,.mpg,.mp4,.webm,.txt,.log,.json,.zip" onChange={(event) => event.target.files && void addFiles(event.target.files)} /></label></div></div>
+        <div className="bug-attachments-head"><div><strong>Attached evidence <InfoDot text="A screenshot, GIF, video, or small log file can show the exact problem. Please avoid including passwords, private donor information, or anything sensitive." /></strong><small>Render the app, paste an image, or add files.</small></div><div className="bug-evidence-actions"><button className="command-button secondary compact" title="Render every open application window" onClick={() => void captureSnip()}><Camera size={15} /> Screenshot</button><label className="command-button secondary compact"><ImagePlus size={15} /> Add files<input type="file" multiple accept="image/*,video/*,.mov,.mpeg,.mpg,.mp4,.webm,.txt,.log,.json,.zip" onChange={(event) => event.target.files && void addFiles(event.target.files)} /></label></div></div>
         <div className="bug-thumbnails">
           {attachments.map((attachment, index) => <figure key={`${attachment.name}-${index}`}><div>{attachment.dataUrl.startsWith("data:image/") ? <img src={attachment.dataUrl} alt="" /> : <span><Upload size={22} /></span>}<button className="bug-attachment-remove" onClick={() => setAttachments((current) => current.filter((_, item) => item !== index))} title="Remove attachment"><X size={13} /></button>{attachment.dataUrl.startsWith("data:image/") && <button className="bug-attachment-edit" onClick={() => setEditingAttachment(index)} title="Annotate image" aria-label={`Annotate ${attachment.name}`}><Pencil size={13} /></button>}</div><figcaption>{attachment.name}</figcaption></figure>)}
           {!attachments.length && <div className="bug-empty-attachments"><Camera size={22} /><span>Screenshots will appear here</span></div>}
@@ -1184,6 +1522,8 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   const preferencesUserRef = useRef(initialActiveUser);
   const [commentTab, setCommentTab] = useState<"user" | "ai">("user");
   const [message, setMessage] = useState("");
+  const [pendingBugDelete, setPendingBugDelete] = useState<BugRecord | null>(null);
+  const [bugUserPromptOpen, setBugUserPromptOpen] = useState(false);
   const load = useCallback(async () => {
     if (isTauri()) {
       try { setBugs(await invoke<BugRecord[]>("list_bug_reports")); }
@@ -1288,7 +1628,6 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
     } catch (error) { setMessage(`Could not update bug: ${String(error)}`); }
   };
   const deleteBug = async (bug: BugRecord) => {
-    if (!window.confirm(`Delete ${bug.bugId} permanently?\n\n"${bug.summary}"\n\nThis removes the report and its attachments for every tester. This cannot be undone.`)) return;
     try {
       if (isTauri()) await invoke("delete_bug_report", { bugId: bug.bugId });
       else {
@@ -1380,12 +1719,12 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
     }
   };
   const counts = { open: bugs.filter((bug) => bug.status === "open").length, testing: bugs.filter((bug) => bug.status === "ready-for-test").length, closed: bugs.filter((bug) => bug.status === "closed" || bug.status === "verified").length };
-  const addUser = () => {
-    const name = window.prompt("New user name");
-    if (!name?.trim()) return;
+  const addUser = (name: string) => {
     const normalized = name.trim();
+    if (!normalized) return;
     setUsers((current) => current.some((user) => user.toLowerCase() === normalized.toLowerCase()) ? current : [...current, normalized]);
     setActiveUser(normalized);
+    setBugUserPromptOpen(false);
   };
   const addComment = () => {
     if (!selected || !comment.trim()) return;
@@ -1402,7 +1741,7 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
   return <section className="bugs-page">
     <div className="bugs-toolbar">
       <div><h2>Bug catalogue</h2><p>Track reports from discovery through verification.</p></div>
-      <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") addUser(); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
+      <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") setBugUserPromptOpen(true); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
     </div>
     <div className="bug-metrics"><article><Bug /><span><b>{counts.open}</b>Open</span></article><article><BadgeCheck /><span><b>{counts.testing}</b>Ready for test</span></article><article><CheckCircle2 /><span><b>{counts.closed}</b>Verified / closed</span></article></div>
     <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status">{statusOrder.map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{statusLabel(value)}</button>)}<button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button></div><div className="bugs-view-options"><label className="bug-entered-by-filter"><Users size={14} /><span>Entered by</span><select aria-label="Filter bugs by entered by" value={enteredByFilter} onChange={(event) => setEnteredByFilter(event.target.value)}><option value="all">All users</option>{reporterUsers.map((user) => <option key={user} value={user}>{user}</option>)}</select></label><label className="bug-group-toggle"><input type="checkbox" checked={groupByStatus} onChange={(event) => setGroupByStatus(event.target.checked)} /><span>Separate by status</span></label><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div></div>
@@ -1441,11 +1780,13 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
             {commentTab === "user" && <div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? `Comment as ${activeUser}…` : `Reply as ${activeUser}…`} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div>}
           </div>
         </div>
-        <footer className="bug-detail-actions"><button className="command-button danger" onClick={() => void deleteBug(selected)}><Trash2 size={16} /> Delete bug</button><button className="command-button secondary" onClick={() => void exportBugToCodex(selected)}><ClipboardCopy size={16} /> Export to Codex</button><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
+        <footer className="bug-detail-actions"><button className="command-button danger" onClick={() => setPendingBugDelete(selected)}><Trash2 size={16} /> Delete bug</button><button className="command-button secondary" onClick={() => void exportBugToCodex(selected)}><ClipboardCopy size={16} /> Export to Codex</button><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
       </> : <div className="bugs-empty"><Pencil size={26} /><strong>Select a bug</strong><span>Open it here to edit details or move it to Ready for test.</span></div>}</aside>
     </div>
     {message && <div className="bugs-message">{message}</div>}
     {selected && viewingEvidence && <EvidenceViewer bugId={selected.bugId} evidence={viewingEvidence} onClose={() => setViewingEvidence(null)} />}
+    {pendingBugDelete && <LanternConfirmDialog eyebrow="Permanent deletion" title={`Delete ${displayBugId(pendingBugDelete.bugId)} permanently?`} description={<><p><strong>{pendingBugDelete.summary}</strong></p><p>This removes the report and its attachments for every tester. This action cannot be undone.</p></>} confirmLabel="Delete bug" onCancel={() => setPendingBugDelete(null)} onConfirm={() => { const bug = pendingBugDelete; setPendingBugDelete(null); void deleteBug(bug); }} />}
+    {bugUserPromptOpen && <LanternTextPromptDialog eyebrow="Bug catalogue user" title="Add a user" description="This name is saved locally and identifies who entered or updated bug reports." label="User name" placeholder="Name" submitLabel="Add user" onCancel={() => setBugUserPromptOpen(false)} onSubmit={addUser} />}
   </section>;
 }
 
@@ -1463,7 +1804,7 @@ const helpSlides = [
   {
     kicker: "Welcome",
     title: "Meet the Museum Donor Board Control Center",
-    copy: "Project Lantern brings donor records, board design, display previews, scheduling, announcements, broadcasts, revisions, and feedback into one staff-friendly workspace.",
+    copy: "Project Lantern brings donor records, board design, display previews, scheduling, announcements, broadcasts, and feedback into one staff-friendly workspace.",
     points: ["Prepare and preview safely", "Control portrait and landscape displays", "Publish only when you are ready"],
     accent: "01",
     image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
@@ -1502,9 +1843,9 @@ const helpSlides = [
   },
   {
     kicker: "Schedule",
-    title: "Plan boards, announcements, and broadcasts",
-    copy: "Use week, month, or agenda views to place content on specific displays. Boards, announcements, and broadcasts can layer together; only overlapping items of the same type are conflicts.",
-    points: ["Add Board, Announcement, or Broadcast", "Set display, date, time, duration, and recurrence", "Resolve same-type conflicts before showtime"],
+    title: "Plan boards, messages, Blips, and broadcasts",
+    copy: "Use week, month, or agenda views to place content on specific displays. Color, icon, label, and border treatment distinguish each content type; only overlapping items of the same type are conflicts.",
+    points: ["Add a Board, Announcement, Blip, or Broadcast", "Set display, date, time, duration, and recurrence", "Resolve same-type conflicts before showtime"],
     accent: "05",
     image: `${import.meta.env.BASE_URL}assets/help/schedule.png`,
     imageAlt: "Schedule calendar containing boards, announcements, and broadcast entries",
@@ -1541,21 +1882,11 @@ const helpSlides = [
     callout: "Personalize the staff workspace"
   },
   {
-    kicker: "Revisions",
-    title: "Review what changed and why",
-    copy: "The revision history records code improvements and board publishes with affected areas, files, verification, and restore context. Use Restore boards when you need to return displays to the published board state.",
-    points: ["Filter code changes and board publishes", "Review verification notes", "Restore boards without losing your working edits"],
-    accent: "09",
-    image: `${import.meta.env.BASE_URL}assets/help/revisions.png`,
-    imageAlt: "Revision History showing the Project Lantern changelog",
-    callout: "A clear operational history"
-  },
-  {
     kicker: "Bugs & feedback",
     title: "Capture actionable reports",
     copy: "Report a bug from any page with a description, reproduction details, expected result, frequency, severity, tags, and annotated evidence. Technical context is attached automatically for a Codex-ready handoff.",
     points: ["Capture, paste, annotate, or attach evidence", "Track status, type, comments, and testing progress", "Group and filter the catalogue to focus the work"],
-    accent: "10",
+    accent: "09",
     image: `${import.meta.env.BASE_URL}assets/help/bugs.png`,
     imageAlt: "Bug catalogue with status filters and report details",
     callout: "Turn feedback into fixes"
@@ -1738,6 +2069,7 @@ function IdeasDrawer({ page, open, onToggle }: { page: View; open: boolean; onTo
 
 function DonorsView({
   state,
+  activeUserId,
   query,
   setQuery,
   donors,
@@ -1749,6 +2081,7 @@ function DonorsView({
   onOpenBoard
 }: {
   state: LanternState;
+  activeUserId?: string;
   query: string;
   setQuery: (query: string) => void;
   donors: Donor[];
@@ -1762,66 +2095,111 @@ function DonorsView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Donor | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [sortOrder, setSortOrder] = useState<"manual" | "az" | "za">("manual");
+  const [sortOrder, setSortOrder] = useState<"manual" | "az" | "za">(
+    () => state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual"
+  );
   const [page, setPage] = useState(0);
-  const [editTab, setEditTab] = useState<"profile" | "recognition" | "appearance" | "history" | "displays">("profile");
+  const [editTab, setEditTab] = useState<"profile" | "recognition" | "history" | "displays">("profile");
+  const [discardDraftPending, setDiscardDraftPending] = useState(false);
+  const discardEditor = () => {
+    setDiscardDraftPending(false);
+    setEditingId(null);
+    setDraft(null);
+  };
   const closeEditor = () => {
     if (draft && editingId) {
       const original = state.donors.find((donor) => donor.id === editingId);
-      const clean = (donor: Donor | null) => donor ? { ...donor, boardIds: undefined } : donor;
-      if (JSON.stringify(clean(draft)) !== JSON.stringify(clean(original ?? null)) && !window.confirm("You have unsaved donor changes. Close without saving?")) return;
+      const originalWithBoards = original ? {
+        ...original,
+        boardIds: original.boardIds ?? state.boardPrograms.filter((board) => board.donorIds.includes(original.id)).map((board) => board.id)
+      } : null;
+      if (JSON.stringify(draft) !== JSON.stringify(originalWithBoards)) {
+        setDiscardDraftPending(true);
+        return;
+      }
     }
-    setEditingId(null); setDraft(null);
+    discardEditor();
   };
   const [createdDonorName, setCreatedDonorName] = useState<string | null>(null);
   const [donorPendingDelete, setDonorPendingDelete] = useState<Donor | null>(null);
+  const [groupPromptOpen, setGroupPromptOpen] = useState(false);
   const allTags = Array.from(new Set([...state.recognitionSettings.tags, ...state.donors.flatMap((donor) => donor.tags ?? [])])).sort();
   const visibleDonors = donors
     .filter((donor) => (tagFilter === "all" || donor.tags?.includes(tagFilter)) && (groupFilter === "all" || donor.groupId === groupFilter) && (typeFilter === "all" || donor.donationType === typeFilter))
     .sort((a, b) => sortOrder === "manual" ? 0 : a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) * (sortOrder === "az" ? 1 : -1));
-  const pageSize = 20;
+  const pageSize = 12;
   const pageCount = Math.max(1, Math.ceil(visibleDonors.length / pageSize));
   const pageDonors = visibleDonors.slice(page * pageSize, page * pageSize + pageSize);
 
   useEffect(() => setPage(0), [query, tagFilter, groupFilter, typeFilter, sortOrder]);
+  useEffect(() => {
+    setSortOrder(state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual");
+  }, [activeUserId, state.userPreferences]);
   useEffect(() => setPage((current) => Math.min(current, pageCount - 1)), [pageCount]);
   useEffect(() => {
     if (!createdDonorName) return;
     const timer = window.setTimeout(() => setCreatedDonorName(null), 4200);
     return () => window.clearTimeout(timer);
   }, [createdDonorName]);
-  const addGroup = () => {
-    const name = window.prompt("Name this donor group");
-    if (!name?.trim()) return;
-    updateState((current) => ({ ...current, donorGroups: [...current.donorGroups, { id: `group-${Date.now()}`, name: name.trim(), color: "#8e7cc3" }] }));
+  const addGroup = (name: string) => {
+    const normalized = name.trim();
+    if (!normalized) return;
+    updateState((current) => ({ ...current, donorGroups: [...current.donorGroups, { id: `group-${Date.now()}`, name: normalized, color: "#8e7cc3" }] }));
+    setGroupPromptOpen(false);
   };
 
   const editDonor = (donor: Donor) => {
     setEditingId(donor.id);
-    setDraft({ ...donor, boardIds: state.boardPrograms.filter((board) => board.donorIds.includes(donor.id)).map((board) => board.id) });
+    setDraft({ ...donor, boardIds: donor.boardIds ?? state.boardPrograms.filter((board) => board.donorIds.includes(donor.id)).map((board) => board.id) });
     setEditTab("profile");
+  };
+
+  const givingBoardMatchesDonor = (current: LanternState, board: DonorBoardProgram, donor: Donor) => {
+    if (!donor.givingProgramId || board.givingProgramId !== donor.givingProgramId) return false;
+    const givingProgram = current.givingPrograms.find((program) => program.id === donor.givingProgramId);
+    if (donor.pledgeOneTime && !givingProgram?.allowOneTimeQualification) return false;
+    if (board.templatePurpose === "roster") return true;
+    if (board.templatePurpose !== "level") return false;
+    const levelName = givingProgram?.levels.find((level) => level.id === donor.givingLevelId)?.name ?? donor.tier;
+    const levelFilters = [...new Set(board.panels?.flatMap((panel) => panel.donorTierFilter ?? []) ?? [])];
+    return levelFilters.length === 0 || levelFilters.some((filter) => filter.localeCompare(levelName, undefined, { sensitivity: "base" }) === 0);
   };
 
   const saveDonor = () => {
     if (!draft) return;
-    updateState((current) => ({
-      ...current,
-      donors: current.donors.map((donor) => (donor.id === draft.id ? draft : donor)),
-      boardPrograms: current.boardPrograms.map((board) => ({ ...board, donorIds: draft.boardIds?.includes(board.id) ? [...new Set([...board.donorIds, draft.id])] : board.donorIds.filter((id) => id !== draft.id) })),
-      recognitionSettings: { ...current.recognitionSettings, tags: [...new Set([...current.recognitionSettings.tags, ...(draft.tags ?? [])])].sort() }
-    }));
+    updateState((current) => {
+      const boardIds = new Set(draft.boardIds ?? []);
+      const savedDonor = { ...draft, boardIds: [...boardIds] };
+      return {
+        ...current,
+        donors: current.donors.map((donor) => (donor.id === draft.id ? savedDonor : donor)),
+        boardPrograms: current.boardPrograms.map((board) => ({
+          ...board,
+          donorIds: boardIds.has(board.id)
+            ? [...new Set([...board.donorIds, draft.id])]
+            : board.donorIds.filter((id) => id !== draft.id)
+        })),
+        recognitionSettings: { ...current.recognitionSettings, tags: [...new Set([...current.recognitionSettings.tags, ...(draft.tags ?? [])])].sort() }
+      };
+    });
     setEditingId(null);
     setDraft(null);
+    setDiscardDraftPending(false);
   };
 
   const deleteDonor = (id: string) => {
     updateState((current) => ({
       ...current,
       donors: current.donors.filter((donor) => donor.id !== id),
-      boardPrograms: current.boardPrograms.map((board) => ({ ...board, donorIds: board.donorIds.filter((donorId) => donorId !== id) })),
+      boardPrograms: current.boardPrograms.map((board) => ({
+        ...board,
+        donorIds: board.donorIds.filter((donorId) => donorId !== id),
+        panels: board.panels?.map((panel) => panel.donorIds?.includes(id) ? { ...panel, donorIds: panel.donorIds.filter((donorId) => donorId !== id) } : panel)
+      })),
       screens: Object.fromEntries(Object.entries(current.screens).map(([screenId, screen]) => [screenId, { ...screen, donorIds: screen.donorIds?.filter((donorId) => donorId !== id) }]))
     }));
     setDonorPendingDelete(null);
@@ -1838,9 +2216,39 @@ function DonorsView({
       list.splice(to, 0, moved);
       return { ...current, donors: list };
     });
+    setDraggedId(null);
+    setDragOverId(null);
   };
 
-  const donorIsOnBoard = (donor: Donor, board: DonorBoardProgram) => board.donorIds.includes(donor.id);
+  const setDonorSort = (donorSort: "manual" | "az" | "za") => {
+    setSortOrder(donorSort);
+    if (!activeUserId) return;
+    updateState((current) => ({
+      ...current,
+      userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUserId
+        ? { ...preferences, donorSort }
+        : preferences)
+    }));
+  };
+
+  const beginDonorDrag = (event: React.DragEvent<HTMLButtonElement>, donor: Donor) => {
+    setDraggedId(donor.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", donor.id);
+    const preview = document.createElement("div");
+    preview.className = "donor-drag-preview";
+    preview.textContent = donor.name;
+    document.body.appendChild(preview);
+    event.dataTransfer.setDragImage(preview, 18, 18);
+    window.setTimeout(() => preview.remove(), 0);
+  };
+
+  const endDonorDrag = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const donorIsOnBoard = (donor: Donor, board: DonorBoardProgram) => donor.boardIds?.includes(board.id) ?? board.donorIds.includes(donor.id);
 
   const toggleDonorBoard = (donorId: string, boardId: string) => {
     updateState((current) => {
@@ -1859,10 +2267,18 @@ function DonorsView({
     updateState((current) => {
       const assignedScreens = Object.values(current.screens).filter((screen) => donor.displayIds?.includes(screen.id));
       const assignedBoardIds = new Set(assignedScreens.map((screen) => screen.boardProgramId ?? current.boardPrograms[0]?.id).filter(Boolean));
+      if (donor.givingProgramId) {
+        current.boardPrograms
+          .filter((program) => program.givingProgramId === donor.givingProgramId && (program.templatePurpose === "roster" || program.templatePurpose === "level"))
+          .forEach((program) => {
+            if (givingBoardMatchesDonor(current, program, donor)) assignedBoardIds.add(program.id);
+            else assignedBoardIds.delete(program.id);
+          });
+      }
 
       return {
         ...current,
-        donors: [donor, ...current.donors],
+        donors: [{ ...donor, boardIds: [...assignedBoardIds] }, ...current.donors],
         recognitionSettings: { ...current.recognitionSettings, tags: [...new Set([...current.recognitionSettings.tags, ...(donor.tags ?? [])])].sort() },
         boardPrograms: current.boardPrograms.map((program) => assignedBoardIds.has(program.id)
           ? { ...program, donorIds: [...new Set([...program.donorIds, donor.id])] }
@@ -1894,14 +2310,14 @@ function DonorsView({
         <select className="toolbar-select" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}><option value="all">All tags</option>{allTags.map((tag) => <option key={tag}>{tag}</option>)}</select>
         <select className="toolbar-select" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="all">All groups</option>{state.donorGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>
         <select className="toolbar-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">All donation types</option>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select>
-        <select className="toolbar-select" aria-label="Sort donors" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)} title="Choose how donor names are ordered"><option value="manual">Manual order</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option></select>
+        <select className="toolbar-select" aria-label="Sort donors" value={sortOrder} onChange={(event) => setDonorSort(event.target.value as typeof sortOrder)} title="Choose how donor names are ordered"><option value="manual">Manual order</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option></select>
         <button className="command-button primary" onClick={addDonor}>
           <Plus size={18} />
           Add donor
         </button>
       </div>
 
-      <div className="donor-groups-row"><button className={groupFilter === "all" ? "group-chip selected" : "group-chip"} onClick={() => setGroupFilter("all")}>All donors <b>{state.donors.length}</b></button>{state.donorGroups.map((group) => <button className={groupFilter === group.id ? "group-chip selected" : "group-chip"} style={{ "--group-color": group.color } as React.CSSProperties} key={group.id} onClick={() => setGroupFilter(group.id)}>{group.name} <b>{state.donors.filter((donor) => donor.groupId === group.id).length}</b></button>)}<button className="group-chip add" onClick={addGroup}><Plus size={14} /> New group</button></div>
+      <div className="donor-groups-row"><button className={groupFilter === "all" ? "group-chip selected" : "group-chip"} onClick={() => setGroupFilter("all")}>All donors <b>{state.donors.length}</b></button>{state.donorGroups.map((group) => <button className={groupFilter === group.id ? "group-chip selected" : "group-chip"} style={{ "--group-color": group.color } as React.CSSProperties} key={group.id} onClick={() => setGroupFilter(group.id)}>{group.name} <b>{state.donors.filter((donor) => donor.groupId === group.id).length}</b></button>)}<button className="group-chip add" onClick={() => setGroupPromptOpen(true)}><Plus size={14} /> New group</button></div>
 
       {createdDonorName && <div className="donor-created-banner" role="status"><CheckCircle2 size={17} /><span><strong>{createdDonorName}</strong> is set up and ready.</span><button type="button" className="icon-button" onClick={() => setCreatedDonorName(null)} title="Dismiss"><X size={14} /></button></div>}
 
@@ -1909,16 +2325,18 @@ function DonorsView({
         {pageDonors.map((donor) => {
           const activeDraft = editingId === donor.id && draft ? draft : donor;
           const editing = false;
+          const assignedBoards = state.boardPrograms.filter((board) => donorIsOnBoard(donor, board));
+          const visibleTags = (donor.tags ?? []).slice(0, 3);
+          const hiddenTagCount = Math.max(0, (donor.tags?.length ?? 0) - visibleTags.length);
           return (
             <article
-              className={editing ? "donor-card editing" : "donor-card"}
+              className={`${editing ? "donor-card editing" : "donor-card"}${draggedId === donor.id ? " dragging" : ""}${dragOverId === donor.id && draggedId !== donor.id ? " drop-target" : ""}`}
               key={donor.id}
-              draggable={!editing && sortOrder === "manual"}
-              onDragStart={() => setDraggedId(donor.id)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => moveDonor(donor.id)}
+              onDragOver={(event) => { if (draggedId && sortOrder === "manual") { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDragOverId(donor.id); } }}
+              onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverId((current) => current === donor.id ? null : current); }}
+              onDrop={(event) => { event.preventDefault(); moveDonor(donor.id); endDonorDrag(); }}
             >
-              <button className="icon-button drag-button" title="Drag to reorder">
+              <button className="icon-button drag-button themed-tooltip" data-tooltip={sortOrder === "manual" ? "Drag to reorder" : "Choose Manual order to drag"} draggable={!editing && sortOrder === "manual"} onDragStart={(event) => beginDonorDrag(event, donor)} onDragEnd={endDonorDrag} disabled={sortOrder !== "manual"} aria-label={`Reorder ${donor.name}`}>
                 <GripVertical size={17} />
               </button>
               <div className="donor-main">
@@ -1942,7 +2360,6 @@ function DonorsView({
                       <select value={activeDraft.donationType ?? "Cash"} onChange={(event) => setDraft({ ...activeDraft, donationType: event.target.value as Donor["donationType"] })}>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select>
                       <input type="number" value={activeDraft.amount ?? ""} onChange={(event) => setDraft({ ...activeDraft, amount: event.target.value === "" ? undefined : Math.max(0, Number(event.target.value)) })} placeholder="Amount" />
                       <select value={activeDraft.groupId ?? ""} onChange={(event) => setDraft({ ...activeDraft, groupId: event.target.value || undefined })}><option value="">No group</option>{state.donorGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>
-                      <select value={activeDraft.icon ?? "none"} onChange={(event) => setDraft({ ...activeDraft, icon: event.target.value as Donor["icon"] })}>{["none", "star", "heart", "leaf"].map((icon) => <option key={icon}>{icon}</option>)}</select>
                       <label className="switch-row">
                         <input type="checkbox" checked={activeDraft.active} onChange={(event) => setDraft({ ...activeDraft, active: event.target.checked })} />
                         <span>{activeDraft.active ? "Active" : "Draft"}</span>
@@ -1955,13 +2372,13 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <div className="donor-title-row"><strong>{donor.name}</strong><div className="donor-display-toggles" aria-label={`${donor.name} board assignments`}>{state.boardPrograms.map((board) => {
+                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong><details className="donor-board-disclosure themed-tooltip" data-tooltip={assignedBoards.length ? `Used on: ${assignedBoards.map((board) => board.name).join(", ")}` : "This donor is not currently used on a board."} onClick={(event) => event.stopPropagation()}><summary aria-label={`${donor.name} board assignments`}><LayoutDashboard size={12} />{assignedBoards.length} board{assignedBoards.length === 1 ? "" : "s"}</summary><div className="donor-display-toggles">{state.boardPrograms.map((board) => {
                       const isOn = donorIsOnBoard(donor, board);
-                      return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${board.name} · ${isOn ? "Included" : "Not included"}`} key={board.id} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={board.name} checked={isOn} onChange={() => toggleDonorBoard(donor.id, board.id)} /><LayoutDashboard size={11} /><span>{board.name}</span></label>;
-                    })}</div></div>
-                    <span>{donor.tier} - {donor.category} - Gift {donor.donationDate ?? donor.since}</span>
-                    <small>{donor.donationType ?? "Cash"}{donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""} · {donor.basicInfo || donor.note}</small>
-                    {!!donor.tags?.length && <div className="donor-meta-row">{donor.tags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}</div>}
+                      return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${board.name} · ${isOn ? "Included" : "Not included"}`} key={board.id}><input type="checkbox" aria-label={board.name} checked={isOn} onChange={() => toggleDonorBoard(donor.id, board.id)} /><LayoutDashboard size={11} /><span>{board.name}</span></label>;
+                    })}</div></details></div>
+                    <span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span>
+                    <small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small>
+                    {!!visibleTags.length && <div className="donor-meta-row">{visibleTags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}{hiddenTagCount > 0 && <span className="tag-chip donor-more-tags" title={(donor.tags ?? []).slice(visibleTags.length).join(", ")}>+{hiddenTagCount} more</span>}</div>}
                   </>
                 )}
               </div>
@@ -1977,7 +2394,7 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <span className={donor.active ? "state-dot active" : "state-dot"}>{donor.active ? "Active" : "Draft"}</span>
+                    <span className={`${donor.active ? "state-dot active" : "state-dot"} themed-tooltip`} data-tooltip={donor.active ? "Active donors may appear on every assigned recognition board." : "Draft donors are saved but hidden from recognition boards."}>{donor.active ? "Active" : "Draft"}</span>
                     <button className="icon-button" onClick={() => editDonor(donor)} title="Edit donor">
                       <Pencil size={18} />
                     </button>
@@ -1997,14 +2414,21 @@ function DonorsView({
       {draft && editingId && createPortal(<div className="modal-backdrop donor-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeEditor(); }}>
         <section className="editor-modal donor-editor-modal" role="dialog" aria-modal="true" aria-labelledby="donor-editor-title">
           <div className="editor-modal-head"><div><p className="eyebrow">Recognition profile</p><h2 id="donor-editor-title">Edit donor</h2></div><button className="icon-button" onClick={closeEditor} title="Close editor"><X size={18} /></button></div>
-          <EditorTabs value={editTab} options={[["profile", "Profile"], ["appearance", "Appearance"], ["history", "Donation History"], ["displays", "Boards"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
+          <EditorTabs value={editTab} options={[["profile", "Profile"], ["recognition", "Pledge"], ["history", "Donation History"], ["displays", "Boards"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
           <div className="editor-modal-body donor-editor-body">
-            {editTab === "profile" && <div className="editor-form-grid"><LabeledInput label="Name" info="Donor or organization display name." value={draft.name} onChange={(name) => setDraft({ ...draft, name })} /><LabeledInput label="Donation date" info="Enter an exact date or only a year." value={draft.donationDate ?? draft.since} onChange={(donationDate) => setDraft({ ...draft, donationDate, since: donationDate })} /><LabeledSelect label="Tier" info="Recognition tier." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} /><LabeledSelect label="Category" info="Donor category." value={draft.category} options={state.recognitionSettings.categories} onChange={(category) => setDraft({ ...draft, category })} /><label className="field span-two"><span>Basic public information <InfoDot text="Short summary used in donor lists." /></span><textarea value={draft.basicInfo ?? ""} onChange={(event) => setDraft({ ...draft, basicInfo: event.target.value })} /></label><label className="field span-two"><span>Expanded donor story <InfoDot text="Longer story shown on the donor profile." /></span><textarea className="expanded-copy" value={draft.expandedInfo ?? ""} onChange={(event) => setDraft({ ...draft, expandedInfo: event.target.value })} /></label><label className="switch-row span-two"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span>{draft.active ? "Active on recognition boards" : "Saved as draft"}</span></label></div>}
-            {editTab === "appearance" && <DonorAppearanceEditor donor={draft} onChange={setDraft} />}
-            {editTab === "history" && <DonationHistoryEditor donor={draft} onChange={(donations) => setDraft({ ...draft, donations })} />}
+            {editTab === "profile" && <div className="editor-form-grid"><LabeledInput label="Name" info="Donor or organization display name." value={draft.name} onChange={(name) => setDraft({ ...draft, name })} /><LabeledInput label={draft.givingProgramId ? "Recognition year" : "Donation date"} info={draft.givingProgramId ? "Cohort or pledge start year; this does not record a received gift." : "Enter an exact date or only a year."} value={draft.givingProgramId ? (draft.pledgeStartYear ?? draft.since) : (draft.donationDate ?? draft.since)} onChange={(date) => setDraft(draft.givingProgramId ? { ...draft, pledgeStartYear: date, since: date } : { ...draft, donationDate: date, since: date })} /><LabeledSelect label="Tier" info="Recognition tier." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} /><LabeledSelect label="Category" info="Donor category." value={draft.category} options={state.recognitionSettings.categories} onChange={(category) => setDraft({ ...draft, category })} /><label className="field span-two"><span>Basic public information <InfoDot text="Short summary used in donor lists." /></span><textarea value={draft.basicInfo ?? ""} onChange={(event) => setDraft({ ...draft, basicInfo: event.target.value })} /></label><label className="field span-two"><span>Expanded donor story <InfoDot text="Longer story shown on the donor profile." /></span><textarea className="expanded-copy" value={draft.expandedInfo ?? ""} onChange={(event) => setDraft({ ...draft, expandedInfo: event.target.value })} /></label><label className="switch-row span-two"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span>{draft.active ? "Active on recognition boards" : "Saved as draft"}</span></label></div>}
+            {editTab === "recognition" && <DonorPledgeEditor state={state} donor={draft} onChange={setDraft} />}
+            {editTab === "history" && <DonationHistoryEditor donor={draft} users={state.users} activeUserId={activeUserId} onChange={(donations) => setDraft({ ...draft, donations })} />}
             {editTab === "displays" && <div className="display-assignment-grid">{state.boardPrograms.map((board) => <div className={draft.boardIds?.includes(board.id) ? "display-assignment selected" : "display-assignment"} key={board.id}><label><input type="checkbox" checked={draft.boardIds?.includes(board.id) ?? false} onChange={(event) => setDraft({ ...draft, boardIds: event.target.checked ? [...(draft.boardIds ?? []), board.id] : (draft.boardIds ?? []).filter((id) => id !== board.id) })} /><span><strong>{board.name}</strong></span></label><button type="button" className="command-button secondary compact" onClick={() => onOpenBoard(board.id)}><ExternalLink size={14} /> Open board</button></div>)}</div>}
           </div>
           <div className="editor-modal-actions"><button className="command-button secondary" onClick={closeEditor}>Cancel</button><button className="command-button primary" onClick={saveDonor}><Save size={17} /> Save changes</button></div>
+        </section>
+      </div>, document.body)}
+      {discardDraftPending && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDiscardDraftPending(false); }}>
+        <section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="discard-donor-title" aria-describedby="discard-donor-description">
+          <div className="destructive-confirm-icon"><AlertTriangle size={22} /></div>
+          <div><p className="eyebrow">Unsaved donor changes</p><h2 id="discard-donor-title">Discard these changes?</h2><p id="discard-donor-description">Profile, pledge, gift-history, and board edits in this window will be lost.</p></div>
+          <div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setDiscardDraftPending(false)}>Keep editing</button><button type="button" className="command-button danger" onClick={discardEditor}>Discard changes</button></div>
         </section>
       </div>, document.body)}
       {donorPendingDelete && createPortal(<div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDonorPendingDelete(null); }}>
@@ -2014,6 +2438,7 @@ function DonorsView({
           <div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setDonorPendingDelete(null)}>Cancel</button><button type="button" className="command-button danger" onClick={() => deleteDonor(donorPendingDelete.id)}><Trash2 size={17} /> Delete donor</button></div>
         </section>
       </div>, document.body)}
+      {groupPromptOpen && <LanternTextPromptDialog eyebrow="Donor organization" title="Create a donor group" description="Groups help staff filter the roster. Creating one does not move or reassign any donors." label="Group name" placeholder="For example, Community partners" submitLabel="Create group" onCancel={() => setGroupPromptOpen(false)} onSubmit={addGroup} />}
       {donorSetupOpen && <DonorSetupWizard state={state} onClose={closeDonorSetup} onCreate={createDonor} />}
     </section>
   );
@@ -2028,8 +2453,7 @@ function CurrencyInput({ label, value, onChange }: { label: string; value?: numb
   }, [value, focused]);
 
   const commit = (raw: string) => {
-    const parsed = Number(raw.replace(/[^0-9.]/g, ""));
-    onChange(raw.trim() === "" || !Number.isFinite(parsed) ? undefined : Math.max(0, parsed));
+    onChange(parseCurrencyAmount(raw));
   };
 
   return <label className="field currency-field">
@@ -2042,11 +2466,8 @@ function CurrencyInput({ label, value, onChange }: { label: string; value?: numb
         aria-label={label}
         value={focused ? draftValue : value ? value.toLocaleString("en-US", { maximumFractionDigits: 2 }) : ""}
         placeholder="0"
-        onFocus={() => { setFocused(true); setDraftValue(value == null || value === 0 ? "" : String(value)); }}
-        onChange={(event) => {
-          const clean = event.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
-          setDraftValue(clean.replace(/^0+(?=\d)/, ""));
-        }}
+        onFocus={() => { setFocused(true); setDraftValue(value == null || value === 0 ? "" : value.toLocaleString("en-US", { maximumFractionDigits: 2 })); }}
+        onChange={(event) => setDraftValue(event.target.value)}
         onBlur={() => { commit(draftValue); setFocused(false); }}
         onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
       />
@@ -2055,67 +2476,108 @@ function CurrencyInput({ label, value, onChange }: { label: string; value?: numb
   </label>;
 }
 
-function DonorAppearanceEditor({ donor, onChange }: { donor: Donor; onChange: (donor: Donor) => void }) {
-  const font = donor.fontOverride ?? "Montserrat";
-  const nameColor = donor.nameColor || "#f5f2eb";
-  const accentColor = donor.accentColor || "#d9a657";
-  const animation = donor.animation ?? "none";
-  const highlight = donor.highlight ?? "none";
-  const icon = donor.icon ?? "none";
+function PledgeAmountControl({ amounts, value, onChange }: { amounts: number[]; value?: number; onChange: (value?: number) => void }) {
+  const configured = [...new Set(amounts.filter((amount) => Number.isFinite(amount) && amount > 0))].sort((left, right) => left - right);
+  const configuredValue = value != null && configured.includes(value) ? String(value) : "custom";
+  return <div className="pledge-amount-control">
+    <label className="field"><span>Annual pledge amount <InfoDot text="Choose a configured program amount, or use Custom for a pasted or free-entry currency value." /></span><select value={configuredValue} onChange={(event) => onChange(event.target.value === "custom" ? undefined : Number(event.target.value))}>{configured.map((amount) => <option value={amount} key={amount}>{amount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 })}</option>)}<option value="custom">Custom</option></select></label>
+    {configuredValue === "custom" && <CurrencyInput label="Custom annual pledge" value={value} onChange={onChange} />}
+  </div>;
+}
 
-  return <div className="donor-appearance-editor">
-    <div
-      className={`donor-appearance-preview highlight-${highlight} animation-${animation}`}
-      style={{ "--donor-name-color": nameColor, "--donor-accent-color": accentColor, fontFamily: `${font}, sans-serif` } as React.CSSProperties}
-    >
-      {icon !== "none" && <span className="appearance-preview-icon">{donorIconGlyph(icon)}</span>}
-      <span><strong>{donor.name || "Donor name"}</strong>{donor.subtext && <small>{donor.subtext}</small>}</span>
+type PledgeTermValue = { pledgeYears?: number; pledgeOneTime?: boolean; years?: number };
+
+function PledgeTermControl({ donor, defaultYears, onChange }: { donor: PledgeTermValue; defaultYears: number; onChange: (donor: PledgeTermValue) => void }) {
+  const years = Math.max(1, Math.round(donor.pledgeYears ?? donor.years ?? defaultYears ?? 1));
+  const supportsOneTime = !("years" in donor);
+  const setYears = (next: number) => onChange({ ...donor, pledgeOneTime: false, pledgeYears: Math.max(1, Math.min(99, Math.round(next) || 1)) });
+  return <div className="pledge-term-field field">
+    <span>Pledge term <InfoDot text="Use one or more years, or explicitly mark this as a one-time pledge. Zero and negative terms are never stored." /></span>
+    {supportsOneTime && <label className="switch-row pledge-one-time"><input type="checkbox" checked={donor.pledgeOneTime ?? false} onChange={(event) => onChange({ ...donor, pledgeOneTime: event.target.checked, pledgeYears: event.target.checked ? undefined : years })} /><span>One-time pledge</span></label>}
+    {(!supportsOneTime || !donor.pledgeOneTime) && <div className="themed-stepper"><button type="button" onClick={() => setYears(years - 1)} disabled={years <= 1} aria-label="Reduce pledge term"><span>−</span></button><input type="text" inputMode="numeric" pattern="[0-9]*" aria-label="Pledge term in years" value={years} onChange={(event) => setYears(Number(event.target.value.replace(/\D/g, "")) || 1)} /><b>years</b><button type="button" onClick={() => setYears(years + 1)} disabled={years >= 99} aria-label="Increase pledge term"><span>+</span></button></div>}
+  </div>;
+}
+
+function DonorPledgeEditor({ state, donor, onChange }: { state: LanternState; donor: Donor; onChange: (donor: Donor) => void }) {
+  const program = state.givingPrograms.find((item) => item.id === donor.givingProgramId);
+  const level = program?.levels.find((item) => item.id === donor.givingLevelId);
+  const connectedBoards = (nextDonor: Donor) => {
+    const managedProgramIds = new Set([donor.givingProgramId, nextDonor.givingProgramId].filter(Boolean));
+    const retained = (nextDonor.boardIds ?? donor.boardIds ?? []).filter((boardId) => {
+      const board = state.boardPrograms.find((candidate) => candidate.id === boardId);
+      return !board?.givingProgramId || !managedProgramIds.has(board.givingProgramId) || !["roster", "level"].includes(board.templatePurpose ?? "");
+    });
+    if (!nextDonor.givingProgramId) return { ...nextDonor, boardIds: retained };
+    const nextProgram = state.givingPrograms.find((candidate) => candidate.id === nextDonor.givingProgramId);
+    if (nextDonor.pledgeOneTime && !nextProgram?.allowOneTimeQualification) return { ...nextDonor, boardIds: retained };
+    const levelName = nextProgram?.levels.find((candidate) => candidate.id === nextDonor.givingLevelId)?.name ?? nextDonor.tier;
+    const matching = state.boardPrograms.filter((board) => {
+      if (board.givingProgramId !== nextDonor.givingProgramId) return false;
+      if (board.templatePurpose === "roster") return true;
+      if (board.templatePurpose !== "level") return false;
+      const filters = [...new Set(board.panels?.flatMap((panel) => panel.donorTierFilter ?? []) ?? [])];
+      return !filters.length || filters.some((filter) => filter.localeCompare(levelName, undefined, { sensitivity: "base" }) === 0);
+    }).map((board) => board.id);
+    return { ...nextDonor, boardIds: [...new Set([...retained, ...matching])] };
+  };
+  const chooseProgram = (givingProgramId: string) => {
+    if (!givingProgramId) {
+      onChange(connectedBoards({ ...donor, givingProgramId: undefined, givingLevelId: undefined, pledgeAnnualAmount: undefined, pledgeYears: undefined, pledgeOneTime: undefined, pledgeStartYear: undefined, pledgeStatus: undefined }));
+      return;
+    }
+    const nextProgram = state.givingPrograms.find((item) => item.id === givingProgramId);
+    const nextLevel = nextProgram?.levels[0];
+    onChange(connectedBoards({
+      ...donor,
+      givingProgramId,
+      givingLevelId: nextLevel?.id,
+      tier: nextLevel?.name ?? donor.tier,
+      category: "Giving Society",
+      groupId: nextLevel ? `group-toy-${nextLevel.id}` : donor.groupId,
+      pledgeAnnualAmount: nextLevel?.annualPledge,
+      pledgeYears: nextLevel?.years ?? 5,
+      pledgeOneTime: false,
+      pledgeStartYear: donor.pledgeStartYear ?? donor.since,
+      pledgeStatus: donor.pledgeStatus ?? "Pledged",
+      tags: [...new Set([...(donor.tags ?? []), nextProgram?.name ?? "Giving society", nextProgram?.classLabel ?? "", nextLevel ? `${nextLevel.name} Level` : "", "Five-year pledge"].filter(Boolean))],
+      note: nextLevel ? `${nextLevel.description} pledged to ${nextProgram?.fundDesignation.toLowerCase() ?? "unrestricted funds"}` : donor.note
+    }));
+  };
+  const chooseLevel = (givingLevelId: string) => {
+    if (!program) return;
+    const nextLevel = program.levels.find((item) => item.id === givingLevelId);
+    if (!nextLevel) return;
+    onChange(connectedBoards({
+      ...donor,
+      givingLevelId,
+      tier: nextLevel.name,
+      groupId: `group-toy-${nextLevel.id}`,
+      pledgeAnnualAmount: nextLevel.annualPledge,
+      pledgeYears: nextLevel.years,
+      note: `${nextLevel.description} pledged to ${program.fundDesignation.toLowerCase()}`,
+      tags: [...new Set([...(donor.tags ?? []).filter((tag) => !program.levels.some((candidate) => `${candidate.name} Level` === tag)), `${nextLevel.name} Level`])]
+    }));
+  };
+
+  return <div className="pledge-editor">
+    <div className="pledge-editor-note"><BadgeCheck size={19} /><span><strong>A pledge is a commitment, not a received payment.</strong><small>Creating or changing a pledge never adds money to Donation History. Add a gift there only when the museum actually receives it.</small></span></div>
+    <div className="editor-form-grid">
+      <LabeledSelect label="Giving program" info="Optional society or campaign. Program and level drive linked roster-board eligibility." value={donor.givingProgramId ?? ""} options={["", ...state.givingPrograms.filter((item) => item.active !== false || item.id === donor.givingProgramId).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)).map((item) => item.id)]} optionLabels={{ "": "No giving program", ...Object.fromEntries(state.givingPrograms.map((item) => [item.id, `${item.name}${item.active === false ? " (archived)" : ""}`])) }} onChange={chooseProgram} />
+      {program && <LabeledSelect label="Giving level" info="Controls the member's tier and linked level-board placement." value={donor.givingLevelId ?? ""} options={program.levels.filter((item) => item.active !== false || item.id === donor.givingLevelId).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)).map((item) => item.id)} optionLabels={Object.fromEntries(program.levels.map((item) => [item.id, `${item.name} Level${item.active === false ? " (archived)" : ""}`]))} onChange={chooseLevel} />}
+      {program && <PledgeAmountControl amounts={program.levels.filter((item) => item.active !== false).map((item) => item.annualPledge)} value={donor.pledgeAnnualAmount} onChange={(pledgeAnnualAmount) => onChange({ ...donor, pledgeAnnualAmount })} />}
+      {program && <PledgeTermControl donor={donor} defaultYears={level?.years ?? 5} onChange={(term) => {
+        const nextDonor = { ...donor, ...term };
+        const termTag = nextDonor.pledgeOneTime ? "One-time pledge" : `${nextDonor.pledgeYears ?? level?.years ?? 5}-year pledge`;
+        onChange(connectedBoards({ ...nextDonor, tags: [...new Set([...(nextDonor.tags ?? []).filter((tag) => !/^(one-time|five-year|\d+-year) pledge$/i.test(tag)), termTag])] }));
+      }} />}
+      {program && <LabeledInput label="Pledge start year" info="Cohort or commitment start year." value={donor.pledgeStartYear ?? program.classYear} onChange={(pledgeStartYear) => onChange({ ...donor, pledgeStartYear })} />}
+      {program && <LabeledSelect label="Pledge status" info="Internal status for the multi-year commitment." value={donor.pledgeStatus ?? "Pledged"} options={["Pledged", "Active", "Fulfilled", "Paused"]} onChange={(pledgeStatus) => onChange({ ...donor, pledgeStatus: pledgeStatus as Donor["pledgeStatus"] })} />}
     </div>
-    <div className="editor-form-grid appearance-controls">
-      <LabeledSelect
-        label="Font override"
-        info="Use a unique typeface for this donor, or inherit the display font."
-        value={donor.fontOverride ?? ""}
-        options={["", ...boardFontOptions]}
-        optionLabels={{ "": "Use display font", ...boardFontLabels }}
-        onChange={(fontOverride) => onChange({ ...donor, fontOverride: (fontOverride || undefined) as Donor["fontOverride"] })}
-      />
-      <LabeledSelect
-        label="Subtle animation"
-        info="Animations are deliberately restrained for readable public displays."
-        value={animation}
-        options={["none", "gentle-pulse", "soft-glow", "shimmer"]}
-        optionLabels={{ none: "None", "gentle-pulse": "Gentle pulse", "soft-glow": "Soft glow", shimmer: "Slow shimmer" }}
-        onChange={(value) => onChange({ ...donor, animation: value as Donor["animation"] })}
-      />
-      <ColorOverrideField label="Name color" value={donor.nameColor} fallback="#f5f2eb" onChange={(nameColor) => onChange({ ...donor, nameColor })} />
-      <ColorOverrideField label="Accent color" value={donor.accentColor} fallback="#d9a657" onChange={(accentColor) => onChange({ ...donor, accentColor })} />
-      <LabeledSelect
-        label="Highlight"
-        info="Add a restrained accent behind or below this donor."
-        value={highlight}
-        options={["none", "underline", "soft-box"]}
-        optionLabels={{ none: "None", underline: "Fine underline", "soft-box": "Soft highlight" }}
-        onChange={(value) => onChange({ ...donor, highlight: value as Donor["highlight"] })}
-      />
-      <div className="field span-two">
-        <span>Recognition icon <InfoDot text="Shown when donor icons are enabled for the display." /></span>
-        <div className="donor-icon-picker" role="radiogroup" aria-label="Recognition icon">
-          {donorIconOptions.map((option) => <button type="button" role="radio" aria-checked={icon === option} className={icon === option ? "selected" : ""} key={option} onClick={() => onChange({ ...donor, icon: option })} title={donorIconLabels[option]}>
-            <b>{donorIconGlyph(option)}</b><small>{donorIconLabels[option]}</small>
-          </button>)}
-        </div>
-      </div>
-      <div className="field span-two custom-donor-icon-field">
-        <span>Custom donor override <InfoDot text="Optional JPG or PNG used instead of the display's circle, diamond, or dash. It only appears when donor icons are enabled." /></span>
-        <div className="custom-donor-icon-row">
-          {donor.customIconImage && <img src={donor.customIconImage} alt="" />}
-          <label className="image-upload compact"><Upload size={15} /><span>{donor.customIconImage ? "Replace image" : "Choose JPG or PNG"}</span><input type="file" accept="image/png,image/jpeg" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (customIconImage) => onChange({ ...donor, customIconImage }))} /></label>
-          {donor.customIconImage && <button type="button" className="icon-button danger-icon" onClick={() => onChange({ ...donor, customIconImage: undefined })} title="Remove custom donor icon"><Trash2 size={15} /></button>}
-        </div>
-      </div>
-      <button type="button" className="command-button secondary appearance-reset" onClick={() => onChange({ ...donor, fontOverride: undefined, nameColor: undefined, accentColor: undefined, highlight: "none", animation: "none", icon: "none", customIconImage: undefined })}>Use display defaults</button>
-    </div>
+    <div className="pledge-data-map"><span><strong>Program + level</strong><small>Used for linked recognition-board eligibility.</small></span><span><strong>Annual amount + term</strong><small>Shown in the pledge summary and recognition profile.</small></span><span><strong>Received gifts</strong><small>Recorded only in Donation History for reconciliation.</small></span></div>
+    {program && <div className="pledge-summary-card">
+      <div><span>{program.classLabel}</span><strong>{program.name}</strong><small>{program.fundDesignation}</small></div>
+      <div><span>Recognition</span><strong>{level?.name ?? donor.tier} Level</strong><small>{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year` : "Amount not set"} · {donor.pledgeOneTime ? "One-time pledge" : `${donor.pledgeYears ?? 5} years`}</small></div>
+    </div>}
   </div>;
 }
 
@@ -2130,10 +2592,6 @@ function ColorOverrideField({ label, value, fallback, onChange }: { label: strin
   </label>;
 }
 
-function donorIconGlyph(icon: NonNullable<Donor["icon"]>) {
-  return ({ none: "—", star: "★", heart: "♥", leaf: "❧", sparkle: "✦", diamond: "◆", crown: "♛", laurel: "❦", sun: "☀", hand: "⌁" } as const)[icon];
-}
-
 function TagEditor({ selected, available, onChange }: { selected: string[]; available: string[]; onChange: (tags: string[]) => void }) {
   const [customTag, setCustomTag] = useState("");
   const addTag = (tag: string) => {
@@ -2144,11 +2602,50 @@ function TagEditor({ selected, available, onChange }: { selected: string[]; avai
   return <div className="tag-editor span-two"><span className="field-label">Tags <InfoDot text="Reusable labels for searching and filtering donors." /></span><div className="tag-pill-editor">{selected.map((tag) => <button type="button" className="tag-chip selected" key={tag} onClick={() => onChange(selected.filter((item) => item !== tag))}>{tag}<X size={11} /></button>)}{!selected.length && <small>No tags selected</small>}</div><div className="tag-add-row"><select value="" aria-label="Add an existing tag" onChange={(event) => addTag(event.target.value)}><option value="">Add existing tag</option>{available.filter((tag) => !selected.includes(tag)).map((tag) => <option key={tag}>{tag}</option>)}</select><input value={customTag} onChange={(event) => setCustomTag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(customTag); } }} placeholder="Create a tag" /><button type="button" className="icon-button" onClick={() => addTag(customTag)} title="Add tag"><Plus size={15} /></button></div></div>;
 }
 
-function DonationHistoryEditor({ donor, onChange }: { donor: Donor; onChange: (donations: DonationRecord[]) => void }) {
+function DonationHistoryEditor({ donor, users, activeUserId, onChange }: { donor: Donor; users: LanternUser[]; activeUserId?: string; onChange: (donations: DonationRecord[]) => void }) {
   const donations = donor.donations ?? [];
-  const patchGift = (id: string, patch: Partial<DonationRecord>) => onChange(donations.map((gift) => gift.id === id ? { ...gift, ...patch } : gift));
-  const addGift = () => onChange([...donations, { id: `gift-${Date.now()}`, date: donor.donationDate ?? donor.since, amount: 0, type: donor.donationType ?? "Cash", note: "" }]);
-  return <div className="gift-history"><div className="gift-history-head"><div><strong>Repeat donations</strong><small>Keep each contribution as a separate record.</small></div><button type="button" className="command-button secondary" onClick={addGift}><Plus size={15} /> Add gift</button></div>{donations.map((gift) => <div className="gift-history-row" key={gift.id}><input aria-label="Gift date" value={gift.date} onChange={(event) => patchGift(gift.id, { date: event.target.value })} placeholder="YYYY or YYYY-MM-DD" /><input aria-label="Gift amount" type="number" min={0} value={gift.amount || ""} onChange={(event) => patchGift(gift.id, { amount: event.target.value === "" ? 0 : Math.max(0, Number(event.target.value)) })} /><select aria-label="Gift type" value={gift.type} onChange={(event) => patchGift(gift.id, { type: event.target.value as DonationRecord["type"] })}>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select><input aria-label="Gift note" value={gift.note ?? ""} onChange={(event) => patchGift(gift.id, { note: event.target.value })} placeholder="Optional note" /><button type="button" className="icon-button danger-icon" onClick={() => onChange(donations.filter((item) => item.id !== gift.id))} title="Remove gift"><Trash2 size={15} /></button></div>)}{!donations.length && <div className="empty-gift-history"><History size={22} /><span>No repeat donations recorded yet.</span></div>}</div>;
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const patchGift = (id: string, patch: Partial<DonationRecord>, preserveUpdatedBy = false) => onChange(donations.map((gift) => gift.id === id ? {
+    ...gift,
+    ...patch,
+    updatedByUserId: preserveUpdatedBy ? patch.updatedByUserId : activeUserId ?? gift.updatedByUserId,
+    updatedAt: new Date().toISOString()
+  } : gift));
+  const addGift = () => {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    onChange([...donations, {
+      id: `gift-${Date.now()}`,
+      date,
+      amount: 0,
+      enteredByUserId: activeUserId,
+      updatedByUserId: activeUserId,
+      enteredAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    }]);
+  };
+  const userOptions = ["", ...users.map((user) => user.id)];
+  const userLabels = { "": "Not recorded", ...Object.fromEntries(users.map((user) => [user.id, user.name])) };
+  return <div className="gift-history">
+    <div className="gift-history-head"><div><strong>Donation History</strong><small>Record only contributions actually received. Pledge changes never create a payment.</small></div><button type="button" className="command-button secondary" onClick={addGift}><Plus size={15} /> Add received gift</button></div>
+    {donations.map((gift, index) => <article className="gift-history-card" key={gift.id}>
+      <header><div><span>Received gift {index + 1}</span><strong>{gift.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}</strong>{gift.migrationKey && <small>Imported opening payment</small>}</div><button type="button" className="icon-button danger-icon" onClick={() => setPendingDeleteId(gift.id)} title="Remove received gift"><Trash2 size={15} /></button></header>
+      <div className="gift-reconciliation-grid">
+        <LabeledInput label="Received date" info="The date the museum received this contribution." value={gift.date} onChange={(date) => patchGift(gift.id, { date })} />
+        <CurrencyInput label="Amount received" value={gift.amount} onChange={(amount) => patchGift(gift.id, { amount: amount ?? 0 })} />
+        <LabeledSelect label="Contribution type" info="Optional reporting classification, separate from the payment method." value={gift.type ?? ""} options={["", "Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"]} optionLabels={{ "": "Not classified" }} onChange={(type) => patchGift(gift.id, { type: (type || undefined) as DonationRecord["type"] })} />
+        <LabeledSelect label="Payment method" info="How the contribution was received. Leave blank when unknown." value={gift.paymentMethod ?? ""} options={["", "Cash", "Check", "Credit card", "ACH", "Wire", "In-kind", "Other"]} optionLabels={{ "": "Not recorded" }} onChange={(paymentMethod) => patchGift(gift.id, { paymentMethod: (paymentMethod || undefined) as DonationRecord["paymentMethod"] })} />
+        <LabeledInput label="Transaction / reference" info="Processor or bank reference when one actually exists." value={gift.transactionReference ?? ""} onChange={(transactionReference) => patchGift(gift.id, { transactionReference: transactionReference || undefined })} />
+        <LabeledInput label="Check number" info="Leave blank unless a real check number is available." value={gift.checkNumber ?? ""} onChange={(checkNumber) => patchGift(gift.id, { checkNumber: checkNumber || undefined })} />
+        <label className="field span-two"><span>Receipt / reference note</span><textarea value={gift.receiptNote ?? gift.note ?? ""} onChange={(event) => patchGift(gift.id, { receiptNote: event.target.value || undefined })} placeholder="Receipt location, batch note, or migration label" /></label>
+        <label className="field span-two"><span>Internal notes</span><textarea value={gift.internalNotes ?? ""} onChange={(event) => patchGift(gift.id, { internalNotes: event.target.value || undefined })} placeholder="Private reconciliation notes" /></label>
+        <LabeledSelect label="Entered by" info="Operator who originally entered this gift." value={gift.enteredByUserId ?? ""} options={userOptions} optionLabels={userLabels} onChange={(enteredByUserId) => patchGift(gift.id, { enteredByUserId: enteredByUserId || undefined })} />
+        <LabeledSelect label="Updated by" info="Operator responsible for the latest reconciliation update." value={gift.updatedByUserId ?? ""} options={userOptions} optionLabels={userLabels} onChange={(updatedByUserId) => patchGift(gift.id, { updatedByUserId: updatedByUserId || undefined }, true)} />
+      </div>
+      {pendingDeleteId === gift.id && <div className="gift-delete-confirm" role="alertdialog" aria-label="Remove received gift"><span>This removes the received-gift record when you save the donor.</span><div><button type="button" className="command-button secondary compact" onClick={() => setPendingDeleteId(null)}>Cancel</button><button type="button" className="command-button danger compact" onClick={() => { onChange(donations.filter((item) => item.id !== gift.id)); setPendingDeleteId(null); }}>Remove gift</button></div></div>}
+    </article>)}
+    {!donations.length && <div className="empty-gift-history"><History size={22} /><strong>No received gifts recorded</strong><span>Add one only after money or an in-kind contribution is received.</span></div>}
+  </div>;
 }
 
 type DonorSetupDraft = Omit<Donor, "id">;
@@ -2163,16 +2660,13 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
     category: "Community",
     active: false,
     since: String(currentYear),
-    donationDate: String(currentYear),
     note: "",
     basicInfo: "",
     expandedInfo: "",
     subtext: "",
     tags: [],
-    donationType: "Cash",
     donations: [],
-    displayIds: [],
-    icon: "none"
+    displayIds: []
   }));
 
   const steps = [
@@ -2180,10 +2674,10 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
     { label: "Recognition", detail: "Contribution details" },
     { label: "Placement", detail: "Displays and status" }
   ];
-  const donationDate = draft.donationDate ?? draft.since;
-  const donationYear = Number(donationDate.slice(0, 4));
+  const recognitionDate = draft.givingProgramId ? (draft.pledgeStartYear ?? draft.since) : (draft.donationDate ?? draft.since);
+  const recognitionYear = Number(recognitionDate.slice(0, 4));
   const nameError = draft.name.trim() ? "" : "Enter the donor or organization name.";
-  const sinceError = /^(\d{4}|\d{4}-\d{2}-\d{2})$/.test(donationDate) && donationYear >= 1800 && donationYear <= currentYear + 1
+  const sinceError = /^(\d{4}|\d{4}-\d{2}-\d{2})$/.test(recognitionDate) && recognitionYear >= 1800 && recognitionYear <= currentYear + 1
     ? ""
     : `Enter a four-digit year between 1800 and ${currentYear + 1}.`;
   const noteError = draft.note.trim() ? "" : "Add a short recognition note so the donor record has context.";
@@ -2218,14 +2712,16 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
       ...draft,
       id: `d-${Date.now()}`,
       name: draft.name.trim(),
-      since: donationDate.trim(),
-      donationDate: donationDate.trim(),
+      since: recognitionDate.trim(),
+      donationDate: draft.givingProgramId && !draft.amount ? undefined : recognitionDate.trim(),
+      donationType: draft.amount ? (draft.donationType ?? "Cash") : draft.givingProgramId ? undefined : draft.donationType,
+      pledgeStartYear: draft.givingProgramId ? (draft.pledgeStartYear ?? recognitionDate.slice(0, 4)) : undefined,
       note: draft.note.trim(),
       basicInfo: draft.basicInfo?.trim() || draft.note.trim(),
       expandedInfo: draft.expandedInfo?.trim(),
       subtext: draft.subtext?.trim(),
       tags: draft.tags ?? [],
-      donations: draft.amount ? [{ id: `gift-${Date.now()}`, date: donationDate.trim(), amount: draft.amount, type: draft.donationType ?? "Cash", note: draft.note.trim() }] : []
+      donations: draft.amount ? [{ id: `gift-${Date.now()}`, date: recognitionDate.trim(), amount: draft.amount, type: draft.donationType ?? "Cash", note: draft.note.trim() }] : []
     });
   };
 
@@ -2241,6 +2737,49 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
 
   const groupName = state.donorGroups.find((group) => group.id === draft.groupId)?.name ?? "No group";
   const assignedDisplays = Object.values(state.screens).filter((screen) => draft.displayIds?.includes(screen.id));
+  const selectedGivingProgram = state.givingPrograms.find((program) => program.id === draft.givingProgramId);
+  const chooseWizardProgram = (givingProgramId: string) => {
+    if (!givingProgramId) {
+      setDraft({ ...draft, givingProgramId: undefined, givingLevelId: undefined, pledgeAnnualAmount: undefined, pledgeYears: undefined, pledgeOneTime: undefined, pledgeStartYear: undefined, pledgeStatus: undefined });
+      return;
+    }
+    const program = state.givingPrograms.find((item) => item.id === givingProgramId);
+    const level = program?.levels[0];
+    setDraft({
+      ...draft,
+      givingProgramId,
+      givingLevelId: level?.id,
+      tier: level?.name ?? draft.tier,
+      category: "Giving Society",
+      groupId: level ? `group-toy-${level.id}` : draft.groupId,
+      pledgeAnnualAmount: level?.annualPledge,
+      pledgeYears: level?.years ?? 5,
+      pledgeOneTime: false,
+      pledgeStartYear: draft.since.slice(0, 4),
+      pledgeStatus: "Pledged",
+      note: level ? `${level.description} pledged to ${program?.fundDesignation.toLowerCase() ?? "unrestricted funds"}` : draft.note,
+      basicInfo: level && program ? `${level.name} Level · ${level.description} · ${program.classLabel}` : draft.basicInfo,
+      subtext: level && program ? `${level.name} Level · ${program.classLabel}` : draft.subtext,
+      tags: [...new Set([...(draft.tags ?? []), program?.name ?? "", program?.classLabel ?? "", level ? `${level.name} Level` : "", "Five-year pledge"].filter(Boolean))]
+    });
+  };
+  const chooseWizardLevel = (givingLevelId: string) => {
+    if (!selectedGivingProgram) return;
+    const level = selectedGivingProgram.levels.find((item) => item.id === givingLevelId);
+    if (!level) return;
+    setDraft({
+      ...draft,
+      givingLevelId,
+      tier: level.name,
+      groupId: `group-toy-${level.id}`,
+      pledgeAnnualAmount: level.annualPledge,
+      pledgeYears: level.years,
+      note: `${level.description} pledged to ${selectedGivingProgram.fundDesignation.toLowerCase()}`,
+      basicInfo: `${level.name} Level · ${level.description} · ${selectedGivingProgram.classLabel}`,
+      subtext: `${level.name} Level · ${selectedGivingProgram.classLabel}`,
+      tags: [...new Set([...(draft.tags ?? []).filter((tag) => !selectedGivingProgram.levels.some((candidate) => `${candidate.name} Level` === tag)), `${level.name} Level`])]
+    });
+  };
 
   return (
     <div className="modal-backdrop donor-setup-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -2279,9 +2818,9 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
                 {attempted && nameError && <small className="field-error" role="alert">{nameError}</small>}
               </label>
               <label className={`field${attempted && sinceError ? " has-error" : ""}`}>
-                <span>Donation date <b>Required</b></span>
-                <input value={donationDate} onChange={(event) => setDraft({ ...draft, since: event.target.value, donationDate: event.target.value })} placeholder="2026 or 2026-07-22" />
-                <small className="field-guidance">Enter an exact date or only the year.</small>
+                <span>Recognition date <b>Required</b></span>
+                <input value={recognitionDate} onChange={(event) => setDraft({ ...draft, since: event.target.value, donationDate: draft.givingProgramId ? undefined : event.target.value, pledgeStartYear: draft.givingProgramId ? event.target.value.slice(0, 4) : draft.pledgeStartYear })} placeholder="2026 or 2026-07-22" />
+                <small className="field-guidance">Use the year or date this recognition begins. Pledges remain separate from received gifts.</small>
                 {attempted && sinceError && <small className="field-error" role="alert">{sinceError}</small>}
               </label>
               <LabeledSelect label="Recognition tier" info="Controls how this donor is grouped by level of support." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} />
@@ -2292,8 +2831,13 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
 
           {step === 1 && (
             <div className="editor-form-grid setup-form-grid">
-              <LabeledSelect label="Donation type" info="The kind of contribution being recognized." value={draft.donationType ?? "Cash"} options={["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"]} onChange={(donationType) => setDraft({ ...draft, donationType: donationType as Donor["donationType"] })} />
-              <CurrencyInput label="Contribution amount" value={draft.amount} onChange={(amount) => setDraft({ ...draft, amount })} />
+              <LabeledSelect label="Giving program" info="Optional pledge society or campaign." value={draft.givingProgramId ?? ""} options={["", ...state.givingPrograms.filter((program) => program.active !== false).map((program) => program.id)]} optionLabels={{ "": "No giving program", ...Object.fromEntries(state.givingPrograms.map((program) => [program.id, program.name])) }} onChange={chooseWizardProgram} />
+              {selectedGivingProgram && <LabeledSelect label="Giving level" info="Sets the pledge terms and dynamic level-board placement." value={draft.givingLevelId ?? ""} options={selectedGivingProgram.levels.filter((level) => level.active !== false).map((level) => level.id)} optionLabels={Object.fromEntries(selectedGivingProgram.levels.map((level) => [level.id, `${level.name} Level`]))} onChange={chooseWizardLevel} />}
+              {selectedGivingProgram && <PledgeAmountControl amounts={selectedGivingProgram.levels.filter((level) => level.active !== false).map((level) => level.annualPledge)} value={draft.pledgeAnnualAmount} onChange={(pledgeAnnualAmount) => setDraft({ ...draft, pledgeAnnualAmount })} />}
+              {selectedGivingProgram && <PledgeTermControl donor={draft} defaultYears={selectedGivingProgram.levels.find((level) => level.id === draft.givingLevelId)?.years ?? 5} onChange={(term) => setDraft({ ...draft, ...term })} />}
+              <LabeledSelect label={selectedGivingProgram ? "Received gift type" : "Donation type"} info={selectedGivingProgram ? "Only used when an actual contribution is recorded with this pledge." : "The kind of contribution being recognized."} value={draft.donationType ?? "Cash"} options={["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"]} onChange={(donationType) => setDraft({ ...draft, donationType: donationType as Donor["donationType"] })} />
+              <CurrencyInput label={selectedGivingProgram ? "Received contribution (optional)" : "Contribution amount"} value={draft.amount} onChange={(amount) => setDraft({ ...draft, amount })} />
+              {selectedGivingProgram && <div className="pledge-editor-note span-two"><BadgeCheck size={18} /><span><strong>Leave the received contribution blank for a pledge-only record.</strong><small>The annual pledge will still drive recognition level and board placement without creating a payment.</small></span></div>}
               <label className={`field span-two${attempted && noteError ? " has-error" : ""}`}>
                 <span>Recognition note <b>Required</b></span>
                 <textarea value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} placeholder="e.g. Annual education fund supporter" />
@@ -2307,7 +2851,6 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
                 <input value={draft.subtext ?? ""} onChange={(event) => setDraft({ ...draft, subtext: event.target.value })} placeholder="e.g. In memory of Elena Rivera" />
                 <small className="field-guidance">Optional line shown below the donor name.</small>
               </label>
-              <LabeledSelect label="Recognition icon" info="Optional symbol shown when a board has donor icons enabled." value={draft.icon ?? "none"} options={donorIconOptions} optionLabels={donorIconLabels} onChange={(icon) => setDraft({ ...draft, icon: icon as Donor["icon"] })} />
               <TagEditor selected={draft.tags ?? []} available={state.recognitionSettings.tags} onChange={(tags) => setDraft({ ...draft, tags })} />
             </div>
           )}
@@ -2344,8 +2887,8 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
               {attempted && placementError && <div className="setup-placement-error" role="alert"><AlertTriangle size={15} />{placementError}</div>}
 
               <div className="setup-review-grid" aria-label="Donor setup summary">
-                <div className="setup-review-card"><span>Profile</span><strong>{draft.name.trim()}</strong><small>{draft.tier} · {draft.category} · Gift {donationDate}</small></div>
-                <div className="setup-review-card"><span>Recognition</span><strong>{draft.donationType}{draft.amount ? ` · $${draft.amount.toLocaleString()}` : ""}</strong><small>{groupName} · {draft.icon === "none" ? "No icon" : `${draft.icon} icon`}</small></div>
+                <div className="setup-review-card"><span>Profile</span><strong>{draft.name.trim()}</strong><small>{draft.tier} · {draft.category} · {selectedGivingProgram ? "Pledge starts" : "Gift"} {recognitionDate}</small></div>
+                <div className="setup-review-card"><span>Recognition</span><strong>{selectedGivingProgram ? `${draft.tier} Level · $${(draft.pledgeAnnualAmount ?? 0).toLocaleString()}/year` : (draft.donationType ?? "Contribution")}{draft.amount ? ` · $${draft.amount.toLocaleString()} received` : ""}</strong><small>{groupName} · visual styling is configured per board</small></div>
                 <div className="setup-review-card"><span>Placement</span><strong>{assignedDisplays.length ? `${assignedDisplays.length} display${assignedDisplays.length === 1 ? "" : "s"}` : "No displays"}</strong><small>{draft.active ? "Activates immediately" : "Saved as draft"}</small></div>
               </div>
             </div>
@@ -2370,6 +2913,14 @@ const boardPanelTypes: BoardPanelType[] = ["heading", "supporters-heading", "don
 
 function boardPanelLabel(type: BoardPanelType) {
   return ({ heading: "Heading", "supporters-heading": "Subheader", donors: "Donor list", message: "Message", story: "Feature story", footer: "Footer", image: "Image / PNG" })[type];
+}
+
+function boardPreviewPalette(palette: DonorBoardProgram["palette"]) {
+  if (palette === "brigade-blue") return { text: "#fff6df", accent: "#f4c45d", secondary: "#f06b55", muted: "#d8edf0" };
+  if (palette === "brigade-red") return { text: "#fff6df", accent: "#f4c45d", secondary: "#72c6d5", muted: "#f7dcd1" };
+  if (palette === "brigade-sunshine") return { text: "#173f61", accent: "#a82f28", secondary: "#146f98", muted: "#3f5669" };
+  if (palette === "brigade-cream") return { text: "#173f61", accent: "#bc3b2f", secondary: "#1575a2", muted: "#586a76" };
+  return { text: "#f5f2eb", accent: "#d9a657", secondary: "#79cac6", muted: "#bdc7c7" };
 }
 
 function defaultBoardPanels(program: LanternState["boardPrograms"][number]): BoardPanel[] {
@@ -2423,15 +2974,23 @@ function ThemeStudio({
   const [newPanelType, setNewPanelType] = useState<BoardPanelType>("message");
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
+  const [donorSearch, setDonorSearch] = useState("");
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [pendingProgramDeleteId, setPendingProgramDeleteId] = useState<string | null>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
+  const pendingProgramDelete = state.boardPrograms.find((program) => program.id === pendingProgramDeleteId);
   const boardDisplay = selectedProgram ? { ...display, orientation: selectedProgram.orientation } : display;
   const panels = selectedProgram?.panels ?? [];
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
   const donorPageSize = 8;
-  const donorPageCount = Math.max(1, Math.ceil(state.donors.length / donorPageSize));
-  const donorPageItems = state.donors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
+  const filteredBoardDonors = state.donors.filter((donor) => donor.name.toLowerCase().includes(donorSearch.trim().toLowerCase()));
+  const donorPageCount = Math.max(1, Math.ceil(filteredBoardDonors.length / donorPageSize));
+  const donorPageItems = filteredBoardDonors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
+  useEffect(() => setDonorPage(0), [donorSearch]);
+  useEffect(() => {
+    if (donorPage >= donorPageCount) setDonorPage(donorPageCount - 1);
+  }, [donorPage, donorPageCount]);
   useEffect(() => {
     if (!selectedProgram?.panels?.some((panel) => panel.x == null || panel.y == null || panel.width == null || panel.height == null)) return;
     const fallback = defaultBoardPanels(selectedProgram);
@@ -2534,6 +3093,9 @@ function ThemeStudio({
     const clonedPanels = panels.map((panel, index) => ({ ...panel, id: `${id}-${panel.type}-${index}` }));
     updateState((current) => ({
       ...current,
+      donors: current.donors.map((donor) => selectedProgram.donorIds.includes(donor.id)
+        ? { ...donor, boardIds: [...new Set([...(donor.boardIds ?? []), id])] }
+        : donor),
       boardPrograms: [...current.boardPrograms, { ...selectedProgram, id, name: `${selectedProgram.name} copy`, active: false, panels: clonedPanels }]
     }));
     setSelectedProgramId(id);
@@ -2548,33 +3110,26 @@ function ThemeStudio({
       name: "Untitled board",
       active: false,
       donorIds: [],
+      donorStyles: undefined,
       panels: []
     };
     updateState((current) => ({ ...current, boardPrograms: [...current.boardPrograms, next] }));
     setSelectedProgramId(id);
   };
 
-  const deleteProgram = () => {
-    if (state.boardPrograms.length <= 1 || !selectedProgram) return;
-    if (!window.confirm(`Delete “${selectedProgram.name}”? This cannot be undone.`)) return;
-    const remaining = state.boardPrograms.filter((program) => program.id !== selectedProgram.id);
+  const deleteProgram = (programId: string) => {
+    if (state.boardPrograms.length <= 1) return;
+    const program = state.boardPrograms.find((item) => item.id === programId);
+    if (!program) return;
+    const remaining = state.boardPrograms.filter((item) => item.id !== program.id);
     updateState((current) => ({
       ...current,
-      boardPrograms: current.boardPrograms.filter((program) => program.id !== selectedProgram.id),
-      screens: Object.fromEntries(Object.entries(current.screens).map(([id, screen]) => [id, screen.boardProgramId === selectedProgram.id ? { ...screen, boardProgramId: remaining[0]?.id } : screen])) as LanternState["screens"]
+      donors: current.donors.map((donor) => ({ ...donor, boardIds: (donor.boardIds ?? []).filter((id) => id !== program.id) })),
+      boardPrograms: current.boardPrograms.filter((item) => item.id !== program.id),
+      screens: Object.fromEntries(Object.entries(current.screens).map(([id, screen]) => [id, screen.boardProgramId === program.id ? { ...screen, boardProgramId: remaining[0]?.id } : screen])) as LanternState["screens"]
     }));
     setSelectedProgramId(remaining[0]?.id ?? "");
-  };
-
-  const patchDisplay = (patch: Partial<DisplayProfile>) => {
-    updateState((current) => ({
-      ...current,
-      screens: { ...current.screens, [display.id]: { ...current.screens[display.id], ...patch } }
-    }));
-  };
-
-  const patchBoard = (patch: Partial<LanternState["board"]>) => {
-    updateState((current) => ({ ...current, board: { ...current.board, ...patch } }));
+    setPendingProgramDeleteId(null);
   };
 
   const useBoardOnDisplay = () => {
@@ -2604,47 +3159,66 @@ function ThemeStudio({
   };
 
   const chooseBoardBackground = async (file?: File) => {
-    if (!file) return;
+    if (!file || !selectedProgram) return;
     try {
       const backgroundImage = await uploadLanternAsset(file);
-      void deleteLanternMedia(display.backgroundMediaId);
-      patchDisplay({
+      void deleteLanternMedia(selectedProgram.backgroundMediaId);
+      patchProgram({
+        backgroundMode: "image",
         backgroundImage,
         backgroundMediaId: undefined,
-        backgroundMediaType: "image",
-        backgroundMediaName: file.name,
-        backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
         backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
       });
     } catch {
       const mediaId = await storeLanternMedia(file);
-      void deleteLanternMedia(display.backgroundMediaId);
-      patchDisplay({
+      void deleteLanternMedia(selectedProgram.backgroundMediaId);
+      patchProgram({
+        backgroundMode: "image",
         backgroundImage: URL.createObjectURL(file),
         backgroundMediaId: mediaId,
-        backgroundMediaType: "image",
-        backgroundMediaName: file.name,
-        backgroundMediaAnimated: file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif"),
         backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
       });
     }
   };
 
   const removeBoardBackground = () => {
-    void deleteLanternMedia(display.backgroundMediaId);
-    patchDisplay({
+    if (!selectedProgram) return;
+    void deleteLanternMedia(selectedProgram.backgroundMediaId);
+    patchProgram({
+      backgroundMode: "board",
       backgroundImage: undefined,
       backgroundMediaId: undefined,
-      backgroundMediaType: undefined,
-      backgroundMediaName: undefined,
-      backgroundMediaAnimated: undefined,
       backgroundCrop: { scale: 1, x: 0, y: 0, rotation: 0 }
     });
   };
 
   const toggleProgramDonor = (donorId: string, checked: boolean) => {
     if (!selectedProgram) return;
-    patchProgram({ donorIds: checked ? [...new Set([...selectedProgram.donorIds, donorId])] : selectedProgram.donorIds.filter((id) => id !== donorId) });
+    const donorIds = checked ? [...new Set([...selectedProgram.donorIds, donorId])] : selectedProgram.donorIds.filter((id) => id !== donorId);
+    setProgramDonorIds(donorIds);
+  };
+
+  const setProgramDonorIds = (donorIds: string[]) => {
+    if (!selectedProgram) return;
+    const roster = new Set(donorIds);
+    updateState((current) => ({
+      ...current,
+      donors: current.donors.map((donor) => ({
+        ...donor,
+        boardIds: roster.has(donor.id)
+          ? [...new Set([...(donor.boardIds ?? []), selectedProgram.id])]
+          : (donor.boardIds ?? []).filter((id) => id !== selectedProgram.id)
+      })),
+      boardPrograms: current.boardPrograms.map((program) => program.id === selectedProgram.id ? { ...program, donorIds } : program)
+    }));
+  };
+
+  const patchBoardPresentation = (patch: Partial<BoardDonorPresentation>) => {
+    patchProgram({ donorPresentation: { ...(selectedProgram.donorPresentation ?? {}), ...patch } });
+  };
+
+  const patchDonorPresentation = (donorId: string, patch: Partial<BoardDonorPresentation>) => {
+    patchProgram({ donorStyles: patchBoardDonorStyle(selectedProgram, donorId, patch) });
   };
 
   const renameDonor = (donorId: string, name: string) => {
@@ -2663,16 +3237,31 @@ function ThemeStudio({
     }
   };
 
+  const groupedBoardPrograms = [
+    { label: "Supporter spotlights", programs: state.boardPrograms.filter((program) => program.templatePurpose === "story") },
+    { label: "Honor rolls", programs: state.boardPrograms.filter((program) => program.templatePurpose === "roster" || program.templatePurpose === "level") },
+    { label: "Program information", programs: state.boardPrograms.filter((program) => program.templatePurpose === "invitation") },
+    { label: "Good deeds", programs: state.boardPrograms.filter((program) => program.templatePurpose === "good-deeds") },
+    { label: "Custom boards", programs: state.boardPrograms.filter((program) => !program.templatePurpose) }
+  ].filter((group) => group.programs.length);
+  const selectedBackgroundCrop = selectedProgram?.backgroundCrop ?? { scale: 1, x: 0, y: 0, rotation: 0 };
+
   if (!selectedProgram) return <div className="empty-inspector"><strong>No boards available</strong></div>;
 
   return (
     <section className="board-builder">
       <div className="board-builder-toolbar">
         <div className="board-select-cluster">
-          <label className="builder-select"><span>Board</span><select value={selectedProgram.id} onChange={(event) => setSelectedProgramId(event.target.value)}>{state.boardPrograms.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</select></label>
-          <button type="button" className="command-button secondary compact" onClick={duplicateProgram}>Duplicate current</button>
-          <button type="button" className="command-button secondary compact" onClick={createProgram}><Plus size={16} /> New</button>
-          <button type="button" className="icon-button danger-icon" onClick={deleteProgram} disabled={state.boardPrograms.length <= 1} title="Delete saved board"><Trash2 size={16} /></button>
+          <label className="builder-select"><span>Board template</span><select value={selectedProgram.id} onChange={(event) => setSelectedProgramId(event.target.value)}>{groupedBoardPrograms.map((group) => <optgroup label={group.label} key={group.label}>{group.programs.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</optgroup>)}</select></label>
+          <details className="board-toolbar-menu">
+            <summary className="command-button secondary compact"><SlidersHorizontal size={15} /> Board actions <ChevronDown size={14} /></summary>
+            <div className="board-toolbar-popover">
+              <button type="button" onClick={useBoardOnDisplay}><Monitor size={15} /> Use on {display.label}</button>
+              <button type="button" onClick={duplicateProgram}><ClipboardCopy size={15} /> Make a copy</button>
+              <button type="button" onClick={createProgram}><Plus size={15} /> New blank board</button>
+              <button type="button" className="danger" onClick={() => setPendingProgramDeleteId(selectedProgram.id)} disabled={state.boardPrograms.length <= 1}><Trash2 size={15} /> Delete board</button>
+            </div>
+          </details>
         </div>
         <div className="board-save-cluster">
           <button type="button" className="command-button primary compact" disabled={saveStatus === "saving"} onClick={() => void saveBoard()}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : "Save board"}</button>
@@ -2707,61 +3296,109 @@ function ThemeStudio({
         </main>
 
         <aside className="board-panel-inspector">
-          <div className="inspector-sticky-head"><div><p className="eyebrow">{selectedPanel ? "Selected panel" : "Selection"}</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "Board selected"}</h2>{!selectedPanel && <span className="inspector-selection-note">Select a panel to modify or edit it.</span>}</div></div>
+          <div className="inspector-sticky-head">
+            <div className="inspector-title-block"><p className="eyebrow">{selectedPanel ? "Selected element" : "Board settings"}</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "Edit this board"}</h2><label className="board-element-picker"><span className="sr-only">Choose board element</span><select value={selectedPanel?.id ?? ""} onChange={(event) => { setSelectedPanelId(event.target.value); setSelectedPanelIds(event.target.value ? [event.target.value] : []); }}><option value="">Board settings</option>{panels.map((panel, index) => <option value={panel.id} key={panel.id}>{index + 1}. {boardPanelLabel(panel.type)}{panel.title ? ` · ${panel.title.slice(0, 28)}` : ""}</option>)}</select></label></div>
+            <div className="panel-icon-actions">
+              <details className="board-add-menu">
+                <summary className="command-button secondary compact"><Plus size={15} /> Add content</summary>
+                <div className="board-add-popover">
+                  <label><span>Content type</span><select value={newPanelType} onChange={(event) => setNewPanelType(event.target.value as BoardPanelType)}>{boardPanelTypes.map((type) => <option value={type} key={type}>{boardPanelLabel(type)}</option>)}</select></label>
+                  <button type="button" onClick={() => addPanel(newPanelType)}><Plus size={14} /> Add to center</button>
+                  <button type="button" onClick={() => setPlacingPanelType(newPanelType)}><Move size={14} /> Place on board</button>
+                </div>
+              </details>
+              {selectedPanel && <button type="button" className="icon-button" title="Return to board settings" aria-label="Return to board settings" onClick={() => { setSelectedPanelId(""); setSelectedPanelIds([]); }}><X size={16} /></button>}
+            </div>
+          </div>
           <div className="board-inspector-scroll">
             {selectedPanel ? <div className="inspector-block">
-              <div className="panel-position-grid">
-                {(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => {
-                  const value = Number(event.target.value);
-                  const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0);
-                  patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) });
-                }} /></label>)}
-              </div>
-              {selectedPanel.type !== "image" && <LabeledSelect label="Panel font" info="Typeface used only by this panel." value={selectedPanel.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} />}
-              {selectedPanel.type !== "image" && <div className="panel-type-row"><Slider label="Font size" info="Changes the text size for the selected panel without changing its box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div>}
+              <section className="inspector-primary-section">
+                <header><strong>Content</strong><small>Edit here or click text directly on the board.</small></header>
+                {(selectedPanel.type === "heading" || selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer") && <LabeledInput label={selectedPanel.type === "footer" ? "Footer text" : selectedPanel.type === "supporters-heading" ? "Subheader text" : "Heading text"} info="Visitor-facing copy for this element." value={selectedPanel.title} onChange={(title) => patchPanel(selectedPanel.id, { title })} />}
+                {(selectedPanel.type === "message" || selectedPanel.type === "story") && <>
+                  <LabeledInput label="Eyebrow" info="Small introductory label above the headline." value={selectedPanel.eyebrow ?? ""} onChange={(eyebrow) => patchPanel(selectedPanel.id, { eyebrow })} />
+                  <LabeledInput label="Headline" info="Main headline for this element." value={selectedPanel.title} onChange={(title) => patchPanel(selectedPanel.id, { title })} />
+                  <label className="field"><span>Body copy <InfoDot text="Keep visitor-facing stories concise enough to read at a glance." /></span><textarea rows={5} value={selectedPanel.body ?? ""} onChange={(event) => patchPanel(selectedPanel.id, { body: event.target.value })} /></label>
+                </>}
+                {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> {selectedPanel.imageUrl ? "Replace image" : "Choose PNG or image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the element." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
+                {selectedPanel.type === "footer" && <div className="field"><span>Footer icons</span><SegmentedControl value={selectedPanel.footerIconPlacement ?? "left"} options={[["left", "Left side"], ["both", "Both sides"]]} onChange={(footerIconPlacement) => patchPanel(selectedPanel.id, { footerIconPlacement: footerIconPlacement as BoardPanel["footerIconPlacement"] })} /></div>}
+              </section>
               {selectedPanel.type === "donors" && <>
-                <div className="donor-divider-controls">
-                  <div className="two-col">
-                    <Slider label="Line thickness" info="Sets the thickness of the lines between donor names. Choose 0 to hide them." value={selectedPanel.donorDividerThickness ?? 1} min={0} max={6} onChange={(donorDividerThickness) => patchPanel(selectedPanel.id, { donorDividerThickness })} />
-                    <Slider label="Line visibility" info="Sets how faint or strong the divider lines appear." value={selectedPanel.donorDividerOpacity ?? 18} min={0} max={100} onChange={(donorDividerOpacity) => patchPanel(selectedPanel.id, { donorDividerOpacity })} />
-                  </div>
-                  <ColorOverrideField label="Line color" value={selectedPanel.donorDividerColor} fallback="#D9A657" onChange={(donorDividerColor) => patchPanel(selectedPanel.id, { donorDividerColor })} />
-                </div>
                 <div className="field"><span>Names in each row</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as BoardPanel["columns"] })} /></div>
-                <Slider label="Rows" info="Sets how many donor rows fit inside this panel." value={selectedPanel.rows ?? Math.max(1, Math.ceil(selectedProgram.donorIds.length / (selectedPanel.columns ?? selectedProgram.columns)))} min={1} max={12} onChange={(rows) => patchPanel(selectedPanel.id, { rows })} />
-                <div className="mini-actions"><button type="button" onClick={() => patchProgram({ donorIds: state.donors.filter((donor) => donor.active).map((donor) => donor.id) })}>Use active</button><button type="button" onClick={() => patchProgram({ donorIds: [] })}>Clear</button></div>
-                <div className="board-donor-picker compact-picker">{donorPageItems.map((donor) => <label key={donor.id}><input type="checkbox" checked={selectedProgram.donorIds.includes(donor.id)} onChange={(event) => toggleProgramDonor(donor.id, event.target.checked)} /><span>{donor.name}</span></label>)}</div>
-                <Pager page={donorPage} pageCount={donorPageCount} onChange={setDonorPage} />
+                <div className="field panel-tier-filter"><span>Show recognition levels <InfoDot text="Level filters update automatically when a donor's pledge level changes." /></span><div><button type="button" className={!selectedPanel.donorTierFilter?.length ? "selected" : ""} aria-pressed={!selectedPanel.donorTierFilter?.length} onClick={() => patchPanel(selectedPanel.id, { donorTierFilter: undefined })}>All levels</button>{state.recognitionSettings.tiers.map((tier) => { const selected = selectedPanel.donorTierFilter?.includes(tier) ?? false; return <button type="button" className={selected ? "selected" : ""} aria-pressed={selected} key={tier} onClick={() => { const current = selectedPanel.donorTierFilter ?? []; const next = selected ? current.filter((item) => item !== tier) : [...current, tier]; patchPanel(selectedPanel.id, { donorTierFilter: next.length ? next : undefined }); }}>{tier}</button>; })}</div></div>
+                <details className="inspector-details roster-details">
+                  <summary>Choose board roster <span>{selectedProgram.donorIds.length} selected</span></summary>
+                  <div className="inspector-block">
+                    <LabeledInput label="Find a supporter" info="Search the museum's supporter list." value={donorSearch} onChange={setDonorSearch} />
+                    <p className="field-note">Roster membership applies to every donor-list element on this board.</p>
+                    <div className="mini-actions"><button type="button" onClick={() => setProgramDonorIds(state.donors.filter((donor) => donor.active).map((donor) => donor.id))}>Use all active</button><button type="button" onClick={() => setProgramDonorIds([])}>Clear roster</button></div>
+                    <div className="board-donor-picker compact-picker">{donorPageItems.map((donor) => <label key={donor.id}><input type="checkbox" checked={selectedProgram.donorIds.includes(donor.id)} onChange={(event) => toggleProgramDonor(donor.id, event.target.checked)} /><span>{donor.name}</span></label>)}{!donorPageItems.length && <p className="field-note">No supporters match “{donorSearch}”.</p>}</div>
+                    <Pager page={donorPage} pageCount={donorPageCount} onChange={setDonorPage} />
+                  </div>
+                </details>
+                <details className="inspector-details">
+                  <summary>Lines & capacity</summary>
+                  <div className="inspector-block">
+                    <Slider label="Rows" info="Sets how many donor rows fit inside this element." value={selectedPanel.rows ?? Math.max(1, Math.ceil(selectedProgram.donorIds.length / (selectedPanel.columns ?? selectedProgram.columns)))} min={1} max={12} onChange={(rows) => patchPanel(selectedPanel.id, { rows })} />
+                    <div className="donor-divider-controls"><div className="two-col"><Slider label="Line thickness" info="Choose 0 to hide divider lines." value={selectedPanel.donorDividerThickness ?? 1} min={0} max={6} onChange={(donorDividerThickness) => patchPanel(selectedPanel.id, { donorDividerThickness })} /><Slider label="Line visibility" info="Sets how faint or strong divider lines appear." value={selectedPanel.donorDividerOpacity ?? 18} min={0} max={100} onChange={(donorDividerOpacity) => patchPanel(selectedPanel.id, { donorDividerOpacity })} /></div><ColorOverrideField label="Line color" value={selectedPanel.donorDividerColor} fallback="#D9A657" onChange={(donorDividerColor) => patchPanel(selectedPanel.id, { donorDividerColor })} /></div>
+                  </div>
+                </details>
               </>}
-              {selectedPanel.type === "footer" && <div className="field"><span>Footer icons</span><SegmentedControl value={selectedPanel.footerIconPlacement ?? "left"} options={[["left", "Left side"], ["both", "Both sides"]]} onChange={(footerIconPlacement) => patchPanel(selectedPanel.id, { footerIconPlacement: footerIconPlacement as BoardPanel["footerIconPlacement"] })} /></div>}
-              {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Choose PNG or image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the panel." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
+              {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><Slider label="Font size" info="Changes text size without changing the element box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div></div></details>}
+              <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0); patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) }); }} /></label>)}</div><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={() => removePanel(selectedPanel.id)}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
-            <details className="inspector-details" open><summary>Board design</summary><div className="inspector-block">
+            <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
+              <LabeledSelect label="Board palette" info="A saved visitor-facing color system for this board." value={selectedProgram.palette ?? "classic"} options={["classic", "brigade-blue", "brigade-red", "brigade-sunshine", "brigade-cream"]} optionLabels={{ classic: "Lantern classic", "brigade-blue": "Brigade blue", "brigade-red": "Brigade red", "brigade-sunshine": "Brigade sunshine", "brigade-cream": "Brigade cream" }} onChange={(palette) => patchProgram({ palette: palette as DonorBoardProgram["palette"] })} />
+              <LabeledSelect label="Board typeface" info="Default typeface for elements that do not use an override." value={selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchProgram({ fontFamily: fontFamily as DonorBoardProgram["fontFamily"] })} />
+            </div></details>
+            <details className="inspector-details"><summary>Background & frame</summary><div className="inspector-block">
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.showFrame ?? display.showFrame ?? true} onChange={(event) => patchProgram({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
               <div className="board-background-controls">
-                <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {display.backgroundImage ? "Replace background" : "Add background image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
-                {display.backgroundImage && <button type="button" className="command-button danger compact" onClick={removeBoardBackground}><Trash2 size={15} /> Remove background</button>}
+                <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {selectedProgram.backgroundImage ? "Replace board image" : "Add board image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
+                {selectedProgram.backgroundImage && <button type="button" className="command-button danger compact" onClick={removeBoardBackground}><Trash2 size={15} /> Use display background</button>}
               </div>
-              {display.backgroundImage && <>
-                <Slider label="Background scale" info="Zoom the background image behind the board." value={Math.round(display.backgroundCrop.scale * 100)} min={50} max={300} onChange={(value) => patchDisplay({ backgroundCrop: { ...display.backgroundCrop, scale: value / 100 } })} />
-                <Slider label="Background pan X" info="Move the background image horizontally." value={display.backgroundCrop.x} min={-100} max={100} onChange={(x) => patchDisplay({ backgroundCrop: { ...display.backgroundCrop, x } })} />
-                <Slider label="Background pan Y" info="Move the background image vertically." value={display.backgroundCrop.y} min={-100} max={100} onChange={(y) => patchDisplay({ backgroundCrop: { ...display.backgroundCrop, y } })} />
+              {selectedProgram.backgroundImage && <>
+                <Slider label="Background scale" info="Zoom the image saved with this board." value={Math.round(selectedBackgroundCrop.scale * 100)} min={50} max={300} onChange={(value) => patchProgram({ backgroundCrop: { ...selectedBackgroundCrop, scale: value / 100 } })} />
+                <Slider label="Background pan X" info="Move the board image horizontally." value={selectedBackgroundCrop.x} min={-100} max={100} onChange={(x) => patchProgram({ backgroundCrop: { ...selectedBackgroundCrop, x } })} />
+                <Slider label="Background pan Y" info="Move the board image vertically." value={selectedBackgroundCrop.y} min={-100} max={100} onChange={(y) => patchProgram({ backgroundCrop: { ...selectedBackgroundCrop, y } })} />
               </>}
-              <LabeledSelect label="Text finish" info="Cut brass adds a metallic face, beveled edge, and dimensional highlight." value={display.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchDisplay({ textFinish: textFinish as DisplayProfile["textFinish"] })} />
-              <label className="switch-row"><input type="checkbox" checked={display.textShadowEnabled ?? false} onChange={(event) => patchDisplay({ textShadowEnabled: event.target.checked })} /><span>Shadow under text</span></label>
-              {display.textShadowEnabled && <>
-                <Slider label="Shadow strength" info="Controls how dark and pronounced the text shadow appears." value={display.textShadowStrength ?? 55} min={0} max={100} onChange={(textShadowStrength) => patchDisplay({ textShadowStrength })} />
-                <Slider label="Shadow angle" info="Sets the direction the shadow falls, in degrees." value={display.textShadowAngle ?? 135} min={0} max={360} onChange={(textShadowAngle) => patchDisplay({ textShadowAngle })} />
-                <Slider label="Shadow distance" info="Sets how far the text appears lifted from the board." value={display.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchDisplay({ textShadowDistance })} />
+              <p className="field-note">Board images are saved with this template and do not change other displays.</p>
+            </div></details>
+            <details className="inspector-details"><summary>Text treatment</summary><div className="inspector-block">
+              <LabeledSelect label="Text finish" info="Cut brass adds a metallic face, beveled edge, and dimensional highlight." value={selectedProgram.textFinish ?? display.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchProgram({ textFinish: textFinish as DisplayProfile["textFinish"] })} />
+              <label className="switch-row"><input type="checkbox" checked={selectedProgram.textShadowEnabled ?? display.textShadowEnabled ?? false} onChange={(event) => patchProgram({ textShadowEnabled: event.target.checked })} /><span>Shadow under text</span></label>
+              {(selectedProgram.textShadowEnabled ?? display.textShadowEnabled) && <>
+                <Slider label="Shadow strength" info="Controls how dark and pronounced the text shadow appears." value={selectedProgram.textShadowStrength ?? display.textShadowStrength ?? 55} min={0} max={100} onChange={(textShadowStrength) => patchProgram({ textShadowStrength })} />
+                <Slider label="Shadow angle" info="Sets the direction the shadow falls, in degrees." value={selectedProgram.textShadowAngle ?? display.textShadowAngle ?? 135} min={0} max={360} onChange={(textShadowAngle) => patchProgram({ textShadowAngle })} />
+                <Slider label="Shadow distance" info="Sets how far the text appears lifted from the board." value={selectedProgram.textShadowDistance ?? display.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchProgram({ textShadowDistance })} />
               </>}
-              <label className="switch-row"><input type="checkbox" checked={selectedProgram.showIcons ?? display.showIcons ?? false} onChange={(event) => patchProgram({ showIcons: event.target.checked })} /><span>Show donor icons</span></label>
-              <p className="field-note">Donor subtext is controlled per name in Displays &gt; Assigned names.</p>
+            </div></details>
+            <details className="inspector-details" open><summary>Donor presentation</summary><div className="inspector-block">
+              <BoardDonorPresentationEditor
+                program={selectedProgram}
+                donors={selectedProgram.donorIds.map((donorId) => state.donors.find((donor) => donor.id === donorId)).filter((donor): donor is Donor => Boolean(donor))}
+                fallbacks={{
+                  fontFamily: selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat",
+                  nameColor: boardPreviewPalette(selectedProgram.palette).text,
+                  accentColor: boardPreviewPalette(selectedProgram.palette).accent
+                }}
+                fontOptions={boardFontOptions}
+                fontLabels={boardFontLabels}
+                iconsVisible={selectedProgram.showIcons ?? display.showIcons ?? false}
+                onIconsVisibleChange={(showIcons) => patchProgram({ showIcons })}
+                onPatchDefaults={patchBoardPresentation}
+                onPatchDonor={patchDonorPresentation}
+                onClearDefaults={() => patchProgram({ donorPresentation: undefined })}
+                onClearDonor={(donorId) => patchProgram({ donorStyles: clearBoardDonorStyle(selectedProgram, donorId) })}
+              />
+              <p className="field-note">These settings belong only to this board. Donor profile data remains unchanged.</p>
             </div></details></>}
           </div>
         </aside>
       </div>
+      {pendingProgramDelete && <LanternConfirmDialog eyebrow="Delete board template" title={`Delete “${pendingProgramDelete.name}”?`} description="This removes the reusable board and its board-specific presentation settings. Donor profiles remain available, and displays using this board move to the next available board." confirmLabel="Delete board" onCancel={() => setPendingProgramDeleteId(null)} onConfirm={() => deleteProgram(pendingProgramDelete.id)} />}
     </section>
   );
 }
@@ -2800,6 +3437,7 @@ function DirectBoardCanvas({
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === "Escape") { setContextMenu(null); onBeginPlace(null); } };
@@ -2817,6 +3455,11 @@ function DirectBoardCanvas({
   const donors = program.donorIds
     .map((id) => state.donors.find((donor) => donor.id === id))
     .filter((donor): donor is Donor => Boolean(donor?.active));
+  const palette = boardPreviewPalette(program.palette);
+  const panelDonors = (panel: BoardPanel) => donors.filter((donor) =>
+    (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
+    && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
+  );
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
     event.preventDefault();
@@ -2850,10 +3493,12 @@ function DirectBoardCanvas({
     const rect = canvasRef.current.getBoundingClientRect();
     onAdd(placingPanelType, { x: (event.clientX - rect.left) / rect.width * 100, y: (event.clientY - rect.top) / rect.height * 100 });
   };
-  const backgroundScale = display.backgroundCrop?.scale ?? 1;
+  const boardBackgroundImage = program.backgroundMode === "image" && program.backgroundImage ? program.backgroundImage : display.backgroundImage;
+  const boardBackgroundCrop = program.backgroundMode === "image" && program.backgroundImage ? program.backgroundCrop ?? display.backgroundCrop : display.backgroundCrop;
+  const backgroundScale = boardBackgroundCrop?.scale ?? 1;
   const particleCount = display.particleCount ?? 34;
-  const shadowRadians = (display.textShadowAngle ?? 135) * Math.PI / 180;
-  const shadowDistance = display.textShadowDistance ?? 5;
+  const shadowRadians = (program.textShadowAngle ?? display.textShadowAngle ?? 135) * Math.PI / 180;
+  const shadowDistance = program.textShadowDistance ?? display.textShadowDistance ?? 5;
   const prioritizeMoveHandle = (event: React.PointerEvent<HTMLDivElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -2864,15 +3509,19 @@ function DirectBoardCanvas({
     });
     if (candidate && !(event.target as Element).closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle}${display.showFrame === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${display.textFinish === "cut-brass" ? " finish-cut-brass" : ""}${display.textShadowEnabled ? " text-shadow-enabled" : ""}`} style={{
-    fontFamily: display.fontFamily ?? "Montserrat",
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${(program.textFinish ?? display.textFinish) === "cut-brass" ? " finish-cut-brass" : ""}${(program.textShadowEnabled ?? display.textShadowEnabled) ? " text-shadow-enabled" : ""}`} style={{
+    fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
     "--board-editor-zoom": editorZoom,
+    "--board-palette-text": palette.text,
+    "--board-palette-accent": palette.accent,
+    "--board-palette-secondary": palette.secondary,
+    "--board-palette-muted": palette.muted,
     "--board-text-shadow-x": `${Math.cos(shadowRadians) * shadowDistance}px`,
     "--board-text-shadow-y": `${Math.sin(shadowRadians) * shadowDistance}px`,
-    "--board-text-shadow-blur": `${1 + (display.textShadowStrength ?? 55) / 28}px`,
-    "--board-text-shadow-alpha": Math.min(.62, .1 + (display.textShadowStrength ?? 55) / 165)
+    "--board-text-shadow-blur": `${1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 28}px`,
+    "--board-text-shadow-alpha": Math.min(.62, .1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 165)
   } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
-    {display.backgroundImage && <div className="direct-board-background"><img src={display.backgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${display.backgroundCrop?.x ?? 50}% ${display.backgroundCrop?.y ?? 50}%` }} /></div>}
+    {boardBackgroundImage && <div className="direct-board-background"><img src={boardBackgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
       const spread = (display.particleSpread ?? 100) / 100;
@@ -2897,11 +3546,11 @@ function DirectBoardCanvas({
         width: `${panel.width ?? 90}%`,
         height: `${panel.height ?? 18}%`,
         zIndex: index + 2,
-        fontFamily: panel.fontFamily ?? display.fontFamily ?? "Montserrat",
-        "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? "#d9a657" : "#f5f2eb"),
+        fontFamily: panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat",
+        "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? palette.accent : panel.type === "message" || panel.type === "story" ? palette.text : palette.text),
         "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
         "--donor-name-size": `${panel.fontSize ?? display.nameSize ?? 28}px`,
-        "--donor-divider-color": panel.donorDividerColor ?? "#d9a657",
+        "--donor-divider-color": panel.donorDividerColor ?? palette.accent,
         "--donor-divider-thickness": `${panel.donorDividerThickness ?? 1}px`,
         "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
       } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
@@ -2910,11 +3559,7 @@ function DirectBoardCanvas({
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
         {panel.type === "heading" && <EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "supporters-heading" && <EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
-        {panel.type === "donors" && <div className="direct-donor-grid" style={{ gridTemplateColumns: `repeat(${panel.columns ?? program.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${panel.rows ?? Math.max(1, Math.ceil(donors.length / (panel.columns ?? program.columns)))}, minmax(0, 1fr))` }}>{donors.slice(0, (panel.rows ?? Math.max(1, Math.ceil(donors.length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <div
-          className={`direct-donor-name donor-custom highlight-${donor.highlight ?? "none"} animation-${donor.animation ?? "none"}`}
-          style={{ "--donor-name-color": donor.nameColor || "#f5f2eb", "--donor-accent-color": donor.accentColor || "#d9a657", fontFamily: `${donor.fontOverride || display.fontFamily || "Montserrat"}, sans-serif` } as React.CSSProperties}
-          key={donor.id}
-        >{display.showIcons && <span className="donor-mark">{donorIconGlyph(donor.icon && donor.icon !== "none" ? donor.icon : "star")}</span>}<EditableBoardText value={donor.name} onCommit={(value) => onRenameDonor(donor.id, value)} />{donorSubtextVisibleForDisplay(display, donor.id) && donor.subtext && <small>{donor.subtext}</small>}</div>)}{!donors.length && <button className="empty-board-action" type="button">Select donors in the inspector</button>}</div>}
+        {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
         {panel.type === "message" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
         {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><div><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></div></>}
         {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={panel.imageUrl} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
@@ -2922,12 +3567,57 @@ function DirectBoardCanvas({
       </section>)}
     </div>
     {placingPanelType && <div className="placement-hint"><Plus size={14} /> Click where the {boardPanelLabel(placingPanelType).toLowerCase()} should go</div>}
-    {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}{widgets.map((widget) => <button key={widget.id} type="button" onClick={() => { onAddWidget?.(widget); setContextMenu(null); }}>{widget.name}</button>)}{selectedPanelIds.length > 1 && <button type="button" onClick={() => { const name = window.prompt("Widget name", "Saved widget"); if (name) onSaveWidget?.(name); setContextMenu(null); }}>Save selection as widget</button>}</div>}
+    {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}{widgets.map((widget) => <button key={widget.id} type="button" onClick={() => { onAddWidget?.(widget); setContextMenu(null); }}>{widget.name}</button>)}{selectedPanelIds.length > 1 && <button type="button" onClick={() => { setWidgetNamePromptOpen(true); setContextMenu(null); }}>Save selection as widget</button>}</div>}
+    {widgetNamePromptOpen && <LanternTextPromptDialog eyebrow="Reusable board content" title="Save selection as a widget" description="The selected panels are copied into a reusable widget. The panels already on this board remain unchanged." label="Widget name" initialValue="Saved widget" submitLabel="Save widget" onCancel={() => setWidgetNamePromptOpen(false)} onSubmit={(name) => { onSaveWidget?.(name); setWidgetNamePromptOpen(false); }} />}
   </div>;
 }
 
-function EditableBoardText({ value, onCommit, className = "" }: { value: string; onCommit: (value: string) => void; className?: string }) {
-  return <div className={`editable-board-text ${className}`} contentEditable suppressContentEditableWarning role="textbox" tabIndex={0} onFocus={(event) => { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(event.currentTarget); selection?.removeAllRanges(); selection?.addRange(range); }} onBlur={(event) => onCommit(event.currentTarget.textContent?.trim() ?? "")} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}>{value}</div>;
+function directDonorGridStyle(donors: Donor[], columns: number, requestedRows: number | undefined, display: DisplayProfile): React.CSSProperties {
+  const rowCount = requestedRows ?? Math.max(1, Math.ceil(donors.length / columns));
+  const layout = buildDonorNameGridLayout(donors.map((donor) => ({
+    name: donor.name,
+    hasSubtext: donorSubtextVisibleForDisplay(display, donor.id) && Boolean(donor.subtext)
+  })), columns, rowCount);
+  return {
+    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    gridTemplateRows: layout.rowUnits.map((units) => `${units}fr`).join(" "),
+    "--donor-shared-size": `${Math.max(.65, 82 / layout.totalUnits)}cqh`,
+    "--donor-column-cap": columns > 1 ? "3.5cqw" : "7.2cqw"
+  } as React.CSSProperties;
+}
+
+function DirectBoardDonorName({ donor, display, program, palette, onRename }: {
+  donor: Donor;
+  display: DisplayProfile;
+  program: DonorBoardProgram;
+  palette: ReturnType<typeof boardPreviewPalette>;
+  onRename: (donorId: string, name: string) => void;
+}) {
+  const presentation = resolveBoardDonorPresentation(program, donor.id, {
+    fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
+    nameColor: palette.text,
+    accentColor: palette.accent
+  });
+  const showIcon = (program.showIcons ?? display.showIcons) && presentation.recognitionIcon !== "none";
+  return <div
+    className={`direct-donor-name board-highlight-${presentation.highlight} board-animation-${presentation.animation}`}
+    style={{
+      "--board-donor-name": presentation.nameColor,
+      "--board-donor-accent": presentation.accentColor,
+      fontFamily: `${presentation.fontFamily}, sans-serif`
+    } as React.CSSProperties}
+  >
+    {showIcon && (presentation.recognitionIconImage
+      ? <img className="board-donor-custom-icon" src={presentation.recognitionIconImage} alt="" />
+      : <span className="board-donor-preview-icon" aria-hidden="true">{recognitionIconGlyph(presentation.recognitionIcon)}</span>)}
+    <EditableBoardText value={donor.name} animation={presentation.animation} multiline onCommit={(value) => onRename(donor.id, value)} />
+    {donorSubtextVisibleForDisplay(display, donor.id) && donor.subtext && <small>{donor.subtext}</small>}
+  </div>;
+}
+
+function EditableBoardText({ value, onCommit, className = "", animation, multiline = false }: { value: string; onCommit: (value: string) => void; className?: string; animation?: BoardDonorPresentation["animation"]; multiline?: boolean }) {
+  const lines = multiline ? splitDonorNameLines(value) : [value];
+  return <div className={`editable-board-text${multiline ? " multiline-donor-name" : ""} ${className}`} contentEditable suppressContentEditableWarning role="textbox" tabIndex={0} onFocus={(event) => { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(event.currentTarget); selection?.removeAllRanges(); selection?.addRange(range); }} onBlur={(event) => onCommit(event.currentTarget.innerText.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}>{lines.map((line, index) => <Fragment key={`${line}-${index}`}><span className="donor-name-line">{animation ? <AnimatedDonorName name={line} animation={animation} /> : line}</span>{index < lines.length - 1 && <br />}</Fragment>)}</div>;
 }
 
 function LegacyThemeStudio({
@@ -3321,11 +4011,25 @@ function AnnouncementsView({
   const [deliveryScheduleOpen, setDeliveryScheduleOpen] = useState(false);
   const [scheduleHasEndDate, setScheduleHasEndDate] = useState(false);
   const [previewScreenId, setPreviewScreenId] = useState<ScreenId>(() => state.announcement.target === "all" ? firstDisplayId(state) : state.announcement.target);
+
+  useEffect(() => {
+    const openVisitorSchedule = (event: Event) => {
+      const announcementId = (event as CustomEvent<string>).detail;
+      if (!announcementId) return;
+      setSelectedSavedId(announcementId);
+      setScheduleAnnouncementId(announcementId);
+    };
+    window.addEventListener("lantern:schedule-announcement", openVisitorSchedule);
+    return () => window.removeEventListener("lantern:schedule-announcement", openVisitorSchedule);
+  }, []);
+
   const previewScreen = state.screens[previewScreenId] ?? Object.values(state.screens)[0];
   const selectedTargets = state.announcement.targets?.length ? state.announcement.targets : state.announcement.target === "all" ? Object.keys(state.screens) : [state.announcement.target];
   const previewLabel = state.announcement.target === "all"
     ? `All displays · previewing ${previewScreen.label}`
     : previewScreen.label;
+  const isTicker = state.announcement.style === "News Ticker";
+  const effectiveTimerPosition = isTicker && state.announcement.timerPosition === "announcement-right" ? "top-right" : state.announcement.timerPosition;
   const patchAnnouncement = (patch: Partial<LanternState["announcement"]>) => {
     updateState((current) => ({ ...current, announcement: { ...current.announcement, ...patch } }));
   };
@@ -3495,12 +4199,28 @@ function AnnouncementsView({
             <div className="composer-message-grid"><LabeledInput label="Headline" info="Large headline shown on the announcement." value={state.announcement.title} onChange={(value) => patchAnnouncement({ title: value })} /><LabeledInput label="Supporting message" info="Supporting text below the headline." value={state.announcement.message} onChange={(value) => patchAnnouncement({ message: value })} /></div>
             <label className="field announcement-details-field"><span>Details <InfoDot text="Optional smaller text displayed in a bordered detail panel." /></span><textarea rows={4} value={state.announcement.details ?? ""} onChange={(event) => patchAnnouncement({ details: event.target.value })} placeholder="Add supporting details…" /></label>
             <div className="announcement-color-row"><ColorControl label="Text color" value={state.announcement.textColor ?? "#10131f"} onChange={(textColor) => patchAnnouncement({ textColor })} /><ColorControl label="Background" value={state.announcement.backgroundColor ?? "#f3efe0"} onChange={(backgroundColor) => patchAnnouncement({ backgroundColor })} /></div>
-            {state.announcement.imageUrl && <div className="three-col compact-image-controls"><Slider label="Image X" info="Move the announcement image horizontally." value={state.announcement.imageX ?? 72} min={0} max={100} onChange={(imageX) => patchAnnouncement({ imageX })} /><Slider label="Image Y" info="Move the announcement image vertically." value={state.announcement.imageY ?? 50} min={0} max={100} onChange={(imageY) => patchAnnouncement({ imageY })} /><Slider label="Image size" info="Adjust the announcement image width." value={state.announcement.imageWidth ?? 22} min={5} max={70} onChange={(imageWidth) => patchAnnouncement({ imageWidth })} /></div>}
+            {state.announcement.imageUrl && !isTicker && <div className="three-col compact-image-controls"><Slider label="Image X" info="Move the announcement image horizontally." value={state.announcement.imageX ?? 72} min={0} max={100} onChange={(imageX) => patchAnnouncement({ imageX })} /><Slider label="Image Y" info="Move the announcement image vertically." value={state.announcement.imageY ?? 50} min={0} max={100} onChange={(imageY) => patchAnnouncement({ imageY })} /><Slider label="Image size" info="Adjust the announcement image width." value={state.announcement.imageWidth ?? 22} min={5} max={70} onChange={(imageWidth) => patchAnnouncement({ imageWidth })} /></div>}
           </section>
           <section className="composer-section delivery-section">
             <header><span>3</span><div><strong>Delivery</strong><small>Choose the audience, layout, schedule, and how long it stays visible.</small></div></header>
             <div className="announcement-target-picker"><span>Send to</span>{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={selectedTargets.includes(screen.id)} onChange={() => toggleAnnouncementTarget(screen.id)} />{screen.label}</label>)}</div>
-            <div className="two-col"><LabeledSelect label="Layout" info="The announcement layout used on the display." value={state.announcement.style} options={["Ribbon", "Temporary Card", "Lower Third"]} onChange={(value) => patchAnnouncement({ style: value as LanternState["announcement"]["style"], layoutX: undefined, layoutY: undefined, layoutWidth: undefined })} /><label className="field duration-field"><span>Show for <InfoDot text="Use 0 to keep it visible until someone ends it manually." /></span><div className="duration-input"><input aria-label="Announcement duration in minutes" type="number" min={0} max={1440} value={state.announcement.durationMinutes} onChange={(event) => patchAnnouncement({ durationMinutes: Number(event.target.value) || 0 })} /><b>min</b></div></label></div>
+            <div className="two-col">
+              <LabeledSelect label="Layout" info="The announcement layout used on the display." value={state.announcement.style} options={["Ribbon", "Temporary Card", "Lower Third", "News Ticker"]} onChange={(value) => {
+                const style = value as LanternState["announcement"]["style"];
+                patchAnnouncement({
+                  style,
+                  layoutX: undefined,
+                  layoutY: undefined,
+                  layoutWidth: undefined,
+                  ...(style === "News Ticker" && state.announcement.timerPosition === "announcement-right" ? { timerPosition: "top-right" as const } : {})
+                });
+              }} />
+              <label className="field duration-field"><span>Show for <InfoDot text="Use 0 to keep it visible until someone ends it manually." /></span><div className="duration-input"><input aria-label="Announcement duration in minutes" type="number" min={0} max={1440} value={state.announcement.durationMinutes} onChange={(event) => patchAnnouncement({ durationMinutes: Number(event.target.value) || 0 })} /><b>min</b></div></label>
+            </div>
+            {isTicker && <div className="ticker-option-row">
+              <LabeledSelect label="Ticker pace" info="Controls how quickly the announcement pans across the display." value={state.announcement.tickerSpeed ?? "standard"} options={["slow", "standard", "fast"]} optionLabels={{ slow: "Slow", standard: "Standard", fast: "Fast" }} onChange={(tickerSpeed) => patchAnnouncement({ tickerSpeed: tickerSpeed as NonNullable<LanternState["announcement"]["tickerSpeed"]> })} />
+              <LabeledSelect label="Scroll direction" info="Choose which direction the news ticker travels." value={state.announcement.tickerDirection ?? "left"} options={["left", "right"]} optionLabels={{ left: "Right to left", right: "Left to right" }} onChange={(tickerDirection) => patchAnnouncement({ tickerDirection: tickerDirection as NonNullable<LanternState["announcement"]["tickerDirection"]> })} />
+            </div>}
             <div className={`announcement-delivery-schedule${deliveryScheduleOpen ? " open" : ""}`}>
               <div className="announcement-delivery-schedule-head">
                 <div><CalendarDays size={17} /><span><strong>When should it play?</strong><small>Add this announcement directly to the Schedule calendar.</small></span></div>
@@ -3527,28 +4247,28 @@ function AnnouncementsView({
               <div className="placement-control-heading"><span>Text box position</span><button type="button" onClick={() => patchAnnouncement({ layoutX: undefined, layoutY: undefined, layoutWidth: undefined })}><RotateCcw size={13} /> Use layout default</button></div>
               <div className="three-col">
                 <Slider label="Text X" info="Horizontal center of the announcement text box." value={state.announcement.layoutX ?? 50} min={5} max={95} onChange={(layoutX) => patchAnnouncement({ layoutX })} />
-                <Slider label="Text Y" info="Vertical center of the announcement text box." value={state.announcement.layoutY ?? (state.announcement.style === "Temporary Card" ? 50 : 88)} min={5} max={95} onChange={(layoutY) => patchAnnouncement({ layoutY })} />
-                <Slider label="Text width" info="Width of the draggable announcement text box." value={state.announcement.layoutWidth ?? (state.announcement.style === "Ribbon" ? 90 : 78)} min={20} max={96} onChange={(layoutWidth) => patchAnnouncement({ layoutWidth })} />
+                <Slider label="Text Y" info="Vertical center of the announcement text box." value={state.announcement.layoutY ?? (state.announcement.style === "Temporary Card" ? 50 : state.announcement.style === "News Ticker" ? 91 : 88)} min={5} max={95} onChange={(layoutY) => patchAnnouncement({ layoutY })} />
+                <Slider label="Text width" info="Width of the draggable announcement text box." value={state.announcement.layoutWidth ?? (state.announcement.style === "News Ticker" ? 96 : state.announcement.style === "Ribbon" ? 90 : 78)} min={20} max={96} onChange={(layoutWidth) => patchAnnouncement({ layoutWidth })} />
               </div>
             </div>
           </section>
           <details className="composer-section optional-section">
-            <summary><span>2</span><div><strong>Optional enhancements</strong><small>Image, countdown, sounds, and walk-on character</small></div><ChevronDown size={16} /></summary>
+            <summary><span>2</span><div><strong>Optional enhancements</strong><small>{isTicker ? "Countdown, sounds, and walk-on character" : "Image, countdown, sounds, and walk-on character"}</small></div><ChevronDown size={16} /></summary>
             <div className="optional-section-body">
-              <div className="optional-image-control">
+              {!isTicker ? <div className="optional-image-control">
                 <div><ImagePlus size={18} /><span><strong>Announcement image</strong><small>Add an optional PNG, JPG, GIF, or WebP to the message.</small></span></div>
                 <label className="image-upload announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (imageUrl) => patchAnnouncement({ imageUrl, imageX: 72, imageY: 50, imageWidth: 22 }))} /></label>
                 {state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined })} title="Remove announcement image"><Trash2 size={15} /></button>}
-              </div>
+              </div> : <p className="ticker-image-note"><Megaphone size={16} /> News tickers keep the full width clear for readable moving text. Any saved announcement image is preserved and returns if you choose another layout.</p>}
               <div className="announcement-timer-controls">
-                <LabeledSelect label="Countdown" info="Add a live countdown to the announcement." value={state.announcement.timerStyle} options={["off", "digital", "progress", "circular"]} optionLabels={{ off: "Off", digital: "Digital clock", progress: "Progress bar", circular: "Circular timer" }} onChange={(value) => patchAnnouncement({ timerStyle: value as LanternState["announcement"]["timerStyle"] })} />
-                {state.announcement.timerStyle !== "off" && <><LabeledSelect label="Timer position" info="Keep the timer beside the announcement or pin it to a screen corner." value={state.announcement.timerPosition} options={["announcement-right", "top-left", "top-right", "bottom-left", "bottom-right"]} optionLabels={{ "announcement-right": "Announcement right", "top-left": "Top left", "top-right": "Top right", "bottom-left": "Bottom left", "bottom-right": "Bottom right" }} onChange={(value) => patchAnnouncement({ timerPosition: value as LanternState["announcement"]["timerPosition"], timerX: undefined, timerY: undefined })} /><ColorControl label="Timer color" value={state.announcement.timerAccentColor} onChange={(timerAccentColor) => patchAnnouncement({ timerAccentColor })} /><ColorControl label="Timer track" value={state.announcement.timerTrackColor} onChange={(timerTrackColor) => patchAnnouncement({ timerTrackColor })} /></>}
+                <LabeledSelect label="Countdown" info="Add a live countdown to the announcement." value={state.announcement.timerStyle} options={["off", "digital", "progress", "circular"]} optionLabels={{ off: "Off", digital: "Digital clock", progress: "Progress bar", circular: "Circular timer" }} onChange={(value) => patchAnnouncement({ timerStyle: value as LanternState["announcement"]["timerStyle"], ...(isTicker && state.announcement.timerPosition === "announcement-right" ? { timerPosition: "top-right" as const } : {}) })} />
+                {state.announcement.timerStyle !== "off" && <><LabeledSelect label="Timer position" info={isTicker ? "Pin the timer to a screen corner so the ticker remains readable." : "Keep the timer beside the announcement or pin it to a screen corner."} value={effectiveTimerPosition} options={isTicker ? ["top-left", "top-right", "bottom-left", "bottom-right"] : ["announcement-right", "top-left", "top-right", "bottom-left", "bottom-right"]} optionLabels={{ "announcement-right": "Announcement right", "top-left": "Top left", "top-right": "Top right", "bottom-left": "Bottom left", "bottom-right": "Bottom right" }} onChange={(value) => patchAnnouncement({ timerPosition: value as LanternState["announcement"]["timerPosition"], timerX: undefined, timerY: undefined })} /><ColorControl label="Timer color" value={state.announcement.timerAccentColor} onChange={(timerAccentColor) => patchAnnouncement({ timerAccentColor })} /><ColorControl label="Timer track" value={state.announcement.timerTrackColor} onChange={(timerTrackColor) => patchAnnouncement({ timerTrackColor })} /></>}
               </div>
-              {state.announcement.timerStyle !== "off" && state.announcement.timerPosition !== "announcement-right" && <div className="announcement-placement-controls">
+              {state.announcement.timerStyle !== "off" && effectiveTimerPosition !== "announcement-right" && <div className="announcement-placement-controls">
                 <div className="placement-control-heading"><span>Timer position</span><button type="button" onClick={() => patchAnnouncement({ timerX: undefined, timerY: undefined })}><RotateCcw size={13} /> Use corner default</button></div>
                 <div className="two-col">
-                  <Slider label="Timer X" info="Horizontal center of the floating timer." value={state.announcement.timerX ?? (state.announcement.timerPosition.endsWith("left") ? 17 : 83)} min={4} max={96} onChange={(timerX) => patchAnnouncement({ timerX })} />
-                  <Slider label="Timer Y" info="Vertical center of the floating timer." value={state.announcement.timerY ?? (state.announcement.timerPosition.startsWith("top") ? 15 : 84)} min={4} max={96} onChange={(timerY) => patchAnnouncement({ timerY })} />
+                  <Slider label="Timer X" info="Horizontal center of the floating timer." value={state.announcement.timerX ?? (effectiveTimerPosition.endsWith("left") ? 17 : 83)} min={4} max={96} onChange={(timerX) => patchAnnouncement({ timerX })} />
+                  <Slider label="Timer Y" info="Vertical center of the floating timer." value={state.announcement.timerY ?? (effectiveTimerPosition.startsWith("top") ? 15 : 84)} min={4} max={96} onChange={(timerY) => patchAnnouncement({ timerY })} />
                 </div>
               </div>}
               <div className="announcement-character-editor">
@@ -3621,21 +4341,20 @@ function AnnouncementsView({
   );
 }
 
-interface LiveRecording {
-  id: string;
-  name: string;
-  url: string;
-  blob: Blob;
-  durationSeconds: number;
-  createdAt: string;
-}
-
 const livePolygonClip = (frame: LanternState["live"]["frame"]) => {
   const points = frame.polygonPoints?.length
     ? frame.polygonPoints
     : [{ x: 12, y: 4 }, { x: 88, y: 4 }, { x: 100, y: 50 }, { x: 86, y: 96 }, { x: 14, y: 96 }, { x: 0, y: 50 }];
   return `polygon(${points.map((point) => `${point.x}% ${point.y}%`).join(", ")})`;
 };
+
+const liveSourceLabel = (source: LanternState["live"]["source"]) => source === "demo"
+  ? "Test feed"
+  : source === "screen"
+    ? "Screen share"
+    : source === "recording"
+      ? "Recording"
+      : "Camera";
 
 function DirectLiveStage({
   state,
@@ -3645,8 +4364,10 @@ function DirectLiveStage({
   mode,
   previewError,
   boardProgramId,
+  boardViewMode = "2d",
   showBoard = true,
   interactive = true,
+  onTrackingStatus,
   onFrameChange,
   onTitlePositionChange,
   onLowerThirdPositionChange
@@ -3658,16 +4379,28 @@ function DirectLiveStage({
   mode: "frame" | "crop";
   previewError: string | null;
   boardProgramId?: string;
+  boardViewMode?: "2d" | "3d";
   showBoard?: boolean;
   interactive?: boolean;
+  onTrackingStatus?: (status: TrackingRuntimeStatus) => void;
   onFrameChange: (frame: LanternState["live"]["frame"]) => void;
   onTitlePositionChange: (position: { x: number; y: number }) => void;
   onLowerThirdPositionChange: (position: { x: number; y: number }) => void;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+  const [confirmPolygonReset, setConfirmPolygonReset] = useState(false);
+  const [controlHeld, setControlHeld] = useState(false);
+  const composedLive = normalizeBroadcastComposition(live);
+  const activeCostume = state.effectStudio.costumes.find((costume) => costume.id === composedLive.effects.costumeId);
+  const activeCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === composedLive.effects.calibrationProfileId);
+  const trackedCostumeRenderer = useMemo(() => composedLive.effects.costumeEnabled && activeCostume
+    ? ((context: CanvasRenderingContext2D, frame: Parameters<typeof renderCostumeOverlay>[1]) => renderCostumeOverlay(context, frame, activeCostume, activeCalibration))
+    : undefined, [activeCalibration, activeCostume, composedLive.effects.costumeEnabled]);
+  const cropEdges = normalizeCropEdges(composedLive.frame.cropEdges);
+  const interactionMode = controlHeld ? "crop" : mode;
   const dragRef = useRef<{
-    kind: "move" | "resize" | "crop" | "crop-resize" | "point";
+    kind: "move" | "resize" | "crop" | "crop-edge" | "point";
     edge?: string;
     pointIndex?: number;
     pointerId: number;
@@ -3683,16 +4416,35 @@ function DirectLiveStage({
     position: { x: number; y: number };
   } | null>(null);
 
+  useEffect(() => {
+    if (!interactive) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Control") setControlHeld(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Control") setControlHeld(false);
+    };
+    const clearControl = () => setControlHeld(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", clearControl);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", clearControl);
+    };
+  }, [interactive]);
+
   const polygonPoints = live.frame.polygonPoints?.length
     ? live.frame.polygonPoints
     : [{ x: 12, y: 4 }, { x: 88, y: 4 }, { x: 100, y: 50 }, { x: 86, y: 96 }, { x: 14, y: 96 }, { x: 0, y: 50 }];
   const polygonClip = `polygon(${polygonPoints.map((point) => `${point.x}% ${point.y}%`).join(", ")})`;
 
-  const beginDrag = (event: React.PointerEvent<HTMLElement>, kind: "move" | "resize" | "crop" | "crop-resize" | "point", edge = "se", pointIndex?: number) => {
+  const beginDrag = (event: React.PointerEvent<HTMLElement>, kind: "move" | "resize" | "crop" | "crop-edge" | "point", edge = "se", pointIndex?: number) => {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { kind, edge, pointIndex, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame: structuredClone(live.frame) };
+    dragRef.current = { kind, edge, pointIndex, pointerId: event.pointerId, x: event.clientX, y: event.clientY, frame: structuredClone(composedLive.frame) };
   };
 
   const moveDrag = (event: React.PointerEvent<HTMLElement>) => {
@@ -3742,23 +4494,18 @@ function DirectLiveStage({
       }
       const maskShape = drag.frame.maskShape === "square" && !isCorner ? "rectangle" : drag.frame.maskShape;
       onFrameChange({ ...drag.frame, x, y, width, height, maskShape });
-    } else if (drag.kind === "crop-resize") {
+    } else if (drag.kind === "crop-edge") {
       const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
       if (!frameBounds) return;
       const edge = drag.edge ?? "se";
-      const horizontal = edge.includes("e")
-        ? (event.clientX - drag.x) / Math.max(frameBounds.width, 1)
-        : edge.includes("w")
-          ? (drag.x - event.clientX) / Math.max(frameBounds.width, 1)
-          : 0;
-      const vertical = edge.includes("s")
-        ? (event.clientY - drag.y) / Math.max(frameBounds.height, 1)
-        : edge.includes("n")
-          ? (drag.y - event.clientY) / Math.max(frameBounds.height, 1)
-          : 0;
-      const contributions = [horizontal, vertical].filter((amount) => amount !== 0);
-      const scaleDelta = (contributions.reduce((sum, amount) => sum + amount, 0) / Math.max(contributions.length, 1)) * 2;
-      onFrameChange({ ...drag.frame, crop: { ...drag.frame.crop, scale: clamp(drag.frame.crop.scale + scaleDelta, 1, 3) } });
+      const horizontal = ((event.clientX - drag.x) / Math.max(frameBounds.width, 1)) * 100;
+      const vertical = ((event.clientY - drag.y) / Math.max(frameBounds.height, 1)) * 100;
+      const next = normalizeCropEdges(drag.frame.cropEdges);
+      if (edge.includes("w")) next.left = clamp(next.left + horizontal, 0, 90 - next.right);
+      if (edge.includes("e")) next.right = clamp(next.right - horizontal, 0, 90 - next.left);
+      if (edge.includes("n")) next.top = clamp(next.top + vertical, 0, 90 - next.bottom);
+      if (edge.includes("s")) next.bottom = clamp(next.bottom - vertical, 0, 90 - next.top);
+      onFrameChange({ ...drag.frame, cropEdges: next });
     } else {
       const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
       if (!frameBounds) return;
@@ -3777,9 +4524,7 @@ function DirectLiveStage({
 
   const deletePolygonPoint = (index: number) => {
     if (polygonPoints.length <= 3) {
-      if (!window.confirm("A polygon needs at least three points. Delete this point and remove the custom polygon?")) return;
-      onFrameChange({ ...live.frame, maskShape: "rectangle", polygonPoints: undefined });
-      setSelectedPoint(null);
+      setConfirmPolygonReset(true);
       return;
     }
     onFrameChange({ ...live.frame, polygonPoints: polygonPoints.filter((_, pointIndex) => pointIndex !== index) });
@@ -3839,80 +4584,76 @@ function DirectLiveStage({
     const stage = stageRef.current;
     if (!stage) return;
     const zoomCrop = (event: WheelEvent) => {
-      if (mode !== "crop" || !(event.target instanceof Element) || !event.target.closest(".direct-live-frame")) return;
+      if (interactionMode !== "crop" || !(event.target instanceof Element) || !event.target.closest(".direct-live-frame")) return;
       event.preventDefault();
-      const scale = clamp(live.frame.crop.scale + (event.deltaY < 0 ? .08 : -.08), 1, 3);
-      onFrameChange({ ...live.frame, crop: { ...live.frame.crop, scale } });
+      const minimum = composedLive.frame.fitMode === "fit" ? .5 : 1;
+      const scale = clamp(composedLive.frame.crop.scale + (event.deltaY < 0 ? .08 : -.08), minimum, 3);
+      onFrameChange({ ...composedLive.frame, crop: { ...composedLive.frame.crop, scale } });
     };
     stage.addEventListener("wheel", zoomCrop, { passive: false });
     return () => stage.removeEventListener("wheel", zoomCrop);
-  }, [live.frame, mode, onFrameChange]);
+  }, [composedLive.frame, interactionMode, onFrameChange]);
 
   return (
     <div className={`direct-live-stage-shell${interactive ? "" : " presentation"}`}>
       {interactive && <div className="direct-stage-toolbar">
         <span>{screen.label}</span>
-        <strong>{mode === "frame" ? "Drag to move · corner to resize" : "Drag to crop · wheel to zoom"}</strong>
+        <strong>{interactionMode === "frame" ? "Drag to move · corner to resize" : `Pan, zoom & crop${controlHeld ? " · Control held" : ""}`}</strong>
       </div>}
       <div ref={stageRef} className={`direct-live-stage ${orientationClass(screen)}`}>
         <div className="direct-stage-board">
-          {showBoard
-            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={boardProgramId} fitToScreen viewMode="2d" />
-            : <div className="broadcast-only-backdrop"><Radio size={24} /><span>Broadcast only</span></div>}
+          {showBoard && composedLive.backgroundMode !== "none"
+            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={boardProgramId} interactive={interactive && boardViewMode === "3d"} fitToScreen viewMode={boardViewMode} />
+            : composedLive.backgroundMode === "none"
+              ? <div className="broadcast-transparent-backdrop"><span>Transparent output</span></div>
+              : <div className="broadcast-only-backdrop"><Radio size={24} /><span>Broadcast only</span></div>}
         </div>
-        {live.backgroundMode !== "board" && <div
-          className="direct-broadcast-background"
-          style={{
-            backgroundColor: live.backgroundColor,
-            backgroundImage: live.backgroundMode === "image" && live.backgroundImage ? `url("${live.backgroundImage}")` : undefined
-          }}
-        />}
+        <BroadcastBackgroundLayer live={composedLive} orientation={screen.orientation} className="direct-broadcast-background" />
         <div
-          className={`direct-live-frame ${mode === "crop" ? "crop-mode" : ""}`}
-          style={{ left: `${live.frame.x}%`, top: `${live.frame.y}%`, width: `${live.frame.width}%`, height: `${live.frame.height}%` }}
+          className={`direct-live-frame ${interactionMode === "crop" ? "crop-mode" : ""}`}
+          style={{ left: `${composedLive.frame.x}%`, top: `${composedLive.frame.y}%`, width: `${composedLive.frame.width}%`, height: `${composedLive.frame.height}%` }}
           onPointerDown={(event) => {
-            if (interactive && mode === "frame") beginDrag(event, "move");
+            if (!interactive) return;
+            beginDrag(event, event.ctrlKey || interactionMode === "crop" ? "crop" : "move");
           }}
           onPointerMove={moveDrag}
           onPointerUp={finishDrag}
           onPointerCancel={finishDrag}
         >
-          <div className={`direct-live-content mask-${live.frame.maskShape ?? "rectangle"}`} style={{
-            ...(live.frame.maskShape === "polygon" ? { clipPath: polygonClip } : {}),
-            backgroundColor: live.panelColor,
-            boxShadow: live.frameBorderWidth > 0 ? `inset 0 0 0 ${live.frameBorderWidth}px ${live.frameBorderColor}` : undefined
+          <div className={`direct-live-content broadcast-frame-surface mask-${composedLive.frame.maskShape ?? "rectangle"}`} style={{
+            ...(composedLive.frame.maskShape === "polygon" ? { clipPath: polygonClip } : {}),
+            ...frameSurfaceStyle(composedLive)
           }}>
-            <div className="live-camera-transform" style={{ transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${live.frame.mirrorX ? -1 : 1}, ${live.frame.mirrorY ? -1 : 1})` }}>
-              {stream ? <ChromaVideo stream={stream} chromaKey={live.chromaKey} effects={live.effects} crop={live.frame.crop} /> : live.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty"><Camera size={22} /><span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
+            <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${cropEdges.top}% ${cropEdges.right}% ${cropEdges.bottom}% ${cropEdges.left}%)` }}>
+              <div className="live-camera-transform" style={{ transform: `rotate(${composedLive.frame.rotation ?? 0}deg) scale(${composedLive.frame.mirrorX ? -1 : 1}, ${composedLive.frame.mirrorY ? -1 : 1})` }}>
+                {stream ? <ChromaVideo stream={stream} chromaKey={composedLive.chromaKey} effects={composedLive.effects} crop={composedLive.frame.crop} fitMode={composedLive.frame.fitMode} onTrackingStatus={onTrackingStatus} renderTrackedOverlay={trackedCostumeRenderer} /> : composedLive.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty">{composedLive.source === "recording" ? <Video size={22} /> : <Camera size={22} />}<span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
+              </div>
             </div>
           </div>
-          {interactive && mode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}`} onPointerDown={(event) => beginDrag(event, "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
-          {interactive && mode === "crop" && <div
+          {interactive && interactionMode === "frame" && ["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div key={edge} className={`direct-resize-handle resize-${edge}`} title={`Resize ${edge}; hold Control to crop only this side`} onPointerDown={(event) => beginDrag(event, event.ctrlKey ? "crop-edge" : "resize", edge)} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} />)}
+          {interactive && interactionMode === "crop" && <div
             className="direct-crop-editor"
             aria-label="Camera image crop"
             style={{
-              left: `${50 - live.frame.crop.scale * 50 - live.frame.crop.x * live.frame.crop.scale}%`,
-              top: `${50 - live.frame.crop.scale * 50 - live.frame.crop.y * live.frame.crop.scale}%`,
-              width: `${live.frame.crop.scale * 100}%`,
-              height: `${live.frame.crop.scale * 100}%`
+              inset: `${cropEdges.top}% ${cropEdges.right}% ${cropEdges.bottom}% ${cropEdges.left}%`
             }}
             onPointerDown={(event) => beginDrag(event, "crop")}
             onPointerMove={moveDrag}
             onPointerUp={finishDrag}
             onPointerCancel={finishDrag}
           >
-            {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <div
+            {["n", "e", "s", "w"].map((edge) => <div
               key={`crop-${edge}`}
-              className={`direct-crop-resize-handle resize-${edge}`}
-              title={`Resize camera image ${edge}`}
-              onPointerDown={(event) => beginDrag(event, "crop-resize", edge)}
+              className={`direct-crop-edge crop-${edge}`}
+              title={`Crop camera ${edge === "n" ? "top" : edge === "e" ? "right" : edge === "s" ? "bottom" : "left"} edge`}
+              onPointerDown={(event) => beginDrag(event, "crop-edge", edge)}
               onPointerMove={moveDrag}
               onPointerUp={finishDrag}
               onPointerCancel={finishDrag}
             />)}
-            <span className="direct-crop-size">Camera image {Math.round(live.frame.crop.scale * 100)}%</span>
+            <span className="direct-crop-size">Camera image {Math.round(composedLive.frame.crop.scale * 100)}%</span>
           </div>}
-          {interactive && mode === "frame" && live.frame.maskShape === "polygon" && <div className="polygon-editor" aria-label="Custom polygon points">
+          {interactive && interactionMode === "frame" && composedLive.frame.maskShape === "polygon" && <div className="polygon-editor" aria-label="Custom polygon points">
             {polygonPoints.map((point, index) => {
               const next = polygonPoints[(index + 1) % polygonPoints.length];
               return <Fragment key={`polygon-${index}`}>
@@ -3946,24 +4687,178 @@ function DirectLiveStage({
               </Fragment>;
             })}
           </div>}
-          {interactive && <span className="direct-frame-size">{Math.round(live.frame.width)} × {Math.round(live.frame.height)}</span>}
+          {interactive && <span className="direct-frame-size">{Math.round(composedLive.frame.width)} × {Math.round(composedLive.frame.height)}</span>}
         </div>
         <div className="direct-broadcast-text direct-broadcast-title" aria-label={interactive ? "Move broadcast title" : "Broadcast title"} style={{ left: `${live.titlePosition.x}%`, top: `${live.titlePosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "title") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><strong>{live.title}</strong></div>
         <div className="direct-broadcast-text direct-broadcast-lower-third" aria-label={interactive ? "Move broadcast lower third" : "Broadcast lower third"} style={{ left: `${live.lowerThirdPosition.x}%`, top: `${live.lowerThirdPosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "lower-third") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><span>{live.lowerThird}</span></div>
       </div>
+      {confirmPolygonReset && <LanternConfirmDialog
+        eyebrow="Custom camera mask"
+        title="Remove the custom polygon?"
+        description="A polygon needs at least three points. Removing this point will return the camera mask to a rectangle."
+        confirmLabel="Use rectangle"
+        onCancel={() => setConfirmPolygonReset(false)}
+        onConfirm={() => {
+          setConfirmPolygonReset(false);
+          setSelectedPoint(null);
+          onFrameChange({ ...composedLive.frame, maskShape: "rectangle", polygonPoints: undefined });
+        }}
+      />}
     </div>
   );
 }
 
+function BlipsView({ state, updateState, onOpenSchedule }: {
+  state: LanternState;
+  updateState: (updater: (current: LanternState) => LanternState) => void;
+  onOpenSchedule: (scheduleId: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState(state.savedBlips[0]?.id ?? "");
+  const [draftBlip, setDraftBlip] = useState<LanternState["savedBlips"][number] | null>(null);
+  const [pendingDeleteBlip, setPendingDeleteBlip] = useState<LanternState["savedBlips"][number] | null>(null);
+  const [runOpen, setRunOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [runTargets, setRunTargets] = useState<ScreenId[]>(() => Object.keys(state.screens).slice(0, 1));
+  const [runMinutes, setRunMinutes] = useState(2);
+  const [scheduleDate, setScheduleDate] = useState(() => toDateInputValue(new Date()));
+  const [scheduleTime, setScheduleTime] = useState(() => minutesToTime(Math.min(1430, new Date().getHours() * 60 + new Date().getMinutes() + 10)));
+  const [scheduleTarget, setScheduleTarget] = useState<TargetScreen>(() => state.savedBlips[0]?.target ?? firstDisplayId(state));
+  const selected = draftBlip?.id === selectedId ? draftBlip : state.savedBlips.find((blip) => blip.id === selectedId) ?? state.savedBlips[0];
+  const previewScreen = state.screens[selected?.target === "all" ? firstDisplayId(state) : selected?.target] ?? Object.values(state.screens)[0];
+
+  useEffect(() => {
+    if (!selected && state.savedBlips[0]) setSelectedId(state.savedBlips[0].id);
+  }, [selected, state.savedBlips]);
+
+  const patchBlip = (patch: Partial<LanternState["savedBlips"][number]>) => {
+    if (!selected) return;
+    if (draftBlip?.id === selected.id) {
+      setDraftBlip({ ...draftBlip, ...patch });
+      return;
+    }
+    updateState((current) => ({ ...current, savedBlips: current.savedBlips.map((blip) => blip.id === selected.id ? { ...blip, ...patch } : blip) }));
+  };
+  const createBlip = (kind: "joke" | "quiz" | "celebration") => {
+    const id = `blip-${Date.now()}`;
+    const next: LanternState["savedBlips"][number] = {
+      id, name: kind === "joke" ? "New joke" : kind === "quiz" ? "New quiz" : "New celebration", kind,
+      headline: kind === "joke" ? "Joke break!" : kind === "quiz" ? "QUIZ TIME!" : "YOU DID IT!",
+      prompt: kind === "celebration" ? "A museum explorer completed the challenge!" : "Type the question here…",
+      answer: kind === "celebration" ? undefined : "Type the answer here…", subtext: "",
+      target: firstDisplayId(state), durationMinutes: 2, countdownSeconds: kind === "celebration" ? 0 : 10,
+      showCountdown: kind !== "celebration", ticking: kind === "quiz", startSfx: kind === "celebration" ? "level-up" : "bell",
+      revealSfx: kind === "joke" ? "ba-dum-tss" : "applause", sfxVolume: 70,
+      backgroundColor: kind === "quiz" ? "#28194c" : kind === "celebration" ? "#073b3d" : "#10243f",
+      accentColor: kind === "quiz" ? "#f4c65f" : kind === "celebration" ? "#ffd166" : "#55d7de", motion: "pop"
+    };
+    setDraftBlip(next);
+    setSelectedId(id);
+  };
+  const saveDraftBlip = () => {
+    if (!draftBlip) return;
+    updateState((current) => ({ ...current, savedBlips: [...current.savedBlips, draftBlip] }));
+    setDraftBlip(null);
+  };
+  const cancelDraftBlip = () => {
+    setDraftBlip(null);
+    setSelectedId(state.savedBlips[0]?.id ?? "");
+  };
+  const duplicateBlip = () => {
+    if (!selected) return;
+    const copy = { ...selected, id: `blip-${Date.now()}`, name: `${selected.name} copy` };
+    setDraftBlip(copy);
+    setSelectedId(copy.id);
+  };
+  const deleteBlip = () => {
+    if (!selected) return;
+    if (draftBlip?.id === selected.id) {
+      cancelDraftBlip();
+      return;
+    }
+    setPendingDeleteBlip(selected);
+  };
+  const confirmDeleteBlip = () => {
+    if (!pendingDeleteBlip) return;
+    const remaining = state.savedBlips.filter((blip) => blip.id !== pendingDeleteBlip.id);
+    updateState((current) => ({ ...current, savedBlips: remaining, schedules: current.schedules.filter((entry) => entry.blipId !== pendingDeleteBlip.id) }));
+    setPendingDeleteBlip(null);
+    setSelectedId(remaining[0]?.id ?? "");
+  };
+  const openRun = () => {
+    if (!selected) return;
+    setRunTargets(selected.target === "all" ? Object.keys(state.screens) : [selected.target]);
+    setRunMinutes(selected.durationMinutes);
+    setRunOpen(true);
+  };
+  const runNow = () => {
+    if (!selected || !runTargets.length) return;
+    updateState((current) => ({ ...current, activeBlip: { ...selected, target: runTargets.length === Object.keys(current.screens).length ? "all" : runTargets[0], targets: runTargets, durationMinutes: runMinutes, active: true, startedAt: new Date().toISOString() } }));
+    setRunOpen(false);
+  };
+  const scheduleBlip = () => {
+    if (!selected) return;
+    const id = `schedule-${Date.now()}`;
+    const start = timeToMinutes(scheduleTime);
+    updateState((current) => ({ ...current, schedules: [...current.schedules, {
+      id, name: selected.name, target: scheduleTarget, boardId: current.boardPrograms[0]?.id ?? "", contentType: "blip", blipId: selected.id,
+      days: [new Date(`${scheduleDate}T12:00:00`).getDay()], recurrence: "once", scheduleDate, startTime: scheduleTime,
+      endTime: minutesToTime(Math.min(1439, start + Math.max(1, Math.round(selected.durationMinutes * 60)))), color: selected.accentColor, active: true
+    }] }));
+    setScheduleOpen(false);
+    onOpenSchedule(id);
+  };
+  const upload = async (file: File | undefined, field: "imageUrl" | "startSoundUrl" | "revealSoundUrl") => {
+    if (!file) return;
+    patchBlip({ [field]: await fileToDataUrl(file) });
+  };
+
+  if (!selected) return <section className="blips-empty"><Sparkles size={36} /><h2>Create your first Blip</h2><p>Start with a joke, quiz, or celebration.</p><div><button className="command-button primary" onClick={() => createBlip("joke")}>New joke</button><button className="command-button secondary" onClick={() => createBlip("quiz")}>New quiz</button><button className="command-button secondary" onClick={() => createBlip("celebration")}>New celebration</button></div></section>;
+
+  return <section className="blips-workspace">
+    <aside className="blip-bank">
+      <header><div><p className="eyebrow">Saved bank</p><h2>Blips</h2></div><span title={draftBlip ? "One unsaved draft" : undefined}>{state.savedBlips.length}{draftBlip ? " + draft" : ""}</span></header>
+      <div className="blip-create-row"><button onClick={() => createBlip("joke")}>+ Joke</button><button onClick={() => createBlip("quiz")}>+ Quiz</button><button onClick={() => createBlip("celebration")}>+ Celebration</button></div>
+      <div className="blip-bank-list">{state.savedBlips.map((blip) => <button type="button" key={blip.id} className={blip.id === selected.id ? "selected" : ""} onClick={() => { setDraftBlip(null); setSelectedId(blip.id); }}><i style={{ background: blip.accentColor }} /><span><strong>{blip.name}</strong><small>{blip.kind} · {blip.durationMinutes} min</small></span><Play size={14} onClick={(event) => { event.stopPropagation(); setDraftBlip(null); setSelectedId(blip.id); setRunTargets(blip.target === "all" ? Object.keys(state.screens) : [blip.target]); setRunMinutes(blip.durationMinutes); setRunOpen(true); }} /></button>)}</div>
+    </aside>
+    <main className="blip-editor">
+      <header><div><p className="eyebrow">{draftBlip ? "Unsaved draft" : `${selected.kind} blip`}</p><h2>{selected.name}</h2></div><div>{draftBlip ? <><button className="command-button secondary compact" onClick={cancelDraftBlip}>Cancel</button><button className="command-button primary compact" onClick={saveDraftBlip}>Save Blip</button></> : <><button className="command-button secondary compact" onClick={duplicateBlip}><ClipboardCopy size={14} /> Duplicate</button><button className="icon-button" onClick={deleteBlip} title="Delete Blip"><Trash2 size={16} /></button></>}</div></header>
+      <div className="blip-editor-body">
+        <div className="blip-fields">
+          <div className="two-col"><LabeledInput label="Saved name" value={selected.name} onChange={(name) => patchBlip({ name })} /><LabeledSelect label="Type" value={selected.kind} options={["joke", "quiz", "celebration"]} optionLabels={{ joke: "Joke", quiz: "Quiz time", celebration: "Celebration" }} onChange={(kind) => patchBlip({ kind: kind as typeof selected.kind })} /></div>
+          <LabeledInput label="Headline" value={selected.headline} onChange={(headline) => patchBlip({ headline })} />
+          <label className="field"><span>{selected.kind === "celebration" ? "Message" : "Question / setup"}</span><textarea value={selected.prompt} onChange={(event) => patchBlip({ prompt: event.target.value })} /></label>
+          {selected.kind !== "celebration" && <label className="field"><span>Answer / punchline</span><textarea value={selected.answer ?? ""} onChange={(event) => patchBlip({ answer: event.target.value })} /></label>}
+          <LabeledInput label="Subtext (optional)" value={selected.subtext ?? ""} onChange={(subtext) => patchBlip({ subtext })} />
+          <div className="two-col"><LabeledInput label="Countdown seconds" type="number" value={String(selected.countdownSeconds)} onChange={(value) => patchBlip({ countdownSeconds: Math.max(0, Number(value) || 0) })} /><LabeledInput label="Default run minutes" type="number" value={String(selected.durationMinutes)} onChange={(value) => patchBlip({ durationMinutes: Math.max(1, Number(value) || 1) })} /></div>
+          <div className="blip-switches"><label><input type="checkbox" checked={selected.showCountdown} onChange={(event) => patchBlip({ showCountdown: event.target.checked })} /> Show countdown</label><label><input type="checkbox" checked={selected.ticking} onChange={(event) => patchBlip({ ticking: event.target.checked })} /> Ticking countdown</label></div>
+          <div className="two-col"><LabeledSelect label="Opening SFX" value={selected.startSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(startSfx) => patchBlip({ startSfx: startSfx as typeof selected.startSfx })} /><LabeledSelect label="Reveal SFX" value={selected.revealSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(revealSfx) => patchBlip({ revealSfx: revealSfx as typeof selected.revealSfx })} /></div>
+          <div className="blip-upload-row"><label className="command-button secondary compact"><Upload size={14} /> Custom opening sound<input type="file" accept="audio/*" onChange={(event) => void upload(event.target.files?.[0], "startSoundUrl")} /></label><label className="command-button secondary compact"><Upload size={14} /> Custom reveal sound<input type="file" accept="audio/*" onChange={(event) => void upload(event.target.files?.[0], "revealSoundUrl")} /></label></div>
+          <div className="two-col"><label className="field"><span>Background</span><input type="color" value={selected.backgroundColor} onChange={(event) => patchBlip({ backgroundColor: event.target.value })} /></label><label className="field"><span>Accent</span><input type="color" value={selected.accentColor} onChange={(event) => patchBlip({ accentColor: event.target.value })} /></label></div>
+          <div className="two-col"><LabeledSelect label="Motion" value={selected.motion} options={["slide", "pop", "gentle"]} optionLabels={{ slide: "Slide in/out", pop: "Playful pop", gentle: "Gentle fade" }} onChange={(motion) => patchBlip({ motion: motion as typeof selected.motion })} /><label className="image-upload command-button secondary compact"><ImagePlus size={14} /><span>{selected.imageUrl ? "Replace image" : "Add celebration image"}</span><input type="file" accept="image/*" onChange={(event) => void upload(event.target.files?.[0], "imageUrl")} /></label></div>
+        </div>
+        <div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} startedAt={new Date(Date.now() - Math.max(0, selected.countdownSeconds - 3) * 1000).toISOString()} /></div><p>Preview · answer reveals after the countdown</p></div>
+      </div>
+      <footer>{draftBlip ? <p className="field-note blip-draft-note">Save this draft before scheduling or running it.</p> : <><button className="command-button secondary" onClick={() => { setScheduleTarget(selected.target); setScheduleOpen(true); }}><CalendarDays size={16} /> Schedule</button>{state.activeBlip.active && state.activeBlip.id === selected.id && <button className="command-button secondary" onClick={() => updateState((current) => ({ ...current, activeBlip: { ...current.activeBlip, active: false } }))}><Square size={15} /> Stop</button>}<button className="command-button primary" onClick={openRun}><Play size={16} /> Run now</button></>}</footer>
+    </main>
+    {runOpen && createPortal(<div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setRunOpen(false)}><section className="editor-modal blip-run-modal"><div className="editor-modal-head"><div><p className="eyebrow">Go live now</p><h2>Run “{selected.name}”</h2></div><button className="icon-button" onClick={() => setRunOpen(false)}><X size={17} /></button></div><div className="blip-target-list">{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={runTargets.includes(screen.id)} onChange={(event) => setRunTargets((current) => event.target.checked ? [...new Set([...current, screen.id])] : current.filter((id) => id !== screen.id))} /><span><strong>{screen.label}</strong><small>{screen.orientation} · {screen.resolution}</small></span></label>)}</div><LabeledInput label="How many minutes?" type="number" value={String(runMinutes)} onChange={(value) => setRunMinutes(Math.max(1, Number(value) || 1))} /><p className="field-note">Runs immediately without adding anything to the schedule. Broadcasts will cover it if both are live.</p><div className="editor-modal-actions"><button className="command-button secondary" onClick={() => setRunOpen(false)}>Cancel</button><button className="command-button primary" disabled={!runTargets.length} onClick={runNow}><Play size={15} /> Run Blip</button></div></section></div>, document.body)}
+    {scheduleOpen && createPortal(<div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setScheduleOpen(false)}><section className="editor-modal blip-run-modal"><div className="editor-modal-head"><div><p className="eyebrow">Add to calendar</p><h2>Schedule “{selected.name}”</h2></div><button className="icon-button" title="Cancel scheduling" onClick={() => setScheduleOpen(false)}><X size={17} /></button></div><div className="two-col"><label className="field"><span>Date</span><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></label><label className="field"><span>Start time</span><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label></div><LabeledSelect label="Display" value={scheduleTarget} options={["all", ...Object.keys(state.screens)]} optionLabels={{ all: "All Displays", ...Object.fromEntries(Object.values(state.screens).map((screen) => [screen.id, `${screen.label} (${screen.orientation})`])) }} onChange={(target) => setScheduleTarget(target as TargetScreen)} /><p className="field-note">The calendar event uses this Blip’s {selected.durationMinutes}-minute default duration. Nothing is added until you confirm.</p><div className="editor-modal-actions"><button className="command-button secondary" onClick={() => setScheduleOpen(false)}>Cancel</button><button className="command-button primary" onClick={scheduleBlip}><CalendarDays size={15} /> Add to schedule</button></div></section></div>, document.body)}
+    {pendingDeleteBlip && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDeleteBlip(null); }}><section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-blip-title" aria-describedby="delete-blip-description"><div className="destructive-confirm-icon"><Trash2 size={22} /></div><div><p className="eyebrow">Delete saved Blip</p><h2 id="delete-blip-title">Delete “{pendingDeleteBlip.name}”?</h2><p id="delete-blip-description">This also removes its scheduled calendar occurrences. This action cannot be undone.</p></div><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setPendingDeleteBlip(null)}>Cancel</button><button type="button" className="command-button danger" onClick={confirmDeleteBlip}><Trash2 size={15} /> Delete Blip</button></div></section></div>, document.body)}
+  </section>;
+}
+
 function LivePreviewPanel({
   state,
+  activeUserId,
   patchLive,
+  updateState,
   startLive,
   startLiveStream,
   stopLive
 }: {
   state: LanternState;
+  activeUserId?: string;
   patchLive: (patch: Partial<LanternState["live"]>) => void;
+  updateState: (updater: (current: LanternState) => LanternState) => void;
   startLive: () => void;
   startLiveStream: (stream: MediaStream, detail: string) => Promise<void>;
   stopLive: () => void;
@@ -3978,29 +4873,82 @@ function LivePreviewPanel({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [directMode, setDirectMode] = useState<"frame" | "crop">("frame");
+  const [boardViewMode, setBoardViewMode] = useState<"2d" | "3d">("2d");
+  const [removalMethod, setRemovalMethod] = useState<BackgroundRemovalMethod>(() => resolveBackgroundRemoval(state.live).method);
+  const [chromaSamplerActive, setChromaSamplerActive] = useState(false);
   const [previewBoardId, setPreviewBoardId] = useState("assigned");
   const [popoutMode, setPopoutMode] = useState<"broadcast" | "selected" | "all">("selected");
-  const [recordings, setRecordings] = useState<LiveRecording[]>([]);
-  const [recording, setRecording] = useState(false);
+  const [recordings, setRecordings] = useState<RecordingLibraryRecord[]>([]);
+  const [recordingMenuOpen, setRecordingMenuOpen] = useState(false);
+  const [trackingStatus, setTrackingStatus] = useState<TrackingRuntimeStatus>();
+  const [recordingLibraryLoading, setRecordingLibraryLoading] = useState(true);
+  const [recordingLibraryError, setRecordingLibraryError] = useState<string | null>(null);
+  const [recordingPhase, setRecordingPhase] = useState<"idle" | "starting" | "recording" | "saving">("idle");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [sendingRecordingId, setSendingRecordingId] = useState<string | null>(null);
+  const recordingActive = recordingPhase === "starting" || recordingPhase === "recording";
   const previewStreamRef = useRef<MediaStream | null>(null);
+  const previewLeaseRef = useRef<MediaDeviceLease | null>(null);
   const previewWindowRef = useRef<Window | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
   const recordingStartedRef = useRef(0);
-  const recordingsRef = useRef<LiveRecording[]>([]);
+  const recordingClickAtRef = useRef(0);
+  const recorderStartedAtRef = useRef(0);
+  const firstRecordingDataAtRef = useRef<number | undefined>(undefined);
+  const recordingInputRef = useRef<MediaStream | null>(null);
+  const demoRecordingCaptureRef = useRef<DemoRecordingCapture | null>(null);
+  const recordingContextRef = useRef<{ source: LanternState["live"]["source"]; target: TargetScreen; targetLabel: string; screenIds: string[] } | null>(null);
   const recordingPlaybackRef = useRef<HTMLVideoElement | null>(null);
+  const recordingPlaybackUrlRef = useRef<string | null>(null);
+  const sourceRecordingPlaybackRef = useRef<HTMLVideoElement | null>(null);
+  const sourceRecordingUrlRef = useRef<string | null>(null);
+  const recordingMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { previewStreamRef.current = previewStream; }, [previewStream]);
+  useEffect(() => {
+    const userId = activeUserId ?? state.users[0]?.id ?? "local-user";
+    const profile = resolveCalibrationProfile(state.effectStudio, userId, state.live.videoDeviceId, state.live.effects.calibrationProfileId);
+    if (state.live.effects.calibrationProfileId === profile?.id) return;
+    patchLive({ effects: { ...state.live.effects, calibrationProfileId: profile?.id } });
+  }, [activeUserId, state.effectStudio, state.live.effects.calibrationProfileId, state.live.videoDeviceId, state.users]);
   useEffect(() => { previewWindowRef.current = previewWindow; }, [previewWindow]);
-  useEffect(() => { recordingsRef.current = recordings; }, [recordings]);
 
   useEffect(() => {
-    if (!recording) return;
+    if (!recordingActive) return;
     const timer = window.setInterval(() => setRecordingSeconds(Math.max(0, Math.floor((Date.now() - recordingStartedRef.current) / 1000))), 250);
     return () => window.clearInterval(timer);
-  }, [recording]);
+  }, [recordingActive]);
+
+  useEffect(() => {
+    if (!recordingMenuOpen) return;
+    const closeMenu = (event: PointerEvent) => {
+      if (!recordingMenuRef.current?.contains(event.target as Node)) setRecordingMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRecordingMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [recordingMenuOpen]);
+
+  useEffect(() => {
+    let mounted = true;
+    void recordingLibraryStore.list().then((items) => {
+      if (!mounted) return;
+      setRecordings(items);
+      setRecordingLibraryLoading(false);
+    }).catch(() => {
+      if (!mounted) return;
+      setRecordingLibraryError("Saved recordings could not be loaded. New captures will use the in-memory fallback.");
+      setRecordingLibraryLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     const refreshDevices = () => void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => setDevices([]));
@@ -4008,11 +4956,18 @@ function LivePreviewPanel({
     navigator.mediaDevices?.addEventListener("devicechange", refreshDevices);
     return () => {
       navigator.mediaDevices?.removeEventListener("devicechange", refreshDevices);
-      previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+      const previewLease = previewLeaseRef.current;
+      previewLease?.release();
+      previewLeaseRef.current = null;
+      if (!previewLease) previewStreamRef.current?.getTracks().forEach((track) => track.stop());
       if (previewWindowRef.current && !previewWindowRef.current.closed) previewWindowRef.current.close();
       recorderRef.current?.state === "recording" && recorderRef.current.stop();
-      recordingsRef.current.forEach((item) => URL.revokeObjectURL(item.url));
+      recordingInputRef.current?.getTracks().forEach((track) => track.stop());
+      demoRecordingCaptureRef.current?.stop();
       recordingPlaybackRef.current?.pause();
+      if (recordingPlaybackUrlRef.current) URL.revokeObjectURL(recordingPlaybackUrlRef.current);
+      sourceRecordingPlaybackRef.current?.pause();
+      if (sourceRecordingUrlRef.current) URL.revokeObjectURL(sourceRecordingUrlRef.current);
     };
   }, []);
 
@@ -4032,53 +4987,104 @@ function LivePreviewPanel({
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
   const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
   const selectedPreviewBoardId = previewBoardId === "assigned" ? undefined : previewBoardId;
-  const backgroundRemovalMode = state.live.chromaKey.enabled
-    ? "chroma"
-    : state.live.effects.background === "original" ? "off" : "ai";
-
-  const setBackgroundRemovalMode = (mode: string) => {
-    patchLive({
-      chromaKey: { ...state.live.chromaKey, enabled: mode === "chroma" },
-      effects: {
-        ...state.live.effects,
-        background: mode === "ai"
-          ? (state.live.effects.background === "original" ? "remove" : state.live.effects.background)
-          : "original"
-      }
-    });
+  const selectedRecordingId = recordings.some((recording) => recording.id === state.live.recordingId)
+    ? state.live.recordingId!
+    : recordings[0]?.id ?? "";
+  const selectedSourceRecording = recordings.find((recording) => recording.id === selectedRecordingId);
+  const recordingSourceLabels = Object.fromEntries(recordings.map((recording) => [
+    recording.id,
+    `${recording.title} · ${formatCountdown(recording.durationSeconds)}`
+  ]));
+  const liveComposition = normalizeBroadcastComposition(state.live);
+  const sourceCropEdges = normalizeCropEdges(liveComposition.frame.cropEdges);
+  const backgroundRemoval = resolveBackgroundRemoval(state.live);
+  const selectedRemovalMethod = backgroundRemoval.enabled ? backgroundRemoval.method : removalMethod;
+  const selectedChromaPreset = CHROMA_KEY_PRESETS.find((preset) => preset.color.toLowerCase() === state.live.chromaKey.color.toLowerCase())?.id ?? "custom";
+  const setBackgroundRemovalEnabled = (enabled: boolean) => {
+    if (!enabled) {
+      setRemovalMethod(backgroundRemoval.method);
+      setChromaSamplerActive(false);
+    }
+    patchLive(createBackgroundRemovalPatch(state.live, enabled, selectedRemovalMethod));
+  };
+  const selectBackgroundRemovalMethod = (method: BackgroundRemovalMethod) => {
+    setRemovalMethod(method);
+    setChromaSamplerActive(false);
+    if (backgroundRemoval.enabled) patchLive(createBackgroundRemovalPatch(state.live, true, method));
   };
 
-  const stopPreviewStream = () => {
-    previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+  const stopRecordingSourcePlayback = () => {
+    sourceRecordingPlaybackRef.current?.pause();
+    sourceRecordingPlaybackRef.current = null;
+    if (sourceRecordingUrlRef.current) URL.revokeObjectURL(sourceRecordingUrlRef.current);
+    sourceRecordingUrlRef.current = null;
+  };
+
+  const stopPreviewStream = (force = false) => {
+    if (recordingActive && !force) {
+      setPreviewError("Stop the recording before disconnecting or changing its source.");
+      return;
+    }
+    const lease = previewLeaseRef.current;
+    previewLeaseRef.current = null;
+    if (lease) lease.release();
+    else previewStreamRef.current?.getTracks().forEach((track) => track.stop());
+    stopRecordingSourcePlayback();
     previewStreamRef.current = null;
     setPreviewStream(null);
   };
 
-  const startPreview = async (source = state.live.source) => {
-    previewStream?.getTracks().forEach((track) => track.stop());
+  const startPreview = async (source = state.live.source, requestedRecordingId = state.live.recordingId) => {
+    if (recordingActive) {
+      setPreviewError("Stop the recording before changing its video source.");
+      return false;
+    }
     setPreviewError(null);
     if (source === "demo") {
-      setPreviewStream(null);
+      stopPreviewStream(true);
       return true;
     }
-    if (!window.isSecureContext || (!navigator.mediaDevices?.getUserMedia && !navigator.mediaDevices?.getDisplayMedia)) {
+    if (source !== "recording" && (!window.isSecureContext || (!navigator.mediaDevices?.getUserMedia && !navigator.mediaDevices?.getDisplayMedia))) {
       setPreviewStream(null);
       setPreviewError("Camera and screen capture require a secure browser context. Open this app from its local app address.");
       return false;
     }
     setPreviewBusy(true);
+    let pendingRecordingPlayback: HTMLVideoElement | null = null;
+    let pendingRecordingUrl: string | null = null;
     try {
       let stream: MediaStream;
+      let nextLease: MediaDeviceLease | null = null;
       if (source === "screen") {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 60 } }, audio: true });
+      } else if (source === "recording") {
+        const recordingId = requestedRecordingId || selectedRecordingId;
+        const recording = recordings.find((item) => item.id === recordingId);
+        if (!recording) throw new Error(recordingLibraryLoading ? "Saved recordings are still loading." : "No saved recording is available. Make a recording first, then select it here.");
+        const sourcePlayback = await createRecordingSourcePlayback(recording);
+        pendingRecordingUrl = sourcePlayback.objectUrl;
+        pendingRecordingPlayback = sourcePlayback.playback;
+        stream = sourcePlayback.stream;
       } else {
-        const video = { deviceId: state.live.videoDeviceId ? { exact: state.live.videoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } };
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video, audio: state.live.audioDeviceId ? { deviceId: { exact: state.live.audioDeviceId } } : true });
-        } catch (error) {
-          if (!(error instanceof DOMException) || !["NotFoundError", "NotReadableError", "OverconstrainedError"].includes(error.name)) throw error;
-          stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
-          setPreviewError("Camera connected without microphone; check the microphone selection if audio is needed.");
+        nextLease = await mediaDeviceManager.acquire("broadcast:preview", {
+          video: {
+            deviceId: state.live.videoDeviceId,
+            constraints: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+            fallbackToDefault: true,
+            required: true
+          },
+          audio: {
+            deviceId: state.live.audioDeviceId,
+            constraints: { echoCancellation: true, noiseSuppression: true },
+            fallbackToDefault: true,
+            required: false
+          }
+        });
+        stream = nextLease.stream;
+        if (nextLease.issues.some((issue) => issue.kind === "audio")) {
+          setPreviewError("Camera connected without microphone; choose another microphone if live audio is needed.");
+        } else if (nextLease.fallbacks.length) {
+          setPreviewError("A saved device was unavailable, so Broadcast connected to the browser default. Review the source selections before going live.");
         }
       }
       // A camera must remain usable when the optional microphone is missing or denied.
@@ -4088,17 +5094,39 @@ function LivePreviewPanel({
       }
       stream.getVideoTracks().forEach((track) => track.addEventListener("ended", () => {
         setPreviewStream(null);
-        setPreviewError(source === "screen" ? "Screen sharing ended. Choose a window again to resume." : "The camera stopped. Reconnect it or choose another camera.");
+        setPreviewError(source === "screen" ? "Screen sharing ended. Choose a window again to resume." : source === "recording" ? "Recording playback ended. Select it again to resume." : "The camera stopped. Reconnect it or choose another camera.");
       }, { once: true }));
+      const previousLease = previewLeaseRef.current;
+      const previousStream = previewStreamRef.current;
+      if (source === "screen" || source === "recording") {
+        previousLease?.release();
+        previewLeaseRef.current = null;
+      } else {
+        previewLeaseRef.current = nextLease;
+      }
+      if (!previousLease && previousStream && previousStream !== stream) previousStream.getTracks().forEach((track) => track.stop());
+      stopRecordingSourcePlayback();
+      if (pendingRecordingPlayback && pendingRecordingUrl) {
+        sourceRecordingPlaybackRef.current = pendingRecordingPlayback;
+        sourceRecordingUrlRef.current = pendingRecordingUrl;
+        pendingRecordingPlayback = null;
+        pendingRecordingUrl = null;
+      }
       previewStreamRef.current = stream;
       setPreviewStream(stream);
-      const nextDevices = await navigator.mediaDevices.enumerateDevices();
-      setDevices(nextDevices);
+      if (source !== "recording") {
+        const nextDevices = await navigator.mediaDevices.enumerateDevices();
+        setDevices(nextDevices);
+      }
       return true;
     } catch (error) {
-      setPreviewStream(null);
+      pendingRecordingPlayback?.pause();
+      if (pendingRecordingUrl) URL.revokeObjectURL(pendingRecordingUrl);
       const name = error instanceof DOMException ? error.name : "";
-      if (name === "NotAllowedError" || name === "SecurityError") {
+      if (source === "recording") {
+        stopPreviewStream(true);
+        setPreviewError(error instanceof Error ? error.message : "The selected recording could not be opened.");
+      } else if (name === "NotAllowedError" || name === "SecurityError") {
         setPreviewError(source === "screen"
           ? "Screen sharing was cancelled or blocked. Click Open preview and choose Screen or window share to try again."
           : "Webcam access was blocked. Allow Camera and Microphone for 127.0.0.1 in the browser address bar, then click Try camera again.");
@@ -4107,7 +5135,7 @@ function LivePreviewPanel({
       } else if (name === "NotReadableError" || name === "TrackStartError") {
         setPreviewError("The selected camera is already in use by another app. Close that app or choose a different camera.");
       } else {
-        setPreviewError(error instanceof Error ? error.message : "The video source could not be opened.");
+        setPreviewError(source === "camera" ? formatMediaDeviceError(error, { kind: "video", deviceId: state.live.videoDeviceId }) : error instanceof Error ? error.message : "The video source could not be opened.");
       }
       return false;
     } finally {
@@ -4144,14 +5172,18 @@ function LivePreviewPanel({
 
   const selectSource = (source: LanternState["live"]["source"], openWindow = false) => {
     setSourcePromptOpen(false);
-    patchLive({ source, usingCamera: source === "camera" });
+    if (recordingActive) {
+      setPreviewError("Stop the recording before changing its source.");
+      return;
+    }
+    patchLive({ source, usingCamera: source === "camera", recordingId: source === "recording" ? selectedRecordingId || undefined : state.live.recordingId });
     if (openWindow) openPreviewWindow();
     if (source === "demo") {
-      stopPreviewStream();
+      stopPreviewStream(true);
       setPreviewError(null);
       return;
     }
-    void startPreview(source);
+    void startPreview(source, source === "recording" ? selectedRecordingId : undefined);
   };
 
   const handleOpenPreview = () => {
@@ -4164,69 +5196,175 @@ function LivePreviewPanel({
   };
 
   const startRecording = () => {
-    if (!previewStream) {
-      setPreviewError("Connect a camera or shared window before recording.");
-      setLiveTab("setup");
-      return;
-    }
+    if (recordingPhase !== "idle") return;
     if (typeof MediaRecorder === "undefined") {
       setPreviewError("This browser does not support local video recording.");
       return;
     }
+    let recordingInput: MediaStream;
+    if (previewStreamRef.current) {
+      recordingInput = previewStreamRef.current.clone();
+    } else if (state.live.source === "demo") {
+      const capture = createDemoRecordingCapture(state.live.title, state.live.lowerThird);
+      if (!capture) {
+        setPreviewError("This browser cannot record the generated test feed. Connect a camera or shared window instead.");
+        return;
+      }
+      demoRecordingCaptureRef.current = capture;
+      recordingInput = capture.stream;
+    } else {
+      setPreviewError(state.live.source === "recording" ? "Select and play a saved recording before capturing it again." : "Connect the selected camera or shared window before recording.");
+      setLiveTab("setup");
+      return;
+    }
     const preferredTypes = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
     const mimeType = preferredTypes.find((type) => MediaRecorder.isTypeSupported(type));
-    const recorder = new MediaRecorder(previewStream, mimeType ? { mimeType } : undefined);
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(recordingInput, mimeType ? { mimeType } : undefined);
+    } catch (error) {
+      recordingInput.getTracks().forEach((track) => track.stop());
+      demoRecordingCaptureRef.current?.stop();
+      demoRecordingCaptureRef.current = null;
+      setPreviewError(error instanceof Error ? error.message : "Recording could not be started in this browser.");
+      return;
+    }
+    recordingInputRef.current = recordingInput;
+    recordingContextRef.current = {
+      source: state.live.source,
+      target: state.live.target,
+      targetLabel: targetOptionLabels(state)[state.live.target] ?? labelForTarget(state.live.target),
+      screenIds: state.live.target === "all" ? Object.keys(state.screens) : [state.live.target]
+    };
     recordingChunksRef.current = [];
-    recorder.addEventListener("dataavailable", (event) => {
-      if (event.data.size) recordingChunksRef.current.push(event.data);
-    });
-    recorder.addEventListener("stop", () => {
-      const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || "video/webm" });
-      if (!blob.size) return;
-      const createdAt = new Date().toISOString();
-      const next: LiveRecording = {
-        id: `recording-${Date.now()}`,
-        name: `Lantern live ${new Date().toLocaleString().replace(/[/:]/g, "-")}.webm`,
-        url: URL.createObjectURL(blob),
-        blob,
-        durationSeconds: Math.max(1, Math.round((Date.now() - recordingStartedRef.current) / 1000)),
-        createdAt
-      };
-      setRecordings((current) => [next, ...current]);
-      setRecording(false);
-      setRecordingSeconds(0);
-    }, { once: true });
-    recorderRef.current = recorder;
+    recordingClickAtRef.current = performance.now();
+    recorderStartedAtRef.current = 0;
+    firstRecordingDataAtRef.current = undefined;
     recordingStartedRef.current = Date.now();
     setRecordingSeconds(0);
-    setRecording(true);
-    recorder.start(500);
+    setRecordingPhase("starting");
+    setPreviewError(null);
+    recorder.addEventListener("start", () => {
+      recorderStartedAtRef.current = performance.now();
+      recordingStartedRef.current = Date.now();
+      setRecordingPhase("recording");
+    }, { once: true });
+    recorder.addEventListener("dataavailable", (event) => {
+      if (!event.data.size) return;
+      if (firstRecordingDataAtRef.current === undefined) firstRecordingDataAtRef.current = performance.now();
+      recordingChunksRef.current.push(event.data);
+    });
+    recorder.addEventListener("stop", () => {
+      setRecordingPhase("saving");
+      recordingInputRef.current?.getTracks().forEach((track) => track.stop());
+      recordingInputRef.current = null;
+      demoRecordingCaptureRef.current?.stop();
+      demoRecordingCaptureRef.current = null;
+      const blob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || "video/webm" });
+      if (!blob.size) {
+        recordingContextRef.current = null;
+        setPreviewError("The recorder stopped without producing video data. Try a shorter source path or another browser.");
+        setRecordingPhase("idle");
+        setRecordingSeconds(0);
+        return;
+      }
+      const createdAt = new Date();
+      const recordingContext = recordingContextRef.current ?? {
+        source: state.live.source,
+        target: state.live.target,
+        targetLabel: targetOptionLabels(state)[state.live.target] ?? labelForTarget(state.live.target),
+        screenIds: state.live.target === "all" ? Object.keys(state.screens) : [state.live.target]
+      };
+      void captureRecordingThumbnail(blob).then((thumbnailDataUrl) => recordingLibraryStore.save({
+        id: `recording-${createdAt.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
+        title: normalizeRecordingTitle(`Lantern Live ${createdAt.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`),
+        createdAt: createdAt.toISOString(),
+        durationSeconds: Math.max(1, Math.round((Date.now() - recordingStartedRef.current) / 1000)),
+        mimeType: blob.type || "video/webm",
+        sizeBytes: blob.size,
+        source: recordingContext.source,
+        sourceLabel: recordingContext.source === "demo" ? "Generated test feed" : recordingContext.source === "screen" ? "Shared screen/window" : recordingContext.source === "recording" ? "Saved recording" : "Camera",
+        target: recordingContext.target,
+        targetLabel: recordingContext.targetLabel,
+        screenIds: recordingContext.screenIds,
+        thumbnailDataUrl,
+        timings: recordingTimingMetrics(
+          recordingClickAtRef.current,
+          recorderStartedAtRef.current || performance.now(),
+          firstRecordingDataAtRef.current
+        ),
+        blob
+      })).then((saved) => {
+        setRecordings((current) => sortRecordingLibrary([saved, ...current.filter((item) => item.id !== saved.id)]));
+        setRecordingLibraryError(saved.storage === "memory" ? "IndexedDB was unavailable. This recording is available for this session and can still be downloaded." : null);
+      }).catch(() => {
+        setRecordingLibraryError("The recording finished, but the browser could not save it to the local library.");
+      }).finally(() => {
+        recordingContextRef.current = null;
+        setRecordingPhase("idle");
+        setRecordingSeconds(0);
+      });
+    }, { once: true });
+    recorder.addEventListener("error", () => {
+      recordingInputRef.current?.getTracks().forEach((track) => track.stop());
+      recordingInputRef.current = null;
+      demoRecordingCaptureRef.current?.stop();
+      demoRecordingCaptureRef.current = null;
+      recordingContextRef.current = null;
+      setRecordingPhase("idle");
+      setPreviewError("The browser recorder encountered an error. The live preview remains connected.");
+    }, { once: true });
+    recorderRef.current = recorder;
+    try {
+      recorder.start(250);
+    } catch (error) {
+      recordingInput.getTracks().forEach((track) => track.stop());
+      demoRecordingCaptureRef.current?.stop();
+      demoRecordingCaptureRef.current = null;
+      recordingInputRef.current = null;
+      recordingContextRef.current = null;
+      setRecordingPhase("idle");
+      setPreviewError(error instanceof Error ? error.message : "Recording could not be started.");
+    }
   };
 
   const stopRecording = () => {
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
   };
 
-  const downloadRecording = (item: LiveRecording) => {
+  const downloadRecording = (item: RecordingLibraryRecord) => {
+    const url = URL.createObjectURL(item.blob);
     const anchor = document.createElement("a");
-    anchor.href = item.url;
-    anchor.download = item.name;
+    anchor.href = url;
+    anchor.download = `${normalizeRecordingTitle(item.title).replace(/[\\/:*?"<>|]/g, "-")}.webm`;
     anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
-  const deleteRecording = (id: string) => {
-    setRecordings((current) => {
-      const item = current.find((recordingItem) => recordingItem.id === id);
-      if (item) URL.revokeObjectURL(item.url);
-      return current.filter((recordingItem) => recordingItem.id !== id);
-    });
+  const renameRecording = async (item: RecordingLibraryRecord, title: string) => {
+    const updated = await recordingLibraryStore.rename(item.id, title);
+    if (!updated) return;
+    setRecordings((current) => sortRecordingLibrary(current.map((recordingItem) => recordingItem.id === updated.id ? updated : recordingItem)));
   };
 
-  const sendRecording = async (item: LiveRecording) => {
+  const deleteRecording = async (item: RecordingLibraryRecord) => {
+    await recordingLibraryStore.delete(item.id);
+    const remaining = recordings.filter((recordingItem) => recordingItem.id !== item.id);
+    setRecordings(remaining);
+    if (state.live.recordingId === item.id) {
+      if (state.live.source === "recording") stopPreviewStream(true);
+      patchLive({ recordingId: remaining[0]?.id });
+    }
+  };
+
+  const sendRecording = async (item: RecordingLibraryRecord) => {
     try {
       recordingPlaybackRef.current?.pause();
+      if (recordingPlaybackUrlRef.current) URL.revokeObjectURL(recordingPlaybackUrlRef.current);
+      const url = URL.createObjectURL(item.blob);
+      recordingPlaybackUrlRef.current = url;
       const playback = document.createElement("video");
-      playback.src = item.url;
+      playback.src = url;
       playback.loop = true;
       playback.playsInline = true;
       playback.preload = "auto";
@@ -4235,7 +5373,7 @@ function LivePreviewPanel({
       const stream = (playback as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
       if (!stream) throw new Error("Recorded-video output is not supported by this browser.");
       setSendingRecordingId(item.id);
-      await startLiveStream(stream, `Playing recording: ${item.name}`);
+      await startLiveStream(stream, `Playing recording: ${item.title}`);
     } catch (error) {
       setSendingRecordingId(null);
       setPreviewError(error instanceof Error ? error.message : "The recording could not be sent to the displays.");
@@ -4245,13 +5383,20 @@ function LivePreviewPanel({
   const endLivePresentation = () => {
     recordingPlaybackRef.current?.pause();
     recordingPlaybackRef.current = null;
+    if (recordingPlaybackUrlRef.current) URL.revokeObjectURL(recordingPlaybackUrlRef.current);
+    recordingPlaybackUrlRef.current = null;
     setSendingRecordingId(null);
     stopLive();
   };
 
   const beginLivePresentation = () => {
     if (previewStream && state.live.source !== "demo") {
-      void startLiveStream(previewStream.clone(), state.live.source === "screen" ? "Using approved screen share." : "Using approved camera preview.");
+      void startLiveStream(previewStream.clone(), state.live.source === "screen" ? "Using approved screen share." : state.live.source === "recording" ? `Playing saved recording: ${selectedSourceRecording?.title ?? "Recording"}.` : "Using approved camera preview.");
+      return;
+    }
+    if (state.live.source === "recording") {
+      setPreviewError("Select and play a saved recording before going live.");
+      setLiveTab("setup");
       return;
     }
     void startLive();
@@ -4282,7 +5427,7 @@ function LivePreviewPanel({
               onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })}
             />)}
           </div>
-          <footer className="live-preview-popout-footer"><span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
+          <footer className="live-preview-popout-footer"><span>{liveSourceLabel(state.live.source)}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
         </div>,
         previewWindow.document.getElementById("lantern-live-preview-root")!
       )
@@ -4304,10 +5449,22 @@ function LivePreviewPanel({
       <div className="live-studio-workspace">
       <section className="live-program-monitor" aria-label="Broadcast preview">
         <div className="live-program-monitor-head">
-          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>{state.live.active ? "Program output" : "Preview"}</strong><label className="monitor-display-select"><span className="sr-only">Preview display</span><select aria-label="Preview display" value={state.live.target} onChange={(event) => patchLive({ target: event.target.value as TargetScreen })}>{targetOptions(state).map((option) => <option key={option} value={option}>{targetOptionLabels(state)[option]}</option>)}</select></label></div>
-          <span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span>
+          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>{state.live.active ? "Program output" : "Preview"}</strong><label className="monitor-display-select"><span className="sr-only">Preview display</span><select aria-label="Preview display" value={state.live.target} disabled={recordingActive} title={recordingActive ? "Stop recording before changing the selected display." : undefined} onChange={(event) => patchLive({ target: event.target.value as TargetScreen })}>{targetOptions(state).map((option) => <option key={option} value={option}>{targetOptionLabels(state)[option]}</option>)}</select></label></div>
+          <div className="live-program-monitor-tools">
+            <span className="monitor-source-label">{liveSourceLabel(state.live.source)}</span>
+            <div className="preview-view-mode" role="group" aria-label="Board preview dimension"><button type="button" className={boardViewMode === "2d" ? "active" : ""} aria-pressed={boardViewMode === "2d"} onClick={() => setBoardViewMode("2d")}><Lock size={12} /> 2D</button><button type="button" className={boardViewMode === "3d" ? "active" : ""} aria-pressed={boardViewMode === "3d"} onClick={() => setBoardViewMode("3d")}><Rotate3d size={12} /> 3D</button></div>
+            <div className="recording-control-cluster" ref={recordingMenuRef}>
+              <button type="button" className={recordingActive ? "monitor-record-button recording" : "monitor-record-button"} disabled={recordingPhase === "starting" || recordingPhase === "saving"} onClick={recordingActive ? stopRecording : startRecording}>{recordingActive ? <Square size={12} /> : <Circle size={12} />}<span>{recordingPhase === "starting" ? "Starting…" : recordingPhase === "saving" ? "Saving…" : recordingActive ? `Stop ${formatCountdown(recordingSeconds)}` : "Record"}</span></button>
+              <button type="button" className={recordingMenuOpen ? "monitor-library-button active" : "monitor-library-button"} aria-haspopup="dialog" aria-expanded={recordingMenuOpen} title="Open saved recording library" onClick={() => setRecordingMenuOpen((open) => !open)}><Video size={12} /><span>{recordings.length}</span><ChevronDown size={11} /></button>
+              {recordingMenuOpen && <div className="recording-library-popover" role="dialog" aria-label="Recording controls and saved files">
+                <div className="recording-popover-status"><strong>{recordingActive ? <><i className="recording-live-dot" /> Recording in progress</> : recordingPhase === "saving" ? "Finalizing recording" : "Local recordings"}</strong><small>{recordingActive ? "Preview and tracking stay live; source controls are locked." : "Hover a filename to preview its thumbnail."}</small></div>
+                <p className="recording-safety-note">Captures use the approved source stream. Editor guides are excluded unless they are inside a shared-window source.</p>
+                <RecordingLibrary compact recordings={recordings} loading={recordingLibraryLoading} error={recordingLibraryError} sendingId={sendingRecordingId} onSend={(recordingItem) => void sendRecording(recordingItem)} onDownload={downloadRecording} onRename={(recordingItem, title) => void renameRecording(recordingItem, title)} onDelete={(recordingItem) => void deleteRecording(recordingItem)} />
+              </div>}
+            </div>
+          </div>
         </div>
-        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} />)}</div>
+        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen, index) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} boardViewMode={boardViewMode} onTrackingStatus={index === 0 ? setTrackingStatus : undefined} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} />)}</div>
       </section>
       <aside className="live-inspector" aria-label="Broadcast controls">
       <EditorTabs value={liveTab} options={[["setup", "Source"], ["frame", "Frame & crop"], ["effects", "Effects"]]} onChange={(value) => setLiveTab(value as typeof liveTab)} />
@@ -4317,26 +5474,32 @@ function LivePreviewPanel({
       <p className="direct-manipulation-hint text-layer-hint">Drag the title and lower-third text directly in either preview to place each one independently.</p>
       <div className="two-col">
         <LabeledSelect label="Preview board" info="Board shown behind the broadcast while setting up in this window and its previews." value={previewBoardId} options={["assigned", ...state.boardPrograms.map((program) => program.id)]} optionLabels={{ assigned: "Assigned board for each display", ...Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name])) }} onChange={setPreviewBoardId} />
-        <LabeledSelect label="Video source" info="Camera uses a camera, screen share captures a Zoom or Skype window, and demo is a local test feed." value={state.live.source} options={["demo", "camera", "screen"]} optionLabels={{ demo: "Generated test feed", camera: "Camera", screen: "Screen or window share" }} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
+        <LabeledSelect label="Video source" info={recordingActive ? "Stop recording before changing the approved source." : "Choose a camera, shared window, saved recording, or generated local test feed."} value={state.live.source} options={["demo", "camera", "screen", "recording"]} optionLabels={{ demo: "Generated test feed", camera: "Camera", screen: "Screen or window share", recording: "Saved recording" }} disabled={recordingActive} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
       </div>
       <div className="two-col">
-        <LabeledSelect label="Camera" info="Camera used for preview and live mode." value={state.live.videoDeviceId ?? ""} options={cameraOptions.options} optionLabels={cameraOptions.labels} onChange={(value) => patchLive({ videoDeviceId: value || undefined })} />
-        <LabeledSelect label="Microphone" info="Microphone used for live mode when the browser allows it." value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} />
+        {state.live.source === "recording" ? <>
+          <LabeledSelect label="Recording" info="Saved local video used for preview, pop-out, and live output." value={selectedRecordingId} options={recordings.map((recording) => recording.id)} optionLabels={recordingSourceLabels} disabled={recordingActive || recordingLibraryLoading || !recordings.length} onChange={(recordingId) => { patchLive({ recordingId }); void startPreview("recording", recordingId); }} />
+          <div className="recording-source-audio"><Volume2 size={17} /><span><strong>Recording audio</strong><small>{selectedSourceRecording ? "Uses the audio embedded in the selected file." : recordingLibraryLoading ? "Loading saved recordings…" : "Record a video to make it available here."}</small></span></div>
+        </> : <>
+          <LabeledSelect label="Camera" info={recordingActive ? "Camera selection is locked while recording." : "Camera used for preview and live mode."} value={state.live.videoDeviceId ?? ""} options={cameraOptions.options} optionLabels={cameraOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ videoDeviceId: value || undefined })} />
+          <LabeledSelect label="Microphone" info={recordingActive ? "Microphone selection is locked while recording." : "Microphone used for live mode when the browser allows it."} value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} />
+        </>}
       </div>
       <section className={previewError || popupBlocked ? "source-connection-card error" : previewStream ? "source-connection-card ready" : "source-connection-card"}>
         <div className="source-connection-status">
           {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}
-          <div><strong>{previewBusy ? "Waiting for permission…" : previewStream ? "Video source connected" : state.live.source === "demo" ? "Test feed selected" : "Video source not connected"}</strong><span>{previewError ?? (popupBlocked ? "The browser blocked the preview window. Allow pop-ups, then try again." : previewStream ? "The selected source is ready for preview and broadcast." : state.live.source === "camera" ? "Start the camera to connect this source." : state.live.source === "screen" ? "Start sharing to choose a screen or window." : "The generated feed is ready without a camera.")}</span></div>
+          <div><strong>{previewBusy ? (state.live.source === "recording" ? "Opening recording…" : "Waiting for permission…") : previewStream ? "Video source connected" : state.live.source === "demo" ? "Test feed selected" : "Video source not connected"}</strong><span>{previewError ?? (popupBlocked ? "The browser blocked the preview window. Allow pop-ups, then try again." : previewStream ? "The selected source is ready for preview and broadcast." : state.live.source === "camera" ? "Start the camera to connect this source." : state.live.source === "screen" ? "Start sharing to choose a screen or window." : state.live.source === "recording" ? selectedSourceRecording ? `Play ${selectedSourceRecording.title} to preview it.` : "Make a recording first, then select it here." : "The generated feed is ready without a camera.")}</span></div>
         </div>
-        {state.live.source !== "demo" && <button type="button" className={previewStream ? "command-button danger compact" : "command-button primary compact"} disabled={previewBusy} onClick={previewStream ? stopPreviewStream : () => void startPreview(state.live.source)}>
-          {previewStream ? <Square size={15} /> : <Camera size={15} />}
-          {previewBusy ? "Connecting…" : previewStream ? (state.live.source === "camera" ? "Stop camera" : "Stop sharing") : previewError ? (state.live.source === "camera" ? "Try camera again" : "Try sharing again") : (state.live.source === "camera" ? "Start camera" : "Start sharing")}
+        {state.live.source !== "demo" && <button type="button" className={previewStream ? "command-button danger compact" : "command-button primary compact"} disabled={previewBusy || recordingActive || (state.live.source === "recording" && !selectedSourceRecording)} onClick={previewStream ? () => stopPreviewStream() : () => void startPreview(state.live.source, selectedRecordingId)}>
+          {previewStream ? <Square size={15} /> : state.live.source === "recording" ? <Play size={15} /> : <Camera size={15} />}
+          {recordingActive ? "Source locked while recording" : previewBusy ? (state.live.source === "recording" ? "Opening…" : "Connecting…") : previewStream ? (state.live.source === "camera" ? "Stop camera" : state.live.source === "screen" ? "Stop sharing" : "Stop recording preview") : previewError ? (state.live.source === "camera" ? "Try camera again" : state.live.source === "screen" ? "Try sharing again" : "Try recording again") : (state.live.source === "camera" ? "Start camera" : state.live.source === "screen" ? "Start sharing" : "Play recording")}
         </button>}
       </section>
       </div>}
       {liveTab === "frame" && <div className="live-frame-tab live-tab-panel">
         <div className="live-toolbox direct-frame-controls">
-          <div className="direct-control-heading"><h3>Direct manipulation</h3><SegmentedControl value={directMode} options={[["frame", "Move & resize"], ["crop", "Pan & zoom"]]} onChange={(value) => setDirectMode(value as typeof directMode)} /></div>
+          <div className="direct-control-heading"><h3>Direct manipulation</h3><SegmentedControl value={directMode} options={[["frame", "Move & resize"], ["crop", "Pan, zoom & crop"]]} onChange={(value) => setDirectMode(value as typeof directMode)} /></div>
+          <div className="field camera-source-fit"><span>Source fit <InfoDot text="Fill covers the camera panel. Fit keeps the whole camera or shared window visible." /></span><SegmentedControl value={liveComposition.frame.fitMode ?? "fill"} options={[["fill", "Fill frame"], ["fit", "Fit whole source"]]} onChange={(value) => patchLive({ frame: { ...state.live.frame, fitMode: value as "fit" | "fill", crop: { ...state.live.frame.crop, scale: value === "fit" ? Math.min(state.live.frame.crop.scale, 1) : Math.max(state.live.frame.crop.scale, 1) } } })} /></div>
           {directMode === "frame" ? <div className="four-col">
             <Slider label="Left" info="Video position from the left edge." value={state.live.frame.x} min={0} max={90} onChange={(value) => patchLive({ frame: { ...state.live.frame, x: Math.min(value, 100 - state.live.frame.width) } })} />
             <Slider label="Top" info="Video position from the top edge." value={state.live.frame.y} min={0} max={90} onChange={(value) => patchLive({ frame: { ...state.live.frame, y: Math.min(value, 100 - state.live.frame.height) } })} />
@@ -4344,107 +5507,99 @@ function LivePreviewPanel({
             <Slider label="Height" info="Video section height." value={state.live.frame.height} min={10} max={100 - state.live.frame.y} onChange={(value) => patchLive({ frame: { ...state.live.frame, height: value } })} />
           </div> : <div className="camera-crop-controls">
             <div className="camera-zoom-control">
-              <button type="button" className="icon-button" title="Zoom camera out" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale - .1, 1, 3) } } })}>−</button>
-              <Slider label="Camera zoom" info="Make the camera image larger inside its frame. You can also use the mouse wheel over the preview." value={Math.round(state.live.frame.crop.scale * 100)} min={100} max={300} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: value / 100 } } })} />
+              <button type="button" className="icon-button" title="Zoom camera out" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale - .1, liveComposition.frame.fitMode === "fit" ? .5 : 1, 3) } } })}>−</button>
+              <Slider label="Camera zoom" info="Make the camera image larger inside its frame. You can also use the mouse wheel over the preview." value={Math.round(state.live.frame.crop.scale * 100)} min={liveComposition.frame.fitMode === "fit" ? 50 : 100} max={300} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: value / 100 } } })} />
               <button type="button" className="icon-button" title="Zoom camera in" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale + .1, 1, 3) } } })}>+</button>
             </div>
             <div className="two-col">
               <Slider label="Pan left / right" info="Pan the camera image left or right inside its frame." value={state.live.frame.crop.x} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, x: value } } })} />
               <Slider label="Pan up / down" info="Pan the camera image vertically inside its frame." value={state.live.frame.crop.y} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, y: value } } })} />
             </div>
+            <div className="four-col camera-edge-crop-controls">
+              <Slider label="Crop top" info="Hide only the top edge of the camera source." value={sourceCropEdges.top} min={0} max={45} onChange={(top) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, top }) } })} />
+              <Slider label="Crop right" info="Hide only the right edge of the camera source." value={sourceCropEdges.right} min={0} max={45} onChange={(right) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, right }) } })} />
+              <Slider label="Crop bottom" info="Hide only the bottom edge of the camera source." value={sourceCropEdges.bottom} min={0} max={45} onChange={(bottom) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, bottom }) } })} />
+              <Slider label="Crop left" info="Hide only the left edge of the camera source." value={sourceCropEdges.left} min={0} max={45} onChange={(left) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, left }) } })} />
+            </div>
+            <button type="button" className="command-button secondary compact reset-edge-crop" disabled={!Object.values(sourceCropEdges).some(Boolean)} onClick={() => patchLive({ frame: { ...state.live.frame, cropEdges: { top: 0, right: 0, bottom: 0, left: 0 } } })}><RotateCcw size={14} /> Reset edge crop</button>
           </div>}
           <div className="live-transform-controls"><LabeledSelect label="Mask" info="Choose the visible shape of the live source." value={state.live.frame.maskShape ?? "rectangle"} options={["rectangle", "square", "circle", "polygon"]} optionLabels={{ rectangle: "Rectangle", square: "Square", circle: "Circle", polygon: "Custom polygon" }} onChange={(value) => {
             const maskShape = value as NonNullable<LanternState["live"]["frame"]["maskShape"]>;
             const size = maskShape === "square" ? Math.min(state.live.frame.width, state.live.frame.height, 100 - state.live.frame.x, 100 - state.live.frame.y) : null;
             patchLive({ frame: { ...state.live.frame, maskShape, width: size ?? state.live.frame.width, height: size ?? state.live.frame.height, polygonPoints: maskShape === "polygon" ? (state.live.frame.polygonPoints?.length ? state.live.frame.polygonPoints : undefined) : state.live.frame.polygonPoints } });
-          }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror camera</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip camera</span></label></div>
-          <div className="camera-frame-style-controls">
-            <label className="field"><span>Panel color <InfoDot text="Choose the fill color inside the camera panel, visible whenever the source does not cover the full panel." /></span><input type="color" value={state.live.panelColor} onChange={(event) => patchLive({ panelColor: event.target.value })} /></label>
-            <label className="field"><span>Frame color <InfoDot text="Choose the border color around the camera feed." /></span><input type="color" value={state.live.frameBorderColor} onChange={(event) => patchLive({ frameBorderColor: event.target.value })} /></label>
-            <Slider label="Frame thickness" info="Set the camera border thickness, or use zero for no frame." value={state.live.frameBorderWidth} min={0} max={20} onChange={(frameBorderWidth) => patchLive({ frameBorderWidth })} />
-          </div>
-          <section className="broadcast-canvas-controls">
-            <div className="field broadcast-background-mode"><span>Broadcast background <InfoDot text="Choose what fills the broadcast canvas behind the camera panel." /></span><SegmentedControl value={state.live.backgroundMode} options={[["board", "Board"], ["color", "Color"], ["image", "Image"]]} onChange={(value) => patchLive({ backgroundMode: value as LanternState["live"]["backgroundMode"] })} /></div>
-            {state.live.backgroundMode === "color" && <label className="field broadcast-color-field"><span>Background color</span><input type="color" value={state.live.backgroundColor} onChange={(event) => patchLive({ backgroundColor: event.target.value })} /></label>}
-            {state.live.backgroundMode === "image" && <label className="image-upload broadcast-background-upload"><ImagePlus size={17} /><span>{state.live.backgroundImage ? "Replace broadcast background" : "Choose broadcast background"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ backgroundImage }))} /></label>}
-          </section>
+          }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror Camera (Left/Right)</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip Camera (Up/Down)</span></label></div>
+          <label className="field camera-panel-color"><span>Camera panel color <InfoDot text="Visible behind fitted or independently cropped camera edges." /></span><input type="color" value={state.live.panelColor} onChange={(event) => patchLive({ panelColor: event.target.value })} /></label>
+          <BroadcastCompositionControls live={state.live} onPatch={patchLive} />
           {(state.live.frame.maskShape === "circle" || state.live.frame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
         </div>
       </div>}
       {liveTab === "effects" && <div className="live-toolbox live-tab-panel effects-tab">
-        <div className="effect-section-heading"><h3>Background removal</h3><span>Choose one method</span></div>
-        <label className="switch-row no-screen-removal-toggle">
-          <input type="checkbox" checked={backgroundRemovalMode === "ai"} onChange={(event) => setBackgroundRemovalMode(event.target.checked ? "ai" : "off")} />
-          <span><strong>No-screen removal</strong><small>{backgroundRemovalMode === "ai" ? "On — AI isolates the person" : "Off — camera background stays visible"}</small></span>
+        <div className="effect-section-heading"><h3>Background Removal</h3><span>One local pipeline at a time</span></div>
+        <label className="switch-row background-removal-toggle">
+          <input type="checkbox" checked={backgroundRemoval.enabled} onChange={(event) => setBackgroundRemovalEnabled(event.target.checked)} />
+          <span><strong>Background Removal</strong><small>{backgroundRemoval.enabled ? `On — ${selectedRemovalMethod === "chroma" ? "Chroma Key" : "Screenless Removal"}` : "Off — the camera background remains visible"}</small></span>
         </label>
-        <div className="field removal-method-field"><span>Removal method <InfoDot text="Green screen keying and screenless AI removal are separate pipelines and cannot be stacked." /></span><SegmentedControl value={backgroundRemovalMode} options={[["off", "Off"], ["chroma", "Green screen"], ["ai", "No screen (AI)"]]} onChange={setBackgroundRemovalMode} /></div>
 
-        {backgroundRemovalMode === "chroma" && <section className="effect-settings-card chroma-settings-card">
-          <div className="effect-card-heading"><div><strong>Green screen key</strong><span>For a physical green or blue backdrop</span></div><b>CHROMA</b></div>
-          <div className="four-col">
-            <label className="field"><span>Key color</span><input type="color" value={state.live.chromaKey.color} onChange={(event) => patchLive({ chromaKey: { ...state.live.chromaKey, color: event.target.value } })} /></label>
+        {backgroundRemoval.enabled && <div className="background-removal-methods">
+          <div className="field removal-method-field"><span>Removal method</span><SegmentedControl value={selectedRemovalMethod} options={[["chroma", "Chroma Key"], ["screenless", "Screenless Removal"]]} onChange={(value) => selectBackgroundRemovalMethod(value as BackgroundRemovalMethod)} /></div>
+          <p className="background-removal-help"><strong>Chroma Key</strong> removes a chosen backdrop color. <strong>Screenless Removal</strong> uses {SCREENLESS_REMOVAL_TECHNOLOGY.name} ({SCREENLESS_REMOVAL_TECHNOLOGY.model}) locally in this browser. They are separate pipelines and cannot be combined; camera frames are not sent to a background-removal service.</p>
+        </div>}
+
+        {backgroundRemoval.enabled && selectedRemovalMethod === "chroma" && <section className="effect-settings-card chroma-settings-card">
+          <div className="effect-card-heading"><div><strong>Chroma Key</strong><span>Choose or sample the color of a physical backdrop</span></div><b>LOCAL</b></div>
+          <div className="chroma-preset-row" role="group" aria-label="Chroma Key color presets">
+            {CHROMA_KEY_PRESETS.map((preset) => <button type="button" key={preset.id} className={`chroma-preset-button${selectedChromaPreset === preset.id ? " selected" : ""}`} aria-pressed={selectedChromaPreset === preset.id} onClick={() => patchLive({ chromaKey: { ...state.live.chromaKey, color: preset.color } })}><i style={{ background: preset.color }} />{preset.label}</button>)}
+            <label className={`chroma-preset-button chroma-custom-color${selectedChromaPreset === "custom" ? " selected" : ""}`}><i style={{ background: state.live.chromaKey.color }} /><span>Custom</span><input type="color" aria-label="Custom Chroma Key color" value={state.live.chromaKey.color} onChange={(event) => patchLive({ chromaKey: { ...state.live.chromaKey, color: event.target.value } })} /></label>
+          </div>
+          <ChromaKeySampler stream={previewStream} active={chromaSamplerActive} currentColor={state.live.chromaKey.color} onActiveChange={setChromaSamplerActive} onSample={(color) => patchLive({ chromaKey: { ...state.live.chromaKey, color } })} />
+          <div className="three-col">
             <Slider label="Similarity" info="How close a pixel must be to the key color." value={Math.round(state.live.chromaKey.similarity * 100)} min={5} max={80} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, similarity: value / 100 } })} />
             <Slider label="Edge feather" info="Softens the keyed edge without erasing the subject." value={Math.round(state.live.chromaKey.smoothness * 100)} min={1} max={40} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, smoothness: value / 100 } })} />
             <Slider label="Spill cleanup" info="Removes reflected key color from hair and clothing." value={Math.round(state.live.chromaKey.spill * 100)} min={0} max={60} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, spill: value / 100 } })} />
           </div>
         </section>}
 
-        {backgroundRemovalMode === "ai" && <section className="effect-settings-card ai-settings-card">
-          <div className="effect-card-heading"><div><strong>No-screen background removal</strong><span>Local person segmentation; no colored backdrop needed</span></div><b>AI</b></div>
-          <div className="field"><span>Background result <InfoDot text="Keep only the person, blur the room, or place an image behind them." /></span><SegmentedControl value={state.live.effects.background} options={[["remove", "Remove"], ["blur", "Blur"], ["image", "Image"]]} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: value as LanternState["live"]["effects"]["background"] } })} /></div>
+        {backgroundRemoval.enabled && selectedRemovalMethod === "screenless" && <section className="effect-settings-card ai-settings-card">
+          <div className="effect-card-heading"><div><strong>Screenless Removal</strong><span>{SCREENLESS_REMOVAL_TECHNOLOGY.name} runs person segmentation in this browser</span></div><b>LOCAL</b></div>
+          <div className="field"><span>Background result <InfoDot text="Keep only the person, blur the room, or place a local image behind them." /></span><SegmentedControl value={state.live.effects.background} options={[["remove", "Remove"], ["blur", "Blur"], ["image", "Image"]]} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: value as LanternState["live"]["effects"]["background"] } })} /></div>
           <div className="three-col ai-precision-controls">
             <Slider label="Edge precision" info="Raise this to reject more background; lower it to retain fine hair and hands." value={Math.round(state.live.effects.segmentationThreshold * 100)} min={20} max={75} onChange={(value) => patchLive({ effects: { ...state.live.effects, segmentationThreshold: value / 100 } })} />
             <Slider label="Edge feather" info="Smooths the transition around the segmented person." value={Math.round(state.live.effects.segmentationFeather * 100)} min={4} max={35} onChange={(value) => patchLive({ effects: { ...state.live.effects, segmentationFeather: value / 100 } })} />
             {state.live.effects.background === "blur" ? <Slider label="Background blur" info="Blur strength behind the segmented person." value={state.live.effects.blur} min={4} max={40} onChange={(value) => patchLive({ effects: { ...state.live.effects, blur: value } })} /> : <div className="effect-setting-note">Mask updates are stabilized between frames to reduce edge flicker.</div>}
           </div>
-          {state.live.effects.background === "image" && <label className="image-upload"><ImagePlus size={17} /><span>{state.live.effects.backgroundImage ? "Replace background image" : "Choose background image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ effects: { ...state.live.effects, backgroundImage } }))} /></label>}
+          {state.live.effects.background === "image" && <div className="background-image-status">
+            {state.live.effects.backgroundImage && <img src={state.live.effects.backgroundImage} alt="Current screenless-removal background" />}
+            <label className="image-upload"><ImagePlus size={17} /><span>{state.live.effects.backgroundImage ? "Replace background image" : "Choose background image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ effects: { ...state.live.effects, backgroundImage } }))} /></label>
+            {state.live.effects.backgroundImage && <button type="button" className="command-button secondary compact" onClick={() => patchLive({ effects: { ...state.live.effects, backgroundImage: undefined } })}>Clear image</button>}
+          </div>}
         </section>}
 
         <section className="effect-settings-card face-settings-card">
-          <div className="effect-card-heading"><div><strong>Face effects</strong><span>High-frequency, stabilized landmark tracking</span></div><b>30 FPS</b></div>
-          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, puppetPreview: event.target.checked && state.live.effects.puppetPreview, trackingDebug: event.target.checked && state.live.effects.trackingDebug } })} /><ScanFace size={16} /><span><strong>Face, body & hand tracking</strong><small>Head, ears, brows, eyes, mouth, chin, shoulders, hands and fingers</small></span></label>
-          <div className="accessory-options">
-            <button type="button" className={!(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses") && !(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat") ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, accessory: "none", glassesEnabled: false, partyHatEnabled: false } })}>None</button>
-            <button type="button" className={(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses") ? "selected" : ""} aria-pressed={state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses"} onClick={() => {
-              const enabled = !(state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses");
-              const hatEnabled = state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat";
-              patchLive({ effects: { ...state.live.effects, accessory: enabled ? "glasses" : hatEnabled ? "party-hat" : "none", glassesEnabled: enabled, partyHatEnabled: hatEnabled, faceTracking: enabled || state.live.effects.faceTracking } });
-            }}><Glasses size={17} /> Glasses</button>
-            <button type="button" className={(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat") ? "selected" : ""} aria-pressed={state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat"} onClick={() => {
-              const enabled = !(state.live.effects.partyHatEnabled ?? state.live.effects.accessory === "party-hat");
-              const glassesOn = state.live.effects.glassesEnabled ?? state.live.effects.accessory === "glasses";
-              patchLive({ effects: { ...state.live.effects, accessory: glassesOn ? "glasses" : enabled ? "party-hat" : "none", glassesEnabled: glassesOn, partyHatEnabled: enabled, faceTracking: enabled || state.live.effects.faceTracking } });
-            }}><PartyPopper size={17} /> Party hat</button>
+          <div className="effect-card-heading"><div><strong>Face effects</strong><span>Choose a friendly style, then turn on the camera preview.</span></div><b>{trackingStatus?.phase === "tracking" || trackingStatus?.phase === "degraded" ? `${Math.round(trackingStatus.renderedFps)} FPS` : trackingStatus?.phase === "detecting" || trackingStatus?.phase === "warming" ? "DETECTING" : "LOCAL"}</b></div>
+          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.faceTracking} onChange={(event) => patchLive({ effects: { ...state.live.effects, faceTracking: event.target.checked, puppetPreview: event.target.checked && state.live.effects.puppetPreview, trackingDebug: event.target.checked && state.live.effects.trackingDebug, trackedPointsOverlay: event.target.checked && state.live.effects.trackedPointsOverlay } })} /><ScanFace size={16} /><span><strong>Face, body & hand tracking</strong><small>{trackingStatus?.phase === "detecting" || trackingStatus?.phase === "warming" ? "Detecting face…" : "Head, ears, eyes, mouth, shoulders, hands and fingers"}</small></span><InfoDot text="The local tracker warms once, stabilizes landmarks between frames, and adapts between 60 and 30 FPS when needed." /></label>
+          <div className="phase4-effect-choice-grid">
+            <div><span>Glasses</span><div className="accessory-options"><button type="button" className={!state.live.effects.glassesEnabled ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, glassesEnabled: false } })}>Off</button>{(["classic", "playful"] as const).map((style) => <button type="button" key={style} className={state.live.effects.glassesEnabled && (state.live.effects.glassesStyle ?? "classic") === style ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, glassesEnabled: true, glassesStyle: style, accessory: "glasses", faceTracking: true } })}><Glasses size={15} /> {style === "classic" ? "Classic" : "Playful"}</button>)}</div></div>
+            <div><span>Hats</span><div className="accessory-options"><button type="button" className={!state.live.effects.hatEnabled ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, hatEnabled: false, partyHatEnabled: false } })}>Off</button>{(["party", "wizard"] as const).map((style) => <button type="button" key={style} className={state.live.effects.hatEnabled && (state.live.effects.hatStyle ?? "party") === style ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, hatEnabled: true, partyHatEnabled: style === "party", hatStyle: style, faceTracking: true } })}><PartyPopper size={15} /> {style === "party" ? "Party" : "Wizard"}</button>)}</div></div>
           </div>
-          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.puppetPreview} onChange={(event) => patchLive({ effects: { ...state.live.effects, puppetPreview: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span><strong>Puppet preview</strong><small>Mouth movement drives the sample character</small></span><InfoDot text="Foundation only: tracks mouth opening and drives a sample avatar. Full puppet replacement is intentionally not built yet." /></label>
-          <label className="switch-row face-effect-toggle"><input type="checkbox" checked={state.live.effects.trackingDebug ?? false} onChange={(event) => patchLive({ effects: { ...state.live.effects, trackingDebug: event.target.checked, faceTracking: event.target.checked || state.live.effects.faceTracking } })} /><span><strong>Colored tracking nodes</strong><small>Testing view: show every detected point without camera video</small></span><InfoDot text="Colors separate face regions, gaze, shoulders, palms, finger joints and fingertips. Hand status shows detected, briefly lost, or off camera." /></label>
+          {state.live.effects.hatEnabled && state.live.effects.hatStyle === "wizard" && <div className="two-col wizard-rig-controls"><Slider label="Wizard springiness" info="How eagerly the three linked hat segments follow head movement." value={Math.round((state.live.effects.wizardSpringiness ?? .56) * 100)} min={0} max={100} onChange={(value) => patchLive({ effects: { ...state.live.effects, wizardSpringiness: value / 100 } })} /><Slider label="Wizard damping" info="How quickly the floppy tip settles after movement." value={Math.round((state.live.effects.wizardDamping ?? .7) * 100)} min={0} max={100} onChange={(value) => patchLive({ effects: { ...state.live.effects, wizardDamping: value / 100 } })} /></div>}
         </section>
+        <EffectStudio
+          studio={state.effectStudio}
+          effects={state.live.effects}
+          userId={activeUserId ?? state.users[0]?.id ?? "local-user"}
+          deviceId={state.live.videoDeviceId}
+          trackingStatus={trackingStatus}
+          onStudioChange={(effectStudio) => updateState((current) => ({ ...current, effectStudio }))}
+          onEffectsChange={(effects) => patchLive({ effects })}
+        />
       </div>}
       </aside>
       </div>
-      <section className="recording-panel">
-        <div className="recording-command">
-          <button type="button" className={recording ? "command-button danger" : "command-button secondary"} onClick={recording ? stopRecording : startRecording}>
-            {recording ? <Square size={15} /> : <Circle size={15} />}
-            {recording ? `Stop ${formatCountdown(recordingSeconds)}` : "Record"}
-          </button>
-          <div><strong>Recordings</strong><span>{recordings.length ? `${recordings.length} saved in this session` : "Record the connected camera or shared window."}</span></div>
-        </div>
-        {recordings.length > 0 && <div className="recording-list">
-          {recordings.map((item) => <article className="recording-item" key={item.id}>
-            <video src={item.url} controls preload="metadata" />
-            <div><strong>{item.name.replace(".webm", "")}</strong><span>{formatCountdown(item.durationSeconds)} - {new Date(item.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span></div>
-            <button type="button" className={sendingRecordingId === item.id ? "icon-button active" : "icon-button"} onClick={() => void sendRecording(item)} title="Send recording to selected displays"><Send size={15} /></button>
-            <button type="button" className="icon-button" onClick={() => downloadRecording(item)} title="Save recording"><Download size={15} /></button>
-            <button type="button" className="icon-button danger-icon" onClick={() => deleteRecording(item.id)} title="Delete recording"><Trash2 size={15} /></button>
-          </article>)}
-        </div>}
-      </section>
       {previewPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>
         <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} /></div>
-        <footer><span>{state.live.source === "demo" ? "Test feed" : state.live.source === "screen" ? "Screen share" : "Camera"}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
+        <footer><span>{liveSourceLabel(state.live.source)}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
       </div>}
       {sourcePromptOpen && <div className="modal-backdrop preview-source-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSourcePromptOpen(false); }}>
         <section className="preview-source-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-source-title">
@@ -4452,6 +5607,7 @@ function LivePreviewPanel({
           <div className="preview-source-options">
             <button type="button" onClick={() => selectSource("camera", true)}><Camera size={24} /><strong>Use webcam</strong><span>Ask for camera and microphone access.</span></button>
             <button type="button" onClick={() => selectSource("screen", true)}><Monitor size={24} /><strong>Share a window</strong><span>Choose Zoom, Skype, or another screen.</span></button>
+            <button type="button" disabled={!recordings.length} onClick={() => selectSource("recording", true)}><Play size={24} /><strong>Use recording</strong><span>{recordings.length ? `Play ${selectedSourceRecording?.title ?? "a saved recording"}.` : "No saved recordings yet."}</span></button>
             <button type="button" onClick={() => selectSource("demo", true)}><Video size={24} /><strong>Use test feed</strong><span>Open the generated preview without a camera.</span></button>
           </div>
         </section>
@@ -4604,10 +5760,13 @@ function AnnouncementLayer({
     y: number;
     width: number;
   } | null>(null);
-  const timerInAnnouncement = announcement.timerStyle !== "off" && announcement.timerPosition === "announcement-right";
+  const isTicker = announcement.style === "News Ticker";
+  const timerInAnnouncement = !isTicker && announcement.timerStyle !== "off" && announcement.timerPosition === "announcement-right";
+  const floatingTimerPosition = isTicker && announcement.timerPosition === "announcement-right" ? "top-right" : announcement.timerPosition;
   const overlayClass = preview ? "announcement-display-overlay" : "announcement-overlay";
   const styleClass = announcement.style.toLowerCase().replace(/\s/g, "-");
-  const defaultLayoutY = announcement.style === "Temporary Card" ? 50 : 88;
+  const defaultLayoutY = announcement.style === "Temporary Card" ? 50 : isTicker ? 91 : 88;
+  const defaultLayoutWidth = isTicker ? 96 : announcement.style === "Ribbon" ? 90 : 78;
   const hasCustomLayout = announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
   const overlayStyle = {
     color: announcement.textColor ?? undefined,
@@ -4617,7 +5776,7 @@ function AnnouncementLayer({
       left: `${announcement.layoutX ?? 50}%`,
       right: "auto",
       bottom: "auto",
-      width: `${announcement.layoutWidth ?? (announcement.style === "Ribbon" ? 90 : 78)}%`,
+      width: `${announcement.layoutWidth ?? defaultLayoutWidth}%`,
       transform: "translate(-50%, -50%)"
     } : {})
   } as React.CSSProperties;
@@ -4634,7 +5793,7 @@ function AnnouncementLayer({
       pointerY: event.clientY,
       x: kind === "layout" ? announcement.layoutX ?? 50 : announcement.imageX ?? 72,
       y: kind === "layout" ? announcement.layoutY ?? defaultLayoutY : announcement.imageY ?? 50,
-      width: kind === "layout" ? announcement.layoutWidth ?? (announcement.style === "Ribbon" ? 90 : 78) : announcement.imageWidth ?? 22
+      width: kind === "layout" ? announcement.layoutWidth ?? defaultLayoutWidth : announcement.imageWidth ?? 22
     };
   };
   const moveManipulation = (event: React.PointerEvent<HTMLElement>) => {
@@ -4670,17 +5829,34 @@ function AnnouncementLayer({
     suppressContentEditableWarning: true,
     onBlur: (event: React.FocusEvent<HTMLElement>) => onPatch?.({ [field]: event.currentTarget.textContent ?? "" })
   });
+  const tickerLabel = [announcement.title, announcement.message, announcement.details].filter(Boolean).join(" · ");
+  const tickerSpeed = announcement.tickerSpeed ?? "standard";
+  const tickerDirection = announcement.tickerDirection ?? "left";
 
   return <>
-    <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}${hasCustomLayout ? " custom-position" : ""}${editing ? " announcement-editable-element" : ""}`} style={overlayStyle}>
+    <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}${hasCustomLayout ? " custom-position" : ""}${editing ? " announcement-editable-element" : ""}`} style={overlayStyle} role={isTicker ? "status" : undefined} aria-atomic={isTicker ? "true" : undefined}>
       {editing && <><button type="button" className="announcement-edit-handle text-handle" title="Drag announcement text box" onPointerDown={(event) => beginManipulation(event, "layout", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("layout")}</>}
-      <strong {...editableText("title")}>{announcement.title || "Announcement title"}</strong>
-      <span {...editableText("message")}>{announcement.message || "Your message appears here."}</span>
-      {announcement.details && <small className="announcement-details" {...editableText("details")}>{announcement.details}</small>}
-      {announcement.imageUrl && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("image")}</>}</div>}
+      {isTicker ? <>
+        <span className="sr-only">{tickerLabel}</span>
+        <div className="announcement-ticker-window" aria-hidden="true">
+          <div className={`announcement-ticker-track pace-${tickerSpeed} direction-${tickerDirection}${editing ? " paused" : ""}`}>
+            {[0, 1].map((copy) => <div className="announcement-ticker-segment" key={copy}>
+              <strong {...(copy === 0 ? editableText("title") : {})}>{announcement.title || "Museum news"}</strong>
+              <i aria-hidden="true" />
+              <span {...(copy === 0 ? editableText("message") : {})}>{announcement.message || "Your scrolling announcement appears here."}</span>
+              {announcement.details && <><i aria-hidden="true" /><small className="announcement-details" {...(copy === 0 ? editableText("details") : {})}>{announcement.details}</small></>}
+            </div>)}
+          </div>
+        </div>
+      </> : <>
+        <strong {...editableText("title")}>{announcement.title || "Announcement title"}</strong>
+        <span {...editableText("message")}>{announcement.message || "Your message appears here."}</span>
+        {announcement.details && <small className="announcement-details" {...editableText("details")}>{announcement.details}</small>}
+      </>}
+      {announcement.imageUrl && !isTicker && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("image")}</>}</div>}
       {timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className="inside-announcement" />}
     </div>
-    {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${announcement.timerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
+    {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${floatingTimerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
   </>;
 }
 
@@ -4707,14 +5883,15 @@ function AnnouncementCountdown({
   const remainingSeconds = Math.max(0, Math.ceil(totalSeconds - elapsedSeconds));
   const progress = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
   const formatted = formatCountdown(remainingSeconds);
+  const timerPosition = announcement.style === "News Ticker" && announcement.timerPosition === "announcement-right" ? "top-right" : announcement.timerPosition;
   const timerStyle = {
     "--timer-accent": announcement.timerAccentColor,
     "--timer-track": announcement.timerTrackColor,
     "--timer-progress": `${Math.max(0, Math.min(1, progress)) * 360}deg`,
     "--timer-progress-percent": `${Math.max(0, Math.min(1, progress)) * 100}%`,
     ...(announcement.timerX !== undefined || announcement.timerY !== undefined ? {
-      left: `${announcement.timerX ?? (announcement.timerPosition.endsWith("left") ? 17 : 83)}%`,
-      top: `${announcement.timerY ?? (announcement.timerPosition.startsWith("top") ? 15 : 84)}%`,
+      left: `${announcement.timerX ?? (timerPosition.endsWith("left") ? 17 : 83)}%`,
+      top: `${announcement.timerY ?? (timerPosition.startsWith("top") ? 15 : 84)}%`,
       right: "auto",
       bottom: "auto",
       transform: "translate(-50%, -50%)"
@@ -4796,8 +5973,46 @@ function MediaStreamVideo({ stream, muted, className }: { stream: MediaStream | 
   return <video ref={videoRef} autoPlay playsInline muted={muted} className={className} />;
 }
 
+function MediaStreamAudioOutput({ stream, muted, gain }: { stream: MediaStream | null; muted: boolean; gain: number }) {
+  const contextRef = useRef<AudioContext | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+
+  useEffect(() => {
+    if (!stream?.getAudioTracks().length) return;
+    const AudioContextConstructor = window.AudioContext
+      ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+    const context = new AudioContextConstructor();
+    const source = context.createMediaStreamSource(stream);
+    const outputGain = context.createGain();
+    outputGain.gain.value = muted ? 0 : clamp(gain, 0, 2);
+    source.connect(outputGain);
+    outputGain.connect(context.destination);
+    contextRef.current = context;
+    gainRef.current = outputGain;
+    if (context.state === "suspended") void context.resume().catch(() => undefined);
+    return () => {
+      source.disconnect();
+      outputGain.disconnect();
+      if (contextRef.current === context) contextRef.current = null;
+      if (gainRef.current === outputGain) gainRef.current = null;
+      if (context.state !== "closed") void context.close().catch(() => undefined);
+    };
+  }, [stream]);
+
+  useEffect(() => {
+    const context = contextRef.current;
+    const outputGain = gainRef.current;
+    if (!context || !outputGain) return;
+    outputGain.gain.setTargetAtTime(muted ? 0 : clamp(gain, 0, 2), context.currentTime, 0.015);
+  }, [gain, muted]);
+
+  return null;
+}
+
 function ScreensView({
   state,
+  activeUserId,
   selectedDisplayId,
   setSelectedDisplayId,
   openDisplays,
@@ -4808,6 +6023,7 @@ function ScreensView({
   onClose
 }: {
   state: LanternState;
+  activeUserId?: string;
   selectedDisplayId: ScreenId;
   setSelectedDisplayId: (screenId: ScreenId) => void;
   openDisplays: () => void;
@@ -4824,14 +6040,25 @@ function ScreensView({
   const [draggedRosterDonorId, setDraggedRosterDonorId] = useState<string | null>(null);
   const [mediaDevices, setMediaDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceError, setDeviceError] = useState<string | null>(null);
+  const [displayNotice, setDisplayNotice] = useState<string | null>(null);
   const [roomScreenId, setRoomScreenId] = useState<ScreenId | null>(null);
   const [roomStream, setRoomStream] = useState<MediaStream | null>(null);
   const [roomMuted, setRoomMuted] = useState(false);
+  const [roomPopoutWindow, setRoomPopoutWindow] = useState<Window | null>(null);
   const [editorPosition, setEditorPosition] = useState({ x: Math.max(8, window.innerWidth - 790), y: 72 });
-  const [roomViewPosition, setRoomViewPosition] = useState({ x: 48, y: 88 });
+  const [roomViewLayout, setRoomViewLayout] = useState(() => ({
+    x: 48,
+    y: 88,
+    width: Math.min(720, window.innerWidth - 16),
+    height: Math.min(520, window.innerHeight - 16)
+  }));
   const editorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const roomViewDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+  const roomViewResizeRef = useRef<{ pointerX: number; pointerY: number; width: number; height: number } | null>(null);
+  const roomViewLayoutRef = useRef(roomViewLayout);
   const roomStreamRef = useRef<MediaStream | null>(null);
+  const roomLeaseRef = useRef<MediaDeviceLease | null>(null);
+  const roomPopoutWindowRef = useRef<Window | null>(null);
   const editingScreen = editingId ? state.screens[editingId] : null;
   const screens = Object.values(state.screens);
   const pageSize = 4;
@@ -4842,12 +6069,42 @@ function ScreensView({
   const availableRosterDonors = state.donors.filter((donor) => donor.active && !rosterIds.includes(donor.id));
   const selectedRosterAddId = availableRosterDonors.some((donor) => donor.id === rosterAddId) ? rosterAddId : availableRosterDonors[0]?.id ?? "";
   const roomScreen = roomScreenId ? state.screens[roomScreenId] : null;
+  const activePreferences = state.userPreferences.find((preferences) => preferences.userId === activeUserId);
+  const roomMirrored = roomScreen ? activePreferences?.roomMirrorByDisplay[roomScreen.id] ?? false : false;
   const roomCameras = mediaDevices.filter((device) => device.kind === "videoinput");
   const roomMics = mediaDevices.filter((device) => device.kind === "audioinput");
   const roomCameraOptions = deviceOptionList(roomCameras, "Default camera", "Camera");
   const roomMicOptions = deviceOptionList(roomMics, "Default mic", "Mic");
   const patchDisplay = (id: ScreenId, patch: Partial<DisplayProfile>) => {
     updateState((current) => ({ ...current, screens: { ...current.screens, [id]: { ...current.screens[id], ...patch } } }));
+  };
+  const applyRoomViewLayout = (layout: typeof roomViewLayout) => {
+    const bounded = {
+      x: clamp(layout.x, 8, Math.max(8, window.innerWidth - layout.width - 8)),
+      y: clamp(layout.y, 8, Math.max(8, window.innerHeight - layout.height - 8)),
+      width: clamp(layout.width, 320, Math.max(320, window.innerWidth - 16)),
+      height: clamp(layout.height, 260, Math.max(260, window.innerHeight - 16))
+    };
+    roomViewLayoutRef.current = bounded;
+    setRoomViewLayout(bounded);
+  };
+  const persistRoomViewLayout = (screenId: ScreenId, layout = roomViewLayoutRef.current) => {
+    if (!activeUserId) return;
+    updateState((current) => ({
+      ...current,
+      userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUserId
+        ? { ...preferences, roomWindows: { ...preferences.roomWindows, [screenId]: layout } }
+        : preferences)
+    }));
+  };
+  const toggleRoomMirror = (screenId: ScreenId) => {
+    if (!activeUserId) return;
+    updateState((current) => ({
+      ...current,
+      userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUserId
+        ? { ...preferences, roomMirrorByDisplay: { ...preferences.roomMirrorByDisplay, [screenId]: !(preferences.roomMirrorByDisplay[screenId] ?? false) } }
+        : preferences)
+    }));
   };
 
   const chooseDisplayMedia = async (screen: DisplayProfile, file?: File) => {
@@ -4932,45 +6189,116 @@ function ScreensView({
   useEffect(() => {
     void navigator.mediaDevices?.enumerateDevices().then(setMediaDevices).catch(() => setMediaDevices([]));
     return () => {
-      roomStreamRef.current?.getTracks().forEach((track) => track.stop());
+      const popup = roomPopoutWindowRef.current;
+      roomPopoutWindowRef.current = null;
+      if (popup && !popup.closed) popup.close();
+      roomLeaseRef.current?.release();
+      roomLeaseRef.current = null;
     };
   }, []);
 
   useEffect(() => { roomStreamRef.current = roomStream; }, [roomStream]);
+  useEffect(() => { roomViewLayoutRef.current = roomViewLayout; }, [roomViewLayout]);
+  useEffect(() => {
+    if (!roomScreen) return;
+    const saved = activePreferences?.roomWindows[roomScreen.id];
+    if (saved) applyRoomViewLayout(saved);
+  }, [activeUserId, roomScreen?.id]);
+
+  useEffect(() => {
+    const fitRoomView = () => applyRoomViewLayout(roomViewLayoutRef.current);
+    window.addEventListener("resize", fitRoomView);
+    return () => window.removeEventListener("resize", fitRoomView);
+  }, []);
 
   const detectRoomDevices = async () => {
     setDeviceError(null);
     try {
-      const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      permissionStream.getTracks().forEach((track) => track.stop());
+      const permissionLease = await mediaDeviceManager.acquire("room:device-probe", {
+        video: { required: false },
+        audio: { required: false }
+      });
       setMediaDevices(await navigator.mediaDevices.enumerateDevices());
+      permissionLease.release();
     } catch (error) {
-      setDeviceError(error instanceof Error ? error.message : "Camera and microphone access was not granted.");
+      setDeviceError(formatMediaDeviceError(error));
     }
   };
 
-  const closeRoomView = () => {
-    roomStreamRef.current?.getTracks().forEach((track) => track.stop());
+  const releaseRoomView = () => {
+    roomLeaseRef.current?.release();
+    roomLeaseRef.current = null;
     roomStreamRef.current = null;
     setRoomStream(null);
     setRoomScreenId(null);
   };
 
-  const openRoomView = async (screen: DisplayProfile) => {
+  const closeRoomView = () => {
+    const popup = roomPopoutWindowRef.current;
+    roomPopoutWindowRef.current = null;
+    setRoomPopoutWindow(null);
+    if (popup && !popup.closed) popup.close();
+    releaseRoomView();
+  };
+
+  const popOutRoomView = (screen: DisplayProfile) => {
+    const existing = roomPopoutWindowRef.current;
+    if (existing && !existing.closed) {
+      existing.document.title = `${screen.label} Room Camera · Project Lantern`;
+      existing.focus();
+      setRoomPopoutWindow(existing);
+      return existing;
+    }
+    const popup = openRoomCameraPopout(window, document, screen.label);
+    if (!popup) {
+      setDisplayNotice("The browser blocked the separate camera window. Allow pop-ups for this site, then use Pop out in the camera panel to try again.");
+      return null;
+    }
+    roomPopoutWindowRef.current = popup;
+    popup.addEventListener("beforeunload", () => {
+      if (roomPopoutWindowRef.current !== popup) return;
+      roomPopoutWindowRef.current = null;
+      setRoomPopoutWindow(null);
+      releaseRoomView();
+    }, { once: true });
+    setRoomPopoutWindow(popup);
+    return popup;
+  };
+
+  const openRoomView = async (screen: DisplayProfile, options: { popOut?: boolean } = { popOut: true }) => {
+    if (options.popOut !== false) popOutRoomView(screen);
+    const savedLayout = activePreferences?.roomWindows[screen.id];
+    if (savedLayout) applyRoomViewLayout(savedLayout);
     setRoomScreenId(screen.id);
-    roomStreamRef.current?.getTracks().forEach((track) => track.stop());
+    const previousLease = roomLeaseRef.current;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: screen.roomVideoDeviceId ? { exact: screen.roomVideoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: screen.roomAudioEnabled === false ? false : screen.roomAudioDeviceId ? { deviceId: { exact: screen.roomAudioDeviceId } } : true
+      const lease = await mediaDeviceManager.acquire(`room:${screen.id}`, {
+        video: {
+          deviceId: screen.roomVideoDeviceId,
+          constraints: { width: { ideal: 1280 }, height: { ideal: 720 } }
+        },
+        audio: screen.roomAudioEnabled === false ? false : {
+          deviceId: screen.roomAudioDeviceId,
+          required: false
+        }
       });
-      roomStreamRef.current = stream;
-      setRoomStream(stream);
+      if (previousLease && previousLease.consumerId !== lease.consumerId) previousLease.release();
+      roomLeaseRef.current = lease;
+      roomStreamRef.current = lease.stream;
+      setRoomScreenId(screen.id);
+      setRoomStream(lease.stream);
       setMediaDevices(await navigator.mediaDevices.enumerateDevices());
-      setDeviceError(null);
+      const messages = [
+        ...lease.fallbacks.map((fallback) => `The assigned ${fallback.kind === "video" ? "camera" : "microphone"} was unavailable, so the default device is in use.`),
+        ...lease.issues.map((issue) => formatMediaDeviceError(issue.error, { kind: issue.kind }))
+      ];
+      setDeviceError(messages.join(" ") || null);
     } catch (error) {
-      setRoomStream(null);
-      setDeviceError(error instanceof Error ? error.message : "The assigned room camera could not be opened.");
+      if (!roomStreamRef.current) {
+        setRoomScreenId(screen.id);
+        setRoomStream(null);
+      }
+      setDeviceError(formatMediaDeviceError(error, { kind: "video", deviceId: screen.roomVideoDeviceId }));
     }
   };
 
@@ -4993,7 +6321,7 @@ function ScreensView({
 
   const identify = (screenId: ScreenId) => {
     if (!screens.some((screen) => screen.status !== "offline")) {
-      window.alert("There are no open/connected displays.");
+      setDisplayNotice("There are no open or connected displays to identify. Open a display window, then try again.");
       return;
     }
     const channel = new BroadcastChannel("project-lantern-host-v1");
@@ -5001,27 +6329,39 @@ function ScreensView({
     channel.close();
   };
 
-  const roomPortal = roomScreen
-    ? <aside className="room-view-floating" style={{ left: roomViewPosition.x, top: roomViewPosition.y }}>
-        <div className="room-view-shell">
-          <header className="room-view-header" onPointerDown={(event) => { if ((event.target as Element).closest("button, select, input")) return; roomViewDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...roomViewPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = roomViewDragRef.current; if (!drag) return; setRoomViewPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 430)), y: clamp(drag.y + event.clientY - drag.pointerY, 8, Math.max(8, window.innerHeight - 180)) }); }} onPointerUp={() => { roomViewDragRef.current = null; }} onPointerCancel={() => { roomViewDragRef.current = null; }}>
-            <div><span className={roomStream ? "live-indicator active" : "live-indicator"} /><strong>{roomScreen.label}</strong><small>Room camera · drag to move</small></div>
-            <div>
-              <button type="button" className={roomMuted ? "icon-button active" : "icon-button"} onClick={() => setRoomMuted((current) => !current)} title={roomMuted ? "Unmute room audio" : "Mute room audio"}>{roomMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-              <button type="button" className="icon-button" onClick={closeRoomView} title="Close room view"><X size={18} /></button>
-            </div>
-          </header>
-          <div className="room-view-device-controls">
-            <label><span>Camera</span><select value={roomScreen.roomVideoDeviceId ?? ""} onChange={(event) => { const roomVideoDeviceId = event.target.value || undefined; patchDisplay(roomScreen.id, { roomVideoDeviceId }); void openRoomView({ ...roomScreen, roomVideoDeviceId }); }}>{roomCameraOptions.options.map((value) => <option key={value || "default"} value={value}>{roomCameraOptions.labels[value] ?? value}</option>)}</select></label>
-            <label><span>Microphone</span><select value={roomScreen.roomAudioDeviceId ?? ""} onChange={(event) => { const roomAudioDeviceId = event.target.value || undefined; patchDisplay(roomScreen.id, { roomAudioDeviceId }); void openRoomView({ ...roomScreen, roomAudioDeviceId }); }}>{roomMicOptions.options.map((value) => <option key={value || "default"} value={value}>{roomMicOptions.labels[value] ?? value}</option>)}</select></label>
-            <button type="button" className="icon-button" onClick={() => void detectRoomDevices()} title="Detect cameras and microphones"><RefreshCcw size={16} /></button>
+  const roomPopoutRoot = roomPopoutWindow && !roomPopoutWindow.closed
+    ? roomPopoutWindow.document.getElementById(ROOM_CAMERA_POPOUT_ROOT_ID)
+    : null;
+  const roomViewPanel = roomScreen
+    ? <div className="room-view-shell">
+        <header className="room-view-header" onPointerDown={roomPopoutRoot ? undefined : (event) => { if ((event.target as Element).closest("button, select, input")) return; roomViewDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, x: roomViewLayoutRef.current.x, y: roomViewLayoutRef.current.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={roomPopoutRoot ? undefined : (event) => { const drag = roomViewDragRef.current; if (!drag) return; applyRoomViewLayout({ ...roomViewLayoutRef.current, x: drag.x + event.clientX - drag.pointerX, y: drag.y + event.clientY - drag.pointerY }); }} onPointerUp={roomPopoutRoot ? undefined : () => { roomViewDragRef.current = null; persistRoomViewLayout(roomScreen.id); }} onPointerCancel={roomPopoutRoot ? undefined : () => { roomViewDragRef.current = null; }}>
+          <div><span className={roomStream ? "live-indicator active" : "live-indicator"} /><strong>{roomScreen.label}</strong><small>{roomStream ? "Camera Active" : "Camera inactive"} · {roomPopoutRoot ? "separate movable window" : "drag within app"}</small></div>
+          <div>
+            {!roomPopoutRoot && <button type="button" className="icon-button" onClick={() => popOutRoomView(roomScreen)} title="Pop out to a movable window"><ExternalLink size={18} /></button>}
+            <button type="button" className={roomMuted ? "icon-button active" : "icon-button"} onClick={() => setRoomMuted((current) => !current)} title={roomMuted ? "Unmute room audio" : "Mute room audio"}>{roomMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+            <button type="button" className={roomMirrored ? "icon-button active" : "icon-button"} onClick={() => toggleRoomMirror(roomScreen.id)} title={roomMirrored ? "Show room camera normally" : "Mirror room camera for monitoring"}><Rotate3d size={18} /></button>
+            <button type="button" className="icon-button" onClick={closeRoomView} title="Close room view"><X size={18} /></button>
           </div>
-          <div className="room-view-video">
-            {roomStream ? <MediaStreamVideo stream={roomStream} muted={roomMuted} /> : <div className="room-view-empty"><Camera size={34} /><strong>Room camera unavailable</strong><span>{deviceError ?? "Choose the camera assigned to this display and try again."}</span></div>}
-          </div>
-          <footer className="room-view-footer"><span>{roomMuted ? "Audio muted" : "Room audio on"}</span><span>{roomScreen.roomVideoDeviceId ? "Assigned camera" : "Default camera"}</span></footer>
+        </header>
+        <div className="room-view-device-controls">
+          <label><span>Camera</span><select value={roomScreen.roomVideoDeviceId ?? ""} onChange={(event) => { const roomVideoDeviceId = event.target.value || undefined; patchDisplay(roomScreen.id, { roomVideoDeviceId }); void openRoomView({ ...roomScreen, roomVideoDeviceId }); }}>{roomCameraOptions.options.map((value) => <option key={value || "default"} value={value}>{roomCameraOptions.labels[value] ?? value}</option>)}</select></label>
+          <label><span>Microphone</span><select value={roomScreen.roomAudioDeviceId ?? ""} onChange={(event) => { const roomAudioDeviceId = event.target.value || undefined; patchDisplay(roomScreen.id, { roomAudioDeviceId }); void openRoomView({ ...roomScreen, roomAudioDeviceId }); }}>{roomMicOptions.options.map((value) => <option key={value || "default"} value={value}>{roomMicOptions.labels[value] ?? value}</option>)}</select></label>
+          <button type="button" className="icon-button" onClick={() => void detectRoomDevices()} title="Detect cameras and microphones"><RefreshCcw size={16} /></button>
         </div>
-      </aside>
+        <div className="room-view-video">
+          {roomStream ? <><MediaStreamVideo stream={roomStream} muted className={roomMirrored ? "mirrored" : undefined} /><MediaStreamAudioOutput stream={roomStream} muted={roomMuted || roomScreen.roomAudioEnabled === false} gain={roomScreen.roomAudioGain ?? 1} /></> : <div className="room-view-empty"><Camera size={34} /><strong>Room camera unavailable</strong><span>{deviceError ?? "Connecting to the camera assigned to this display…"}</span></div>}
+        </div>
+        <div className="room-audio-monitor"><AudioLevelMeter stream={roomStream} muted={roomMuted || roomScreen.roomAudioEnabled === false} gain={roomScreen.roomAudioGain ?? 1} label="Room microphone" /><label><span>Gain</span><input type="range" min="0" max="2" step="0.05" value={roomScreen.roomAudioGain ?? 1} onChange={(event) => patchDisplay(roomScreen.id, { roomAudioGain: Number(event.target.value) })} /><output>{Math.round((roomScreen.roomAudioGain ?? 1) * 100)}%</output></label>{deviceError && roomStream && <p className="room-device-warning"><AlertTriangle size={13} /> {deviceError}</p>}</div>
+        <footer className="room-view-footer"><span>{roomMuted || roomScreen.roomAudioEnabled === false ? "Audio muted" : `Room audio · ${Math.round((roomScreen.roomAudioGain ?? 1) * 100)}%`}</span><span>{roomMirrored ? "Mirrored monitor" : roomScreen.roomVideoDeviceId ? "Assigned camera" : "Default camera"}</span></footer>
+      </div>
+    : null;
+  const roomPortal = roomScreen && roomViewPanel
+    ? roomPopoutRoot
+      ? createPortal(<main className="room-view-popout">{roomViewPanel}</main>, roomPopoutRoot)
+      : <aside className="room-view-floating" style={{ left: roomViewLayout.x, top: roomViewLayout.y, width: roomViewLayout.width, height: roomViewLayout.height }}>
+          {roomViewPanel}
+          <button type="button" className="room-view-resize-handle" aria-label="Resize room view" title="Drag to resize" onPointerDown={(event) => { event.preventDefault(); roomViewResizeRef.current = { pointerX: event.clientX, pointerY: event.clientY, width: roomViewLayoutRef.current.width, height: roomViewLayoutRef.current.height }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const resize = roomViewResizeRef.current; if (!resize) return; applyRoomViewLayout({ ...roomViewLayoutRef.current, width: resize.width + event.clientX - resize.pointerX, height: resize.height + event.clientY - resize.pointerY }); }} onPointerUp={() => { roomViewResizeRef.current = null; persistRoomViewLayout(roomScreen.id); }} onPointerCancel={() => { roomViewResizeRef.current = null; }} />
+        </aside>
     : null;
 
   return (
@@ -5033,7 +6373,7 @@ function ScreensView({
             <div className="screen-card-head"><div><h2>{screen.label}</h2><p>{screen.orientation} · {screen.resolution}</p></div><div className="screen-icon-actions"><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={19} /> : <Wifi size={19} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => patchDisplay(screen.id, { enabled: !screen.enabled })} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={17} /></button></div></div>
             <button className={`mini-preview ${orientationClass(screen)}`} onClick={() => setSelectedDisplayId(screen.id)}><BabylonDonorWall state={state} screenId={screen.id} /></button>
             <div className="screen-card-summary"><span>{labelForStyle(screen.style)}</span><span>{screen.donorScrollEnabled ? `Scrolling · ${screen.donorScrollSpeed ?? 4}/10` : `${screen.columns ?? 1} column${screen.columns === 2 ? "s" : ""}`}</span><span>{screen.roomVideoDeviceId ? "Room camera assigned" : "Default room camera"}</span></div>
-            <div className="button-row screen-actions"><button className="icon-button" onClick={() => identify(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => void openRoomView(screen)} title={`Open ${screen.label} room view`}><Camera size={17} /></button><button className="command-button secondary" onClick={() => { setSelectedDisplayId(screen.id); setEditingId(screen.id); setEditorTab("setup"); }}><Settings2 size={17} /> Edit</button><button className="icon-button danger-icon" onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
+            <div className="button-row screen-actions"><button className="icon-button" onClick={() => identify(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => void openRoomView(screen)} title={`Pop out ${screen.label} room camera to a movable window`}><PictureInPicture2 size={17} /></button><button className="command-button secondary" onClick={() => { setSelectedDisplayId(screen.id); setEditingId(screen.id); setEditorTab("setup"); }}><Settings2 size={17} /> Edit</button><button className="icon-button danger-icon" onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
           </article>
         ))}
       </div>
@@ -5041,7 +6381,7 @@ function ScreensView({
       {editingScreen && <aside className="screen-editor-drawer" style={{ left: editorPosition.x, top: editorPosition.y, right: "auto", bottom: "auto" }}>
         <button className="icon-button screen-editor-close" onClick={() => { setEditingId(null); onClose?.(); }} title="Close editor"><X size={18} /></button>
         <div className="panel-heading screen-editor-drag-handle" onPointerDown={(event) => { if ((event.target as Element).closest("button, input, select")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 320)), y: clamp(drag.y + event.clientY - drag.pointerY, 8, Math.max(8, window.innerHeight - 120)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Display settings · drag to move</p><h2>{editingScreen.label}</h2></div></div>
-        <EditorTabs value={editorTab} options={[["setup", "Configuration"], ["room", "Room camera"], ["names", "Assigned names"]]} onChange={(value) => setEditorTab(value as typeof editorTab)} />
+        <EditorTabs value={editorTab} options={[["setup", "Configuration"], ["room", "Room camera"]]} onChange={(value) => setEditorTab(value as typeof editorTab)} />
         {editorTab === "setup" &&
         <div className="screen-editor-grid">
           <LabeledInput label="Display name" info="User-facing name for this physical display, such as Entrance Display - Portrait." value={editingScreen.label} onChange={(value) => patchDisplay(editingScreen.id, { label: value })} />
@@ -5065,12 +6405,12 @@ function ScreensView({
           <LabeledSelect label="Room microphone" info="Microphone used to hear people near this monitor." value={editingScreen.roomAudioDeviceId ?? ""} options={roomMicOptions.options} optionLabels={roomMicOptions.labels} onChange={(value) => patchDisplay(editingScreen.id, { roomAudioDeviceId: value || undefined })} />
           <label className="switch-row"><input type="checkbox" checked={editingScreen.roomAudioEnabled ?? true} onChange={(event) => patchDisplay(editingScreen.id, { roomAudioEnabled: event.target.checked })} /><Volume2 size={16} /><span>Capture room audio</span></label>
           {deviceError && <div className="device-error"><AlertTriangle size={16} /><span>{deviceError}</span></div>}
-          <button type="button" className="command-button primary" onClick={() => void openRoomView(editingScreen)}><PictureInPicture2 size={17} /> Open display room view</button>
+          <button type="button" className="command-button primary" onClick={() => void openRoomView(editingScreen)}><PictureInPicture2 size={17} /> Pop out room camera</button>
         </div>}
-        {editorTab === "names" && <div className="display-roster-editor">
+        {false && <div className="display-roster-editor">
           <div className="display-roster-heading">
             <div><h2>Names on this display</h2><span>{rosterDonors.length} assigned · drag or use arrows to reorder</span></div>
-            <button className="command-button secondary compact" onClick={() => useAllActiveDonors(editingScreen)}>Use all active</button>
+            <button className="command-button secondary compact" onClick={() => useAllActiveDonors(editingScreen!)}>Use all active</button>
           </div>
           <div className="display-roster-add">
             <select aria-label="Donor to add" value={selectedRosterAddId} onChange={(event) => setRosterAddId(event.target.value)} disabled={!availableRosterDonors.length}>
@@ -5078,7 +6418,7 @@ function ScreensView({
                 ? availableRosterDonors.map((donor) => <option key={donor.id} value={donor.id}>{donor.name}</option>)
                 : <option value="">All active donors are assigned</option>}
             </select>
-            <button type="button" className="command-button primary compact" onClick={() => addRosterDonor(editingScreen)} disabled={!selectedRosterAddId}><Plus size={15} /> Add name</button>
+            <button type="button" className="command-button primary compact" onClick={() => addRosterDonor(editingScreen!)} disabled={!selectedRosterAddId}><Plus size={15} /> Add name</button>
           </div>
           <div className="display-roster-list">
             {rosterDonors.map((donor, index) => (
@@ -5088,15 +6428,15 @@ function ScreensView({
                 draggable
                 onDragStart={(event) => { setDraggedRosterDonorId(donor.id); event.dataTransfer.effectAllowed = "move"; }}
                 onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
-                onDrop={(event) => { event.preventDefault(); if (draggedRosterDonorId) moveRosterDonor(editingScreen, draggedRosterDonorId, index); setDraggedRosterDonorId(null); }}
+                onDrop={(event) => { event.preventDefault(); if (draggedRosterDonorId) moveRosterDonor(editingScreen!, draggedRosterDonorId, index); setDraggedRosterDonorId(null); }}
                 onDragEnd={() => setDraggedRosterDonorId(null)}
               >
                 <span className="display-roster-grip" title="Drag to reorder"><GripVertical size={16} /></span>
                 <div className="display-roster-copy"><strong>{donor.name}</strong><small>{donor.subtext || donor.note || "No donor subtext entered"}</small></div>
                 <div className="display-roster-order">
-                  <button type="button" className="icon-button" disabled={index === 0} onClick={() => moveRosterDonor(editingScreen, donor.id, index - 1)} title={`Move ${donor.name} up`}><ChevronUp size={15} /></button>
-                  <button type="button" className="icon-button" disabled={index === rosterDonors.length - 1} onClick={() => moveRosterDonor(editingScreen, donor.id, index + 1)} title={`Move ${donor.name} down`}><ChevronDown size={15} /></button>
-                  <button type="button" className="icon-button danger-icon" onClick={() => setRoster(editingScreen, rosterIds.filter((id) => id !== donor.id))} title={`Remove ${donor.name}`}><X size={15} /></button>
+                  <button type="button" className="icon-button" disabled={index === 0} onClick={() => moveRosterDonor(editingScreen!, donor.id, index - 1)} title={`Move ${donor.name} up`}><ChevronUp size={15} /></button>
+                  <button type="button" className="icon-button" disabled={index === rosterDonors.length - 1} onClick={() => moveRosterDonor(editingScreen!, donor.id, index + 1)} title={`Move ${donor.name} down`}><ChevronDown size={15} /></button>
+                  <button type="button" className="icon-button danger-icon" onClick={() => setRoster(editingScreen!, rosterIds.filter((id) => id !== donor.id))} title={`Remove ${donor.name}`}><X size={15} /></button>
                 </div>
               </article>
             ))}
@@ -5105,6 +6445,7 @@ function ScreensView({
         </div>}
       </aside>}
       {roomPortal}
+      {displayNotice && <LanternNotice message={displayNotice} onDismiss={() => setDisplayNotice(null)} />}
     </section>
   );
 }
@@ -5125,9 +6466,14 @@ function ScheduleCalendarView({
   const dayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const [viewMode, setViewMode] = useState<"week" | "month" | "agenda">(() => window.innerWidth <= 760 ? "agenda" : "week");
   const [compact, setCompact] = useState(() => window.innerWidth <= 760);
+  const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight);
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [displayFilter, setDisplayFilter] = useState<TargetScreen>("all");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
+  const [draftEntry, setDraftEntry] = useState<ScheduleEntry | null>(null);
+  const [draftIsNew, setDraftIsNew] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ScheduleEntry | null>(null);
+  const [colorEditor, setColorEditor] = useState<{ original: string; draft: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ id?: string; x: number; y: number; date?: Date; start?: number } | null>(null);
   const [previewEntry, setPreviewEntry] = useState<ScheduleEntry | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -5146,15 +6492,33 @@ function ScheduleCalendarView({
   } | null>(null);
   const [dragPreview, setDragPreview] = useState<{ id: string; sourceDate: string; start: number; end: number; dayDelta: number } | null>(null);
   const dragPreviewRef = useRef<typeof dragPreview>(null);
-  const selected = state.schedules.find((entry) => entry.id === selectedId) ?? null;
+  const visibleSchedules = draftEntry && !draftIsNew
+    ? state.schedules.map((entry) => entry.id === draftEntry.id ? draftEntry : entry)
+    : state.schedules;
+  const selected = draftEntry?.id === selectedId ? draftEntry : null;
   useEffect(() => {
-    if (initialSelectedId) setSelectedId(initialSelectedId);
+    if (initialSelectedId) {
+      const entry = state.schedules.find((candidate) => candidate.id === initialSelectedId);
+      setDraftEntry(entry ? { ...entry, days: [...entry.days] } : null);
+      setDraftIsNew(false);
+      setSelectedId(initialSelectedId);
+    }
   }, [initialSelectedId]);
   const visibleMode = compact ? "agenda" : viewMode;
   const weekStart = startOfCalendarWeek(anchorDate);
-  const hourHeight = clamp((window.innerHeight - 280) / 17, 20, 32);
-  const hours = Array.from({ length: 24 }, (_, index) => index);
-  const filtered = state.schedules.filter((entry) => displayFilter === "all" || entry.target === "all" || entry.target === displayFilter);
+  const filtered = visibleSchedules.filter((entry) => {
+    const archivedLegacySeed = !entry.active
+      && (entry.id === "schedule-portrait-board" || entry.id === "schedule-landscape-board");
+    if (archivedLegacySeed) return false;
+    return displayFilter === "all" || entry.target === "all" || entry.target === displayFilter;
+  });
+  const scheduleStartHour = Math.min(7, ...filtered.map((entry) => Math.floor(timeToMinutes(entry.startTime) / 60)));
+  const scheduleEndHour = Math.max(19, ...filtered.map((entry) => Math.ceil(timeToMinutes(entry.endTime) / 60)));
+  const scheduleHourCount = Math.max(1, scheduleEndHour - scheduleStartHour);
+  const scheduleStartMinutes = scheduleStartHour * 60;
+  const scheduleEndMinutes = scheduleEndHour * 60;
+  const hourHeight = clamp((viewportHeight - 280) / scheduleHourCount, 28, 58);
+  const hours = Array.from({ length: scheduleHourCount + 1 }, (_, index) => scheduleStartHour + index);
   const monthStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
   const monthDates = Array.from({ length: 42 }, (_, index) => addCalendarDays(startOfCalendarWeek(monthStart), index));
   const agendaDates = Array.from({ length: 14 }, (_, index) => addCalendarDays(anchorDate, index));
@@ -5168,7 +6532,10 @@ function ScheduleCalendarView({
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
-    const resize = () => setCompact(window.innerWidth <= 760);
+    const resize = () => {
+      setCompact(window.innerWidth <= 760);
+      setViewportHeight(window.innerHeight);
+    };
     window.addEventListener("resize", resize);
     return () => { window.clearInterval(timer); window.removeEventListener("resize", resize); };
   }, []);
@@ -5183,51 +6550,125 @@ function ScheduleCalendarView({
 
   useEffect(() => {
     if (visibleMode !== "week") return;
-    const frame = window.requestAnimationFrame(() => { if (weekScrollRef.current) weekScrollRef.current.scrollTop = hourHeight * 6; });
+    const frame = window.requestAnimationFrame(() => { if (weekScrollRef.current) weekScrollRef.current.scrollTop = 0; });
     return () => window.cancelAnimationFrame(frame);
   }, [visibleMode]);
 
-  const patchEntry = (id: string, patch: Partial<ScheduleEntry>) => updateState((current) => ({
-    ...current,
-    schedules: current.schedules.map((entry) => entry.id === id ? { ...entry, ...patch } : entry)
-  }));
+  const patchEntry = (id: string, patch: Partial<ScheduleEntry>) => {
+    if (draftEntry?.id === id) {
+      setDraftEntry({ ...draftEntry, ...patch });
+      return;
+    }
+    updateState((current) => ({
+      ...current,
+      schedules: current.schedules.map((entry) => entry.id === id ? { ...entry, ...patch } : entry)
+    }));
+  };
   const removeEntry = (id: string) => {
+    if (draftEntry?.id === id && draftIsNew) {
+      setDraftEntry(null);
+      setDraftIsNew(false);
+      setSelectedId(null);
+      setPendingDelete(null);
+      return;
+    }
     updateState((current) => ({ ...current, schedules: current.schedules.filter((entry) => entry.id !== id) }));
     if (selectedId === id) setSelectedId(null);
+    if (draftEntry?.id === id) setDraftEntry(null);
+    setPendingDelete(null);
   };
   const confirmRemoveEntry = (entry: ScheduleEntry) => {
-    const label = entry.contentType === "announcement" ? "scheduled announcement" : entry.contentType === "broadcast" ? "scheduled broadcast" : "scheduled board";
-    if (window.confirm(`Are you sure you want to delete this ${label} (${entry.name})?`)) removeEntry(entry.id);
+    setPendingDelete(entry);
   };
   const duplicateEntry = (entry: ScheduleEntry) => {
     const id = `schedule-${Date.now()}`;
-    updateState((current) => ({ ...current, schedules: [...current.schedules, { ...entry, id, name: `${entry.name} copy`, target: entry.target === "all" ? firstDisplayId(current) : entry.target }] }));
+    setDraftEntry({ ...entry, id, name: `${entry.name} copy`, target: entry.target === "all" ? firstDisplayId(state) : entry.target, days: [...entry.days] });
+    setDraftIsNew(true);
     setSelectedId(id);
   };
-  const addEntry = (contentType: "board" | "announcement" | "broadcast", slot?: { date: Date; start: number }) => {
+  const addEntry = (contentType: "board" | "announcement" | "blip" | "broadcast", slot?: { date: Date; start: number }) => {
     const saved = state.savedAnnouncements[0];
+    const savedBlip = state.savedBlips[0];
     const id = `schedule-${Date.now()}`;
     const currentMinutes = new Date();
     const roundedNow = Math.min(1380, Math.round((currentMinutes.getHours() * 60 + currentMinutes.getMinutes()) / 15) * 15);
     const start = slot?.start ?? roundedNow;
-    updateState((current) => ({ ...current, schedules: [...current.schedules, {
+    const draft: ScheduleEntry = {
       id,
-      name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : contentType === "broadcast" ? "Scheduled broadcast" : "New scheduled board",
-      target: displayFilter === "all" ? firstDisplayId(current) : displayFilter,
+      name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : contentType === "blip" ? savedBlip?.name ?? "Scheduled Blip" : contentType === "broadcast" ? "Scheduled broadcast" : "New scheduled board",
+      target: displayFilter === "all" ? firstDisplayId(state) : displayFilter,
       boardId: state.boardPrograms[0]?.id ?? "board-classic",
       contentType,
       broadcastMode: contentType === "broadcast" ? "recorded" : undefined,
       announcementId: contentType === "announcement" ? saved?.id : undefined,
+      blipId: contentType === "blip" ? savedBlip?.id : undefined,
       days: slot ? [slot.date.getDay()] : [1, 2, 3, 4, 5],
       recurrence: slot ? "once" : undefined,
       scheduleDate: slot ? toDateInputValue(slot.date) : undefined,
       startTime: minutesToTime(start),
       endTime: minutesToTime(Math.min(1440, start + 60)),
-      color: contentType === "announcement" ? "#b45a78" : contentType === "broadcast" ? "#d17928" : "#4f63cf",
+      color: contentType === "announcement" ? "#b45a78" : contentType === "blip" ? savedBlip?.accentColor ?? "#16a6a1" : contentType === "broadcast" ? "#d17928" : "#4f63cf",
       active: true
-    }] }));
+    };
+    setDraftEntry(draft);
+    setDraftIsNew(true);
     setSelectedId(id);
   };
+
+  const closeEditor = () => {
+    setDraftEntry(null);
+    setDraftIsNew(false);
+    setSelectedId(null);
+    setColorEditor(null);
+  };
+
+  const saveEntry = () => {
+    if (draftEntry) {
+      updateState((current) => ({
+        ...current,
+        schedules: draftIsNew
+          ? [...current.schedules, draftEntry]
+          : current.schedules.map((entry) => entry.id === draftEntry.id ? draftEntry : entry)
+      }));
+      setDraftEntry(null);
+      setDraftIsNew(false);
+    }
+    setSelectedId(null);
+    setColorEditor(null);
+  };
+
+  const validScheduleColor = (value: string, fallback: string) => {
+    const trimmed = value.trim();
+    if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toUpperCase();
+    if (/^#[0-9a-f]{3}$/i.test(trimmed)) return `#${trimmed.slice(1).split("").map((part) => `${part}${part}`).join("")}`.toUpperCase();
+    return fallback;
+  };
+  const previewScheduleColor = (entry: ScheduleEntry) => entry.id === selectedId && colorEditor
+    ? validScheduleColor(colorEditor.draft, colorEditor.original)
+    : entry.color ?? "#5f55bd";
+
+  useEffect(() => {
+    if (!colorEditor || !selected) return;
+    const commit = () => {
+      patchEntry(selected.id, { color: validScheduleColor(colorEditor.draft, colorEditor.original) });
+      setColorEditor(null);
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest(".schedule-color-picker, .schedule-color-trigger")) return;
+      commit();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setColorEditor(null);
+      if (event.key === "Enter") commit();
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [colorEditor, selected?.id]);
   const entriesForDate = (date: Date) => filtered.filter((entry) => entryOccursOnDate(entry, date)).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
   const conflictFor = (entry: ScheduleEntry, date: Date) => entry.active && filtered.some((candidate) =>
     candidate.id !== entry.id && candidate.active && entryOccursOnDate(candidate, date)
@@ -5271,6 +6712,10 @@ function ScheduleCalendarView({
     const preview = { id: entry.id, sourceDate: drag.sourceDate, start: drag.start, end: drag.end, dayDelta: 0 };
     dragPreviewRef.current = preview;
     setDragPreview(preview);
+    if (draftEntry?.id !== entry.id) {
+      setDraftEntry({ ...entry, days: [...entry.days] });
+      setDraftIsNew(false);
+    }
     setSelectedId(entry.id);
   };
   const moveDrag = (event: React.PointerEvent<HTMLElement>) => {
@@ -5297,7 +6742,7 @@ function ScheduleCalendarView({
     const preview = dragPreviewRef.current;
     if (!drag || !preview) return;
     event.preventDefault();
-    const entry = state.schedules.find((item) => item.id === drag.id);
+    const entry = visibleSchedules.find((item) => item.id === drag.id);
     if (entry) {
       const patch: Partial<ScheduleEntry> = { startTime: minutesToTime(preview.start), endTime: minutesToTime(preview.end) };
       if (drag.mode === "move" && preview.dayDelta) {
@@ -5307,7 +6752,17 @@ function ScheduleCalendarView({
         patch.days = [...new Set([...entry.days.filter((day) => day !== sourceDay), targetDate.getDay()])];
         if (entry.recurrence === "once" || entry.scheduleDate) patch.scheduleDate = toDateInputValue(targetDate);
       }
-      patchEntry(entry.id, patch);
+      const changed = patch.startTime !== entry.startTime
+        || patch.endTime !== entry.endTime
+        || patch.scheduleDate !== undefined
+        || patch.days !== undefined;
+      if (changed) updateState((current) => ({
+        ...current,
+        schedules: current.schedules.map((candidate) => candidate.id === entry.id ? { ...candidate, ...patch } : candidate)
+      }));
+      setDraftEntry((current) => ({ ...(current?.id === entry.id ? current : entry), ...patch, days: patch.days ?? [...entry.days] }));
+      setDraftIsNew(false);
+      setSelectedId(entry.id);
     }
     calendarDragRef.current = null;
     dragPreviewRef.current = null;
@@ -5320,12 +6775,12 @@ function ScheduleCalendarView({
     const visualStart = preview?.start ?? start;
     const visualEnd = preview?.end ?? end;
     return {
-      top: `${(visualStart / 60) * hourHeight}px`,
+      top: `${((visualStart - scheduleStartMinutes) / 60) * hourHeight}px`,
       height: `${Math.max(24, ((visualEnd - visualStart) / 60) * hourHeight)}px`,
       left: `calc(${(lane / laneCount) * 100}% + 2px)`,
       width: `calc(${100 / laneCount}% - 4px)`,
       transform: preview ? `translateX(${preview.dayDelta * ((document.querySelector(".week-columns")?.getBoundingClientRect().width ?? 700) / 7)}px)` : undefined,
-      "--event-color": entry.color ?? "#5f55bd",
+      "--event-color": previewScheduleColor(entry),
       zIndex: preview ? 9 : undefined
     } as React.CSSProperties;
   };
@@ -5335,13 +6790,19 @@ function ScheduleCalendarView({
     <button type="button" className="danger" title="Delete" onClick={(event) => { event.stopPropagation(); confirmRemoveEntry(entry); }}><Trash2 size={13} /></button>
   </div>;
   const openEditorAt = (id: string, originX?: number, originY?: number) => {
-    if (!compact && originX !== undefined && originY !== undefined) {
+    const entry = visibleSchedules.find((candidate) => candidate.id === id);
+    const shouldPlace = draftEntry?.id !== id;
+    if (shouldPlace && !compact && originX !== undefined && originY !== undefined) {
       const editorWidth = 352;
       const gap = 16;
       const x = originX + gap + editorWidth <= window.innerWidth - 8
         ? originX + gap
         : Math.max(8, originX - editorWidth - gap);
-      setEditorPosition({ x, y: clamp(originY - 24, 70, Math.max(70, window.innerHeight - 150)) });
+      setEditorPosition({ x, y: clamp(originY - 24, 70, Math.max(70, window.innerHeight - 620)) });
+    }
+    if (entry && draftEntry?.id !== id) {
+      setDraftEntry({ ...entry, days: [...entry.days] });
+      setDraftIsNew(false);
     }
     setSelectedId(id);
   };
@@ -5354,7 +6815,7 @@ function ScheduleCalendarView({
   const openCalendarContextMenu = (event: React.MouseEvent, date: Date) => {
     event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
-    const start = clamp(Math.round(((event.clientY - bounds.top) / hourHeight) * 4) * 15, 0, 1410);
+    const start = clamp(scheduleStartMinutes + Math.round(((event.clientY - bounds.top) / hourHeight) * 4) * 15, scheduleStartMinutes, scheduleEndMinutes - 15);
     setContextMenu({ x: event.clientX, y: event.clientY, date, start });
   };
 
@@ -5369,46 +6830,62 @@ function ScheduleCalendarView({
       </div>
       <div className="schedule-command-actions">
         <div className="calendar-view-switch" aria-label="Calendar view">{(["week", "month", "agenda"] as const).map((option) => <button type="button" key={option} className={visibleMode === option ? "active" : ""} disabled={compact && option !== "agenda"} onClick={() => setViewMode(option)}>{option[0].toUpperCase() + option.slice(1)}</button>)}</div>
-        <label className="calendar-selector"><Monitor size={14} /><select aria-label="Display filter" value={displayFilter} onChange={(event) => setDisplayFilter(event.target.value as TargetScreen)}><option value="all">All displays</option>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label>
+        <label className="calendar-selector"><Monitor size={14} /><select aria-label="Display filter" value={displayFilter} onChange={(event) => setDisplayFilter(event.target.value as TargetScreen)}><option value="all">All Displays</option>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label} ({screen.orientation})</option>)}</select></label>
         <button type="button" className="command-button secondary compact" onClick={() => addEntry("board")}><Plus size={15} /> Board</button>
         <button type="button" className="command-button primary compact" onClick={() => addEntry("announcement")}><Megaphone size={15} /> Announcement</button>
+        <button type="button" className="command-button secondary compact" onClick={() => addEntry("blip")}><Sparkles size={15} /> Blip</button>
         <button type="button" className="command-button secondary compact" onClick={() => addEntry("broadcast")}><Radio size={15} /> Broadcast</button>
       </div>
     </header>
     <div className="schedule-status-strip">
-      <div className={`schedule-live-summary${liveEntries.length ? " active" : ""}`}><Radio size={14} /><span>{liveEntries.length ? "Live now" : "Nothing live now"}</span>{liveEntries.slice(0, 2).map((entry) => <button key={entry.id} onClick={() => setSelectedId(entry.id)}>{entry.name}</button>)}</div>
-      <div className="schedule-next-summary"><Clock3 size={14} /><span>Next up</span>{nextEntry ? <button onClick={() => setSelectedId(nextEntry.id)}><strong>{nextEntry.startTime}</strong> {nextEntry.name}</button> : <small>No more events today</small>}</div>
-      <div className="schedule-type-legend"><span><i className="board" /> Donor board</span><span><i className="announcement" /> Announcement</span><span><i className="broadcast" /> Broadcast</span><span><AlertTriangle size={12} /> Same-type conflict</span></div>
+      <div className={`schedule-live-summary${liveEntries.length ? " active" : ""}`}><Radio size={14} /><span>{liveEntries.length ? "Live now" : "Nothing live now"}</span>{liveEntries.slice(0, 2).map((entry) => <button key={entry.id} onClick={() => openEditorAt(entry.id)}>{entry.name}</button>)}</div>
+      <div className="schedule-next-summary"><Clock3 size={14} /><span>Next up</span>{nextEntry ? <button onClick={() => openEditorAt(nextEntry.id)}><strong>{nextEntry.startTime}</strong> {nextEntry.name}</button> : <small>No more events today</small>}</div>
+      <div className="schedule-type-legend"><span><i className="board" /> Donor board</span><span><i className="announcement" /> Announcement</span><span><i className="blip" /> Blip</span><span><i className="broadcast" /> Broadcast</span><span><AlertTriangle size={12} /> Same-type conflict</span></div>
     </div>
     <div className={`schedule-view-container ${visibleMode}`}>
-      {visibleMode === "week" && <div className="week-calendar schedule-week" style={{ "--calendar-hour": `${hourHeight}px` } as React.CSSProperties}>
+      {visibleMode === "week" && <div className="week-calendar schedule-week" style={{ "--calendar-hour": `${hourHeight}px`, "--calendar-hours": scheduleHourCount } as React.CSSProperties}>
         <div className="week-header"><div />{dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); return <div className={isSameCalendarDate(date, now) ? "today" : ""} key={label}><span>{label.slice(0, 3)}</span><strong>{date.getDate()}</strong></div>; })}</div>
-        <div className="week-scroll" ref={weekScrollRef}><div className="time-gutter">{hours.map((hour) => <span key={hour} style={{ top: `${hour * hourHeight}px` }}>{formatHour(hour)}</span>)}</div><div className="week-columns">
-          {dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); const entries = entriesForDate(date); const today = isSameCalendarDate(date, now); return <div className={`week-day-column${today ? " is-today" : ""}`} key={label} onContextMenu={(event) => openCalendarContextMenu(event, date)}>{hours.map((hour) => <i key={hour} style={{ top: `${hour * hourHeight}px` }} />)}{today && <div className="calendar-now-line" style={{ top: `${(nowMinutes / 60) * hourHeight}px` }}><span>Now</span></div>}{entries.map((entry) => {
+        <div className="week-scroll" ref={weekScrollRef}><div className="time-gutter">{hours.map((hour) => <span key={hour} style={{ top: `${(hour - scheduleStartHour) * hourHeight}px` }}>{formatHour(hour)}</span>)}</div><div className="week-columns">
+          {dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); const entries = entriesForDate(date); const today = isSameCalendarDate(date, now); return <div className={`week-day-column${today ? " is-today" : ""}`} key={label} onContextMenu={(event) => openCalendarContextMenu(event, date)}>{hours.map((hour) => <i key={hour} style={{ top: `${(hour - scheduleStartHour) * hourHeight}px` }} />)}{today && nowMinutes >= scheduleStartMinutes && nowMinutes <= scheduleEndMinutes && <div className="calendar-now-line" style={{ top: `${((nowMinutes - scheduleStartMinutes) / 60) * hourHeight}px` }}><span>Now</span></div>}{entries.map((entry) => {
             const lane = scheduleLane(entry, entries);
             const conflict = conflictFor(entry, date);
             const live = today && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes;
             const offline = displayIsOffline(entry);
             return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={(event) => openEditor(entry.id, event)} onContextMenu={(event) => openContextMenu(event, entry)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}${offline ? ", target display offline" : ""}`} title="Drag to move. Drag the top or bottom edge to resize.">
               <span className="calendar-resize-handle top" onPointerDown={(event) => beginDrag(event, entry, date, "resize-start")} />
-              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : entry.contentType === "broadcast" ? <Radio size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small>{offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
+              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : entry.contentType === "blip" ? <Sparkles size={11} /> : entry.contentType === "broadcast" ? <Radio size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small><b>{entry.contentType === "announcement" ? "Announcement" : entry.contentType === "blip" ? "Blip" : entry.contentType === "broadcast" ? "Broadcast" : "Board"}</b> · {offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
               <span className="calendar-resize-handle bottom" onPointerDown={(event) => beginDrag(event, entry, date, "resize-end")} />
             </button>;
           })}</div>; })}
         </div></div>
       </div>}
       {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{offline ? <WifiOff size={10} /> : conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
-      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : entry.contentType === "broadcast" ? <Radio size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : entry.contentType === "broadcast" ? "Broadcast" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Same-type conflict on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
+      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : entry.contentType === "blip" ? <Sparkles size={14} /> : entry.contentType === "broadcast" ? <Radio size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : entry.contentType === "blip" ? "Blip" : entry.contentType === "broadcast" ? "Broadcast" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Same-type conflict on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
     </div>
     {selected && createPortal(<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
-      <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - 150)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag to move</p><h2 id="schedule-event-editor-title">Edit event</h2></div><button type="button" className="icon-button" title="Close editor" onClick={() => setSelectedId(null)}><X size={17} /></button></header>
-      <div className="schedule-event-editor-body">{quickActions(selected)}<div className="schedule-name-color-row"><LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} /><label className="schedule-color-swatch" title="Choose calendar color"><span>Color</span><input type="color" aria-label="Calendar color" value={selected.color ?? "#5f55bd"} onChange={(event) => patchEntry(selected.id, { color: event.target.value })} /></label></div><div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div>
-        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "broadcast" ? <><LabeledSelect label="Broadcast source" info="Recorded video is the default scheduled broadcast source." value={selected.broadcastMode ?? "recorded"} options={["recorded", "live"]} optionLabels={{ recorded: "Recorded broadcast video", live: "Live feed" }} onChange={(value) => patchEntry(selected.id, { broadcastMode: value as ScheduleEntry["broadcastMode"] })} />{(selected.broadcastMode ?? "recorded") === "recorded" ? <label className="image-upload command-button secondary compact"><Upload size={15} /><span>{selected.broadcastVideoName ?? "Choose recorded broadcast video"}</span><input type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchEntry(selected.id, { broadcastVideoUrl: String(reader.result), broadcastVideoName: file.name }); reader.readAsDataURL(file); }} /></label> : <LabeledInput label="Presenter" info="User responsible for starting this live broadcast." value={selected.presenterName ?? ""} onChange={(presenterName) => patchEntry(selected.id, { presenterName })} />}</> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
-        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="field"><span>Display on</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => { const days = selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day]; patchEntry(selected.id, { days, recurrence: "weekly", scheduleDate: selected.scheduleDate ?? toDateInputValue(new Date()) }); }}>{label.slice(0, 1)}</button>; })}</div></div><div className="two-col schedule-date-range"><label className="field"><span>From date</span><input type="date" value={selected.scheduleDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleDate: event.target.value || undefined, recurrence: event.target.value ? "weekly" : selected.recurrence })} /></label><label className="field"><span>To date</span><input type="date" min={selected.scheduleDate} value={selected.scheduleEndDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleEndDate: event.target.value || undefined, recurrence: "weekly" })} /></label></div><button type="button" className="command-button primary schedule-save-button" onClick={() => setSelectedId(null)}>Save event</button>
+      <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; const editorHeight = event.currentTarget.parentElement?.getBoundingClientRect().height ?? 610; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - editorHeight - 8)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag title to move</p><h2 id="schedule-event-editor-title">{draftIsNew ? "New event" : "Edit event"}</h2></div><button type="button" className="icon-button" title={draftIsNew ? "Discard new event" : "Cancel edits and close"} onClick={closeEditor}><X size={17} /></button></header>
+      <div className="schedule-event-editor-body">
+        {!draftIsNew && quickActions(selected)}
+        <div className="schedule-name-color-row">
+          <LabeledInput label="Name" info="Event label shown in the calendar." value={selected.name} onChange={(name) => patchEntry(selected.id, { name })} />
+          <div className="schedule-color-control">
+            <span>Color</span>
+            <button type="button" className="schedule-color-trigger" aria-haspopup="dialog" aria-expanded={Boolean(colorEditor)} title="Choose calendar color" onClick={() => setColorEditor((current) => current ? null : { original: selected.color ?? "#5f55bd", draft: selected.color ?? "#5f55bd" })}><i style={{ background: previewScheduleColor(selected) }} /><span>{previewScheduleColor(selected)}</span></button>
+            {colorEditor && <div className="schedule-color-picker" role="dialog" aria-label="Calendar color picker">
+              <div className="schedule-color-options">{["#4F63CF", "#16A6A1", "#B45A78", "#D17928", "#8E61C7", "#C3463B", "#2D7D46", "#596579"].map((color) => <button type="button" key={color} title={color} aria-label={`Preview ${color}`} className={validScheduleColor(colorEditor.draft, colorEditor.original) === color ? "selected" : ""} style={{ background: color }} onClick={() => setColorEditor({ ...colorEditor, draft: color })} />)}</div>
+              <label><span>Hex color</span><input value={colorEditor.draft} onChange={(event) => setColorEditor({ ...colorEditor, draft: event.target.value })} maxLength={7} spellCheck={false} /></label>
+              <div className="schedule-color-picker-actions"><button type="button" onClick={() => setColorEditor(null)}>Cancel</button><button type="button" className="primary" onClick={() => { patchEntry(selected.id, { color: validScheduleColor(colorEditor.draft, colorEditor.original) }); setColorEditor(null); }}>Apply</button></div>
+            </div>}
+          </div>
+        </div>
+        <div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div>
+        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "blip" ? state.savedBlips.length ? <LabeledSelect label="Blip" info="Saved Blip to run during this calendar event." value={selected.blipId ?? state.savedBlips[0].id} options={state.savedBlips.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedBlips.map((item) => [item.id, item.name]))} onChange={(blipId) => { const item = state.savedBlips.find((candidate) => candidate.id === blipId); patchEntry(selected.id, { blipId, name: item?.name ?? selected.name, color: item?.accentColor ?? selected.color }); }} /> : <p className="field-note">Create a saved Blip before scheduling one.</p> : selected.contentType === "broadcast" ? <><LabeledSelect label="Broadcast source" info="Recorded video is the default scheduled broadcast source." value={selected.broadcastMode ?? "recorded"} options={["recorded", "live"]} optionLabels={{ recorded: "Recorded broadcast video", live: "Live feed" }} onChange={(value) => patchEntry(selected.id, { broadcastMode: value as ScheduleEntry["broadcastMode"] })} />{(selected.broadcastMode ?? "recorded") === "recorded" ? <label className="image-upload command-button secondary compact"><Upload size={15} /><span>{selected.broadcastVideoName ?? "Choose recorded broadcast video"}</span><input type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchEntry(selected.id, { broadcastVideoUrl: String(reader.result), broadcastVideoName: file.name }); reader.readAsDataURL(file); }} /></label> : <LabeledInput label="Presenter" info="User responsible for starting this live broadcast." value={selected.presenterName ?? ""} onChange={(presenterName) => patchEntry(selected.id, { presenterName })} />}</> : <LabeledSelect label="Board" info="Donor board shown during the event." value={selected.boardId} options={state.boardPrograms.map((program) => program.id)} optionLabels={Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name]))} onChange={(boardId) => patchEntry(selected.id, { boardId })} />}
+        <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="field"><span>Display on</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => { const days = selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day]; patchEntry(selected.id, { days, recurrence: "weekly", scheduleDate: selected.scheduleDate ?? toDateInputValue(new Date()) }); }}>{label.slice(0, 1)}</button>; })}</div></div><div className="two-col schedule-date-range"><label className="field"><span>From date</span><input type="date" value={selected.scheduleDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleDate: event.target.value || undefined, recurrence: event.target.value ? "weekly" : selected.recurrence })} /></label><label className="field"><span>To date</span><input type="date" min={selected.scheduleDate} value={selected.scheduleEndDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleEndDate: event.target.value || undefined, recurrence: "weekly" })} /></label></div><div className="schedule-editor-actions"><button type="button" className="command-button secondary" onClick={closeEditor}>Cancel</button><button type="button" className="command-button primary schedule-save-button" onClick={saveEntry}>Save event</button></div>
       </div>
     </aside>, document.body)}
-    {contextMenu && createPortal(<div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">{contextMenu.id ? (() => { const entry = state.schedules.find((item) => item.id === contextMenu.id); return entry ? <><button type="button" onClick={() => { setSelectedId(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button><button type="button" onClick={() => { setPreviewEntry(entry); setContextMenu(null); }}><Eye size={14} /> Preview on display</button>{entry.contentType === "announcement" ? <button type="button" disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button type="button" onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button type="button" onClick={() => { duplicateEntry(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button type="button" className="danger" onClick={() => { removeEntry(entry.id); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></> : null; })() : <><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("board", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Plus size={14} /> Add board here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("announcement", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Megaphone size={14} /> Add announcement here</button></>}</div>, document.body)}
-    {previewEntry && (() => { const screenId = previewEntry.target === "all" ? (displayFilter === "all" ? Object.keys(state.screens)[0] : displayFilter) : previewEntry.target; const screen = state.screens[screenId]; const savedAnnouncement = previewEntry.contentType === "announcement" ? state.savedAnnouncements.find((item) => item.id === previewEntry.announcementId) : undefined; const announcement = savedAnnouncement ? { ...savedAnnouncement, active: true } : undefined; return screen && createPortal(<div className="modal-backdrop schedule-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewEntry(null); }}><section className="editor-modal schedule-display-preview" role="dialog" aria-modal="true" aria-labelledby="schedule-preview-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled display preview</p><h2 id="schedule-preview-title">{screen.label} · {previewEntry.startTime}–{previewEntry.endTime}</h2></div><button type="button" className="icon-button" title="Close preview" onClick={() => setPreviewEntry(null)}><X size={18} /></button></div><div className={`schedule-preview-surface ${orientationClass(screen)}`}><BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" previewProgramId={previewEntry.contentType === "announcement" ? undefined : previewEntry.boardId} announcementActive={Boolean(announcement)} announcementCharacter={announcement?.character} announcementCharacterAsset={announcement} />{announcement && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={`${toDateInputValue(anchorDate)}T${previewEntry.startTime}:00`} />}</div><p className="field-note">Previewing the content scheduled for this event on {screen.label}.</p></section></div>, document.body); })()}
+    {contextMenu && createPortal(<div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">{contextMenu.id ? (() => { const entry = visibleSchedules.find((item) => item.id === contextMenu.id); return entry ? <><button type="button" onClick={() => { openEditorAt(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button><button type="button" onClick={() => { setPreviewEntry(entry); setContextMenu(null); }}><Eye size={14} /> Preview on display</button>{entry.contentType === "announcement" ? <button type="button" disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button type="button" onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button type="button" onClick={() => { duplicateEntry(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button type="button" className="danger" onClick={() => { confirmRemoveEntry(entry); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></> : null; })() : <><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("board", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Plus size={14} /> Add board here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("announcement", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Megaphone size={14} /> Add announcement here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("blip", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Sparkles size={14} /> Add Blip here</button></>}</div>, document.body)}
+    {pendingDelete && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDelete(null); }}><section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-schedule-title" aria-describedby="delete-schedule-description"><div className="destructive-confirm-icon"><Trash2 size={22} /></div><div><p className="eyebrow">Delete scheduled content</p><h2 id="delete-schedule-title">Delete “{pendingDelete.name}”?</h2><p id="delete-schedule-description">This removes the event from the calendar. The underlying board, announcement, Blip, or recording will remain available.</p></div><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setPendingDelete(null)}>Cancel</button><button type="button" className="command-button danger" onClick={() => removeEntry(pendingDelete.id)}><Trash2 size={15} /> Delete event</button></div></section></div>, document.body)}
+    {previewEntry && (() => { const screenId = previewEntry.target === "all" ? (displayFilter === "all" ? Object.keys(state.screens)[0] : displayFilter) : previewEntry.target; const screen = state.screens[screenId]; const savedAnnouncement = previewEntry.contentType === "announcement" ? state.savedAnnouncements.find((item) => item.id === previewEntry.announcementId) : undefined; const announcement = savedAnnouncement ? { ...savedAnnouncement, active: true } : undefined; const savedBlip = previewEntry.contentType === "blip" ? state.savedBlips.find((item) => item.id === previewEntry.blipId) : undefined; const blip = savedBlip ? { ...savedBlip, active: true } as LanternState["activeBlip"] : undefined; return screen && createPortal(<div className="modal-backdrop schedule-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewEntry(null); }}><section className="editor-modal schedule-display-preview" role="dialog" aria-modal="true" aria-labelledby="schedule-preview-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled display preview</p><h2 id="schedule-preview-title">{screen.label} · {previewEntry.startTime}–{previewEntry.endTime}</h2></div><button type="button" className="icon-button" title="Close preview" onClick={() => setPreviewEntry(null)}><X size={18} /></button></div><div className={`schedule-preview-surface ${orientationClass(screen)}`}><BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" previewProgramId={previewEntry.contentType === "board" ? previewEntry.boardId : undefined} announcementActive={Boolean(announcement)} announcementCharacter={announcement?.character} announcementCharacterAsset={announcement} />{announcement && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={`${toDateInputValue(anchorDate)}T${previewEntry.startTime}:00`} />}{blip && <BlipComposition blip={blip} startedAt={new Date(Date.now() - Math.max(0, blip.countdownSeconds - 3) * 1000).toISOString()} />}</div><p className="field-note">Previewing the content scheduled for this event on {screen.label}.</p></section></div>, document.body); })()}
   </section>;
 }
 
@@ -5710,7 +7187,7 @@ function scheduleLane(entry: ScheduleEntry, entries: ScheduleEntry[]) {
 }
 
 function timeToMinutes(value: string) { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; }
-function formatHour(hour: number) { return `${hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? "PM" : "AM"}`; }
+function formatHour(hour: number) { return `${hour % 12 || 12}:00 ${hour >= 12 ? "PM" : "AM"}`; }
 function minutesToTime(value: number) { const minutes = clamp(Math.round(value), 0, 1439); return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`; }
 function startOfCalendarWeek(value: Date) { const date = new Date(value.getFullYear(), value.getMonth(), value.getDate()); date.setDate(date.getDate() - ((date.getDay() + 6) % 7)); return date; }
 function addCalendarDays(value: Date, amount: number) { const date = new Date(value); date.setDate(date.getDate() + amount); return date; }
@@ -5787,13 +7264,177 @@ function RecognitionSettingsView({ state, updateState }: { state: LanternState; 
         <VocabularyEditor title="Categories" description="Donor types" values={state.recognitionSettings.categories} onChange={(next, previous, replacement) => changeVocabulary("categories", next, previous, replacement)} />
         <VocabularyEditor title="Tags" description="Search labels" values={state.recognitionSettings.tags} onChange={(next, previous, replacement) => changeVocabulary("tags", next, previous, replacement)} />
       </div>
+      <GivingProgramsEditor state={state} updateState={updateState} />
     </section>
   );
 }
 
+function GivingProgramsEditor({ state, updateState }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void }) {
+  const [expandedId, setExpandedId] = useState("");
+  const orderedPrograms = [...state.givingPrograms].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  const patchProgram = (programId: string, patch: Partial<GivingProgram>) => updateState((current) => {
+    if (patch.name !== undefined && !patch.name.trim()) return current;
+    const previousProgram = current.givingPrograms.find((program) => program.id === programId);
+    return {
+      ...current,
+      givingPrograms: current.givingPrograms.map((program) => program.id === programId ? { ...program, ...patch } : program),
+      donors: (patch.name || patch.classLabel) && previousProgram
+        ? current.donors.map((donor) => donor.givingProgramId === programId ? {
+            ...donor,
+            tags: (donor.tags ?? []).map((tag) => tag === previousProgram.name && patch.name
+              ? patch.name
+              : tag === previousProgram.classLabel && patch.classLabel
+                ? patch.classLabel
+                : tag)
+          } : donor)
+        : current.donors
+    };
+  });
+  const renameLevel = (programId: string, levelId: string, name: string) => updateState((current) => {
+    if (!name.trim()) return current;
+    const program = current.givingPrograms.find((candidate) => candidate.id === programId);
+    const previous = program?.levels.find((candidate) => candidate.id === levelId)?.name;
+    return {
+      ...current,
+      givingPrograms: current.givingPrograms.map((candidate) => candidate.id === programId ? {
+        ...candidate,
+        levels: candidate.levels.map((level) => level.id === levelId ? { ...level, name } : level)
+      } : candidate),
+      donors: current.donors.map((donor) => donor.givingProgramId === programId && donor.givingLevelId === levelId ? {
+        ...donor,
+        tier: name || donor.tier,
+        tags: (donor.tags ?? []).map((tag) => tag === `${previous} Level` ? `${name} Level` : tag)
+      } : donor),
+      donorGroups: current.donorGroups.map((group) => group.id === `group-toy-${levelId}` ? { ...group, name: `${name} Level` } : group),
+      boardPrograms: current.boardPrograms.map((board) => board.givingProgramId === programId ? {
+        ...board,
+        panels: board.panels?.map((panel) => panel.donorTierFilter?.includes(previous ?? "") ? {
+          ...panel,
+          donorTierFilter: panel.donorTierFilter.map((tier) => tier === previous ? name : tier)
+        } : panel)
+      } : board),
+      recognitionSettings: {
+        ...current.recognitionSettings,
+        tiers: current.recognitionSettings.tiers.map((tier) => tier === previous ? name : tier)
+      }
+    };
+  });
+  const patchLevel = (programId: string, levelId: string, patch: Partial<GivingLevel>) => updateState((current) => ({
+    ...current,
+    givingPrograms: current.givingPrograms.map((program) => program.id === programId ? {
+      ...program,
+      levels: program.levels.map((level) => level.id === levelId ? { ...level, ...patch } : level)
+    } : program)
+  }));
+  const moveProgram = (programId: string, direction: -1 | 1) => updateState((current) => {
+    const ordered = [...current.givingPrograms].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+    const index = ordered.findIndex((program) => program.id === programId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= ordered.length) return current;
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    return { ...current, givingPrograms: ordered.map((program, displayOrder) => ({ ...program, displayOrder })) };
+  });
+  const moveLevel = (programId: string, levelId: string, direction: -1 | 1) => updateState((current) => ({
+    ...current,
+    givingPrograms: current.givingPrograms.map((program) => {
+      if (program.id !== programId) return program;
+      const levels = [...program.levels].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      const index = levels.findIndex((level) => level.id === levelId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= levels.length) return program;
+      [levels[index], levels[target]] = [levels[target], levels[index]];
+      return { ...program, levels: levels.map((level, displayOrder) => ({ ...level, displayOrder })) };
+    })
+  }));
+  const addProgram = () => {
+    const id = `giving-program-${Date.now()}`;
+    const program: GivingProgram = {
+      id,
+      name: "New Giving Program",
+      classLabel: "Recognition class",
+      classYear: String(new Date().getFullYear()),
+      description: "Describe this giving program.",
+      fundDesignation: "General support",
+      invitation: "",
+      impactStatement: "",
+      goodDeedPrompt: "",
+      contactName: "",
+      contactPhone: "",
+      contactEmail: "",
+      website: "",
+      address: "",
+      levels: [],
+      active: true,
+      displayOrder: state.givingPrograms.length,
+      allowOneTimeQualification: false
+    };
+    updateState((current) => ({ ...current, givingPrograms: [...current.givingPrograms, program] }));
+    setExpandedId(id);
+  };
+  const addLevel = (programId: string) => {
+    const levelId = `level-${Date.now()}`;
+    updateState((current) => ({ ...current, givingPrograms: current.givingPrograms.map((program) => program.id === programId ? {
+      ...program,
+      levels: [...program.levels, { id: levelId, name: "New Level", annualPledge: 1000, years: 1, description: "Describe this level.", color: "#5f65b8", minAmount: 1000, displayOrder: program.levels.length, active: true }]
+    } : program) }));
+  };
+
+  return <section className="giving-program-settings" aria-labelledby="giving-programs-heading">
+    <header><div><p className="eyebrow">Connected pledge settings</p><h2 id="giving-programs-heading">Giving programs and levels</h2><span>Programs configured here appear automatically in donor profiles and linked board tools.</span></div><button type="button" className="command-button primary" onClick={addProgram}><Plus size={15} /> Add program</button></header>
+    <div className="giving-program-list">{orderedPrograms.map((program, programIndex) => {
+      const expanded = expandedId === program.id;
+      const levels = [...program.levels].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      return <article className={`giving-program-card${program.active === false ? " archived" : ""}`} key={program.id}>
+        <div className="giving-program-card-head"><button type="button" className="giving-program-expand" onClick={() => setExpandedId(expanded ? "" : program.id)} aria-expanded={expanded}><ChevronRight size={16} /><span><strong>{program.name}</strong><small>{program.active === false ? "Archived" : `${program.levels.filter((level) => level.active !== false).length} active levels`}</small></span></button><div><button type="button" className="icon-button" disabled={programIndex === 0} onClick={() => moveProgram(program.id, -1)} title="Move program up"><ChevronUp size={14} /></button><button type="button" className="icon-button" disabled={programIndex === orderedPrograms.length - 1} onClick={() => moveProgram(program.id, 1)} title="Move program down"><ChevronDown size={14} /></button><button type="button" className={program.active === false ? "command-button secondary compact" : "command-button danger compact"} onClick={() => patchProgram(program.id, { active: program.active === false })}>{program.active === false ? "Restore" : "Archive"}</button></div></div>
+        {expanded && <div className="giving-program-body">
+          <div className="editor-form-grid giving-program-fields"><LabeledInput label="Program name" info="Public and editor label used anywhere this program is selected." value={program.name} onChange={(name) => patchProgram(program.id, { name })} /><LabeledInput label="Class label" info="Data-driven cohort label shown on recognition boards." value={program.classLabel} onChange={(classLabel) => patchProgram(program.id, { classLabel })} /><LabeledInput label="Class year" info="Default pledge cohort/start year." value={program.classYear} onChange={(classYear) => patchProgram(program.id, { classYear })} /><LabeledInput label="Fund designation" info="Where this program's support is directed." value={program.fundDesignation} onChange={(fundDesignation) => patchProgram(program.id, { fundDesignation })} /><label className="field span-two"><span>Description</span><textarea value={program.description} onChange={(event) => patchProgram(program.id, { description: event.target.value })} /></label><label className="switch-row span-two"><input type="checkbox" checked={program.allowOneTimeQualification ?? false} onChange={(event) => patchProgram(program.id, { allowOneTimeQualification: event.target.checked })} /><span>Allow one-time pledges to qualify for linked program boards</span></label></div>
+          <div className="giving-levels-head"><div><strong>Program levels</strong><small>Configure labels, amount rules, defaults, term, order, and availability.</small></div><button type="button" className="command-button secondary compact" onClick={() => addLevel(program.id)}><Plus size={14} /> Add level</button></div>
+          <div className="giving-level-list">{levels.map((level, levelIndex) => <section className={`giving-level-card${level.active === false ? " archived" : ""}`} key={level.id}><header><span><strong>{level.name}</strong><small>{level.active === false ? "Archived" : level.maxAmount == null ? `${(level.minAmount ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD" })}+` : `${(level.minAmount ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD" })}–${level.maxAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })}`}</small></span><div><button type="button" className="icon-button" disabled={levelIndex === 0} onClick={() => moveLevel(program.id, level.id, -1)} title="Move level up"><ChevronUp size={14} /></button><button type="button" className="icon-button" disabled={levelIndex === levels.length - 1} onClick={() => moveLevel(program.id, level.id, 1)} title="Move level down"><ChevronDown size={14} /></button><button type="button" className="icon-button" onClick={() => patchLevel(program.id, level.id, { active: level.active === false })} title={level.active === false ? "Restore level" : "Archive level"}>{level.active === false ? <RefreshCcw size={14} /> : <Trash2 size={14} />}</button></div></header><div className="giving-level-fields"><LabeledInput label="Label" info="Public name for this level." value={level.name} onChange={(name) => renameLevel(program.id, level.id, name)} /><CurrencyInput label="Annual amount default" value={level.annualPledge} onChange={(annualPledge) => patchLevel(program.id, level.id, { annualPledge: annualPledge ?? 0 })} /><CurrencyInput label="Minimum / threshold" value={level.minAmount} onChange={(minAmount) => patchLevel(program.id, level.id, { minAmount })} /><CurrencyInput label="Maximum (optional)" value={level.maxAmount} onChange={(maxAmount) => patchLevel(program.id, level.id, { maxAmount })} /><PledgeTermControl donor={level} defaultYears={1} onChange={(next) => patchLevel(program.id, level.id, { years: next.pledgeYears ?? 1 })} /><label className="field span-two"><span>Description</span><textarea value={level.description} onChange={(event) => patchLevel(program.id, level.id, { description: event.target.value })} /></label></div></section>)}</div>
+        </div>}
+      </article>;
+    })}</div>
+  </section>;
+}
+
 function VocabularyEditor({ title, description, values, onChange }: { title: string; description: string; values: string[]; onChange: (values: string[], previous?: string, replacement?: string) => void }) {
+  const singularTitle = title === "Categories" ? "category" : title.toLocaleLowerCase().replace(/s$/, "");
+  const [selectedValue, setSelectedValue] = useState(values[0] ?? "");
+  const [editValue, setEditValue] = useState(values[0] ?? "");
   const [newValue, setNewValue] = useState("");
-  const add = () => { const clean = newValue.trim(); if (!clean || values.includes(clean)) return; onChange([...values, clean]); setNewValue(""); };
+  useEffect(() => {
+    if (values.includes(selectedValue)) return;
+    const nextSelected = values[0] ?? "";
+    setSelectedValue(nextSelected);
+    setEditValue(nextSelected);
+  }, [selectedValue, values]);
+  const select = (value: string) => {
+    setSelectedValue(value);
+    setEditValue(value);
+  };
+  const save = () => {
+    const clean = editValue.trim();
+    if (!selectedValue || !clean || (clean !== selectedValue && values.some((value) => value.toLocaleLowerCase() === clean.toLocaleLowerCase()))) return;
+    onChange(values.map((value) => value === selectedValue ? clean : value), selectedValue, clean);
+    setSelectedValue(clean);
+    setEditValue(clean);
+  };
+  const remove = () => {
+    if (!selectedValue || values.length <= 1) return;
+    const selectedIndex = values.indexOf(selectedValue);
+    const nextValues = values.filter((value) => value !== selectedValue);
+    const nextSelected = nextValues[Math.min(Math.max(selectedIndex, 0), nextValues.length - 1)] ?? "";
+    onChange(nextValues, selectedValue);
+    setSelectedValue(nextSelected);
+    setEditValue(nextSelected);
+  };
+  const add = () => {
+    const clean = newValue.trim();
+    if (!clean || values.some((value) => value.toLocaleLowerCase() === clean.toLocaleLowerCase())) return;
+    onChange([...values, clean]);
+    setSelectedValue(clean);
+    setEditValue(clean);
+    setNewValue("");
+  };
   return (
     <section className="vocabulary-panel">
       <div className="vocabulary-panel-head">
@@ -5803,23 +7444,23 @@ function VocabularyEditor({ title, description, values, onChange }: { title: str
         </div>
         <b>{values.length}</b>
       </div>
-      <div className="vocabulary-list">
-        {values.map((value, index) => (
-          <div className="vocabulary-row" key={`${index}-${value}`}>
-            <input value={value} aria-label={`${title} name`} onChange={(event) => { const replacement = event.target.value; onChange(values.map((item, itemIndex) => itemIndex === index ? replacement : item), value, replacement); }} />
-            <button type="button" className="icon-button danger-icon" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index), value)} disabled={values.length <= 1} title={`Remove ${value}`}><Trash2 size={14} /></button>
-          </div>
-        ))}
+      <div className="vocabulary-select-row">
+        <label><span>Selected {singularTitle}</span><select aria-label={`Select ${singularTitle}`} value={selectedValue} onChange={(event) => select(event.target.value)}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        <button type="button" className="icon-button danger-icon" onClick={remove} disabled={values.length <= 1} title={selectedValue ? `Delete ${selectedValue}` : `Delete selected ${singularTitle}`}><Trash2 size={14} /></button>
+      </div>
+      <div className="vocabulary-edit-row">
+        <label><span>Edit selected</span><input value={editValue} aria-label={`Edit selected ${singularTitle}`} onChange={(event) => setEditValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } }} /></label>
+        <button type="button" className="command-button secondary" onClick={save} disabled={!selectedValue || !editValue.trim() || editValue.trim() === selectedValue}>Save</button>
       </div>
       <div className="vocabulary-add">
-        <input value={newValue} onChange={(event) => setNewValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }} placeholder={`New ${title.toLowerCase().replace(/s$/, "")}`} />
-        <button type="button" className="command-button primary" onClick={add}><Plus size={14} /> Add</button>
+        <input value={newValue} onChange={(event) => setNewValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }} placeholder={`New ${singularTitle}`} />
+        <button type="button" className="command-button primary" onClick={add}><Plus size={14} /> Add new</button>
       </div>
     </section>
   );
 }
 
-function RevisionsView() {
+function RevisionsView({ state }: { state: LanternState }) {
   const [tag, setTag] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const entries = codeChangelog.map((entry) => ({ ...entry, kind: "code" as const }));
@@ -5831,6 +7472,7 @@ function RevisionsView() {
 
   return (
     <section className="revision-workspace">
+      <AuditHistoryPanel auditHistory={state.auditHistory} title="Operational audit history" />
       <div className="revision-hero">
         <div>
           <p className="eyebrow">Version control</p>
@@ -5877,6 +7519,27 @@ function RevisionsView() {
   );
 }
 
+function BlipComposition({ blip, startedAt }: { blip: LanternState["activeBlip"]; startedAt?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, []);
+  const elapsed = Math.max(0, (now - Date.parse(startedAt ?? new Date().toISOString())) / 1000);
+  const remaining = Math.max(0, Math.ceil(blip.countdownSeconds - elapsed));
+  const revealed = blip.kind === "celebration" || elapsed >= blip.countdownSeconds;
+  return <div className={`blip-overlay blip-${blip.kind} motion-${blip.motion}${revealed ? " revealed" : ""}`} style={{ "--blip-background": blip.backgroundColor, "--blip-accent": blip.accentColor } as React.CSSProperties}>
+    <div className="blip-glow" />
+    <article>
+      {blip.imageUrl && <div className="blip-image"><img src={blip.imageUrl} alt="" /></div>}
+      <div className="blip-copy"><span className="blip-kicker">{blip.kind === "celebration" ? "Museum moment" : blip.kind === "quiz" ? "Think fast" : "Just for fun"}</span><h1>{blip.headline}</h1><p className="blip-prompt">{blip.prompt}</p>{blip.subtext && <small>{blip.subtext}</small>}
+        {blip.kind !== "celebration" && <div className={`blip-answer${revealed ? " visible" : ""}`} aria-live="polite"><span>{blip.kind === "quiz" ? "Answer" : "Punchline"}</span><strong>{revealed ? blip.answer : "Get ready…"}</strong></div>}
+      </div>
+      {!revealed && blip.showCountdown && <div className="blip-countdown"><strong>{remaining}</strong><span>seconds</span><i style={{ "--countdown-progress": `${Math.max(0, Math.min(1, remaining / Math.max(1, blip.countdownSeconds))) * 360}deg` } as React.CSSProperties} /></div>}
+    </article>
+  </div>;
+}
+
 function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
   const [demoStartedAt, setDemoStartedAt] = useState(() => new Date().toISOString());
@@ -5918,6 +7581,24 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
   );
 }
 
+function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
+  const state = loadLanternState();
+  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  const screens = screenIds.map((screenId) => state.screens[screenId]).filter(Boolean);
+  return <main className={`display-wall-shell count-${screens.length}`}>
+    <header>
+      <div><strong>Lantern display wall</strong><span>{screens.length} outputs opened together</span></div>
+      <div><span>Browser-safe one-click view</span><button type="button" onClick={() => window.close()}><X size={16} /> Close wall</button></div>
+    </header>
+    <div className="display-wall-grid">
+      {screens.map((screen) => <section className={`display-wall-tile ${orientationClass(screen)}`} key={screen.id}>
+        <span>{screen.label} · {screen.orientation}</span>
+        <iframe src={`${appUrl}#/display/${encodeURIComponent(screen.id)}`} title={`${screen.label} display output`} allow="autoplay; fullscreen" />
+      </section>)}
+    </div>
+  </main>;
+}
+
 function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
   const [fps, setFps] = useState(0);
@@ -5928,6 +7609,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const [displayMenu, setDisplayMenu] = useState<{ x: number; y: number } | null>(null);
   const [scheduleNow, setScheduleNow] = useState(() => new Date());
   const scheduledSoundRef = useRef<ResolvedScheduledAnnouncement | null>(null);
+  const blipSoundKeyRef = useRef("");
   const identifyTimerRef = useRef<number | null>(null);
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
   const showIdentity = useCallback(() => {
@@ -5990,10 +7672,49 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
     };
   }, [fps, screenId, showIdentity, state.live.active, state.live.target]);
 
-  const showAnnouncement = state.announcement.active && (state.announcement.targets?.length ? state.announcement.targets.includes(screenId) : targetIncludes(state.announcement.target, screenId));
   const showLive = state.live.active && targetIncludes(state.live.target, screenId);
-  const scheduledAnnouncement = showAnnouncement ? null : resolveScheduledAnnouncement(state, screenId, scheduleNow);
+  const liveComposition = normalizeBroadcastComposition(state.live);
+  const liveCropEdges = normalizeCropEdges(liveComposition.frame.cropEdges);
+  const displayCostume = state.effectStudio.costumes.find((costume) => costume.id === liveComposition.effects.costumeId);
+  const displayCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === liveComposition.effects.calibrationProfileId);
+  const displayCostumeRenderer = useMemo(() => liveComposition.effects.costumeEnabled && displayCostume
+    ? ((context: CanvasRenderingContext2D, frame: Parameters<typeof renderCostumeOverlay>[1]) => renderCostumeOverlay(context, frame, displayCostume, displayCalibration))
+    : undefined, [displayCalibration, displayCostume, liveComposition.effects.costumeEnabled]);
+  const scheduledBroadcast = showLive ? null : resolveScheduledBroadcast(state, screenId, scheduleNow);
+  const broadcastActive = showLive || Boolean(scheduledBroadcast);
+  const immediateBlipExpiresAt = state.activeBlip.startedAt && state.activeBlip.durationMinutes > 0
+    ? Date.parse(state.activeBlip.startedAt) + state.activeBlip.durationMinutes * 60_000
+    : null;
+  const immediateBlipIsCurrent = immediateBlipExpiresAt === null || scheduleNow.getTime() < immediateBlipExpiresAt;
+  const immediateBlip = state.activeBlip.active && immediateBlipIsCurrent && (state.activeBlip.targets?.length ? state.activeBlip.targets.includes(screenId) : targetIncludes(state.activeBlip.target, screenId)) ? { key: `${state.activeBlip.id}-${state.activeBlip.startedAt}`, blip: state.activeBlip, startedAt: state.activeBlip.startedAt ?? scheduleNow.toISOString() } : null;
+  const displayBlip = broadcastActive ? null : immediateBlip ?? resolveScheduledBlip(state, screenId, scheduleNow);
+  const immediateAnnouncementExpiresAt = state.announcement.startedAt && state.announcement.durationMinutes > 0
+    ? Date.parse(state.announcement.startedAt) + state.announcement.durationMinutes * 60_000
+    : null;
+  const immediateAnnouncementIsCurrent = immediateAnnouncementExpiresAt === null || scheduleNow.getTime() < immediateAnnouncementExpiresAt;
+  const showAnnouncement = !broadcastActive && !displayBlip && state.announcement.active && immediateAnnouncementIsCurrent && (state.announcement.targets?.length ? state.announcement.targets.includes(screenId) : targetIncludes(state.announcement.target, screenId));
+  const scheduledAnnouncement = broadcastActive || displayBlip || showAnnouncement ? null : resolveScheduledAnnouncement(state, screenId, scheduleNow);
   const scheduledMessage = activeScheduleMessage(state, screenId, scheduleNow);
+
+  useEffect(() => {
+    if (!displayBlip || blipSoundKeyRef.current === displayBlip.key) return;
+    blipSoundKeyRef.current = displayBlip.key;
+    if (displayBlip.blip.startSoundUrl) playSound(displayBlip.blip.startSoundUrl, displayBlip.blip.sfxVolume);
+    else playBlipSfx(displayBlip.blip.startSfx, displayBlip.blip.sfxVolume);
+    if (displayBlip.blip.kind === "celebration") {
+      window.setTimeout(() => displayBlip.blip.revealSoundUrl ? playSound(displayBlip.blip.revealSoundUrl!, displayBlip.blip.sfxVolume) : playBlipSfx(displayBlip.blip.revealSfx, displayBlip.blip.sfxVolume), 650);
+    }
+  }, [displayBlip?.key]);
+
+  useEffect(() => {
+    if (!displayBlip || displayBlip.blip.kind === "celebration") return;
+    const elapsed = Math.max(0, (Date.now() - Date.parse(displayBlip.startedAt)) / 1000);
+    const revealIn = Math.max(0, displayBlip.blip.countdownSeconds - elapsed) * 1000;
+    const revealTimer = window.setTimeout(() => displayBlip.blip.revealSoundUrl ? playSound(displayBlip.blip.revealSoundUrl!, displayBlip.blip.sfxVolume) : playBlipSfx(displayBlip.blip.revealSfx, displayBlip.blip.sfxVolume), revealIn);
+    const tickTimer = displayBlip.blip.ticking && revealIn > 0 ? window.setInterval(() => playBlipSfx("bell", Math.min(24, displayBlip.blip.sfxVolume)), 1000) : undefined;
+    const stopTicks = tickTimer ? window.setTimeout(() => window.clearInterval(tickTimer), revealIn) : undefined;
+    return () => { window.clearTimeout(revealTimer); if (tickTimer) window.clearInterval(tickTimer); if (stopTicks) window.clearTimeout(stopTicks); };
+  }, [displayBlip?.key]);
 
   useEffect(() => {
     const previous = scheduledSoundRef.current;
@@ -6023,7 +7744,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
 
   return (
     <div
-      className={`display-shell ${orientationClass(screen)}${fitToScreen ? " fit-board" : ""}`}
+      className={`display-shell ${orientationClass(screen)}${fitToScreen ? " fit-board" : ""}${showLive && liveComposition.backgroundMode === "none" ? " transparent-live-background" : ""}`}
       onClick={() => setDisplayMenu(null)}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -6043,25 +7764,27 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         announcementCharacterAsset={showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement}
         announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
       />
+      {displayBlip && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
       {showAnnouncement && (
         <FixedAnnouncementComposition screen={screen} announcement={state.announcement} startedAt={state.announcement.startedAt} />
       )}
       {!showAnnouncement && scheduledAnnouncement && (
         <FixedAnnouncementComposition screen={screen} announcement={scheduledAnnouncement.announcement} startedAt={scheduledAnnouncement.startedAt} />
       )}
-      {!showAnnouncement && !scheduledAnnouncement && scheduledMessage && (
+      {!broadcastActive && !displayBlip && !showAnnouncement && !scheduledAnnouncement && scheduledMessage && (
         <div className="announcement-overlay ribbon">
           <strong>{scheduledMessage.name}</strong>
           <span>{scheduledMessage.message}</span>
         </div>
       )}
-      {showLive && state.live.backgroundMode !== "board" && (
-        <div className="live-broadcast-background" style={{ backgroundColor: state.live.backgroundColor, backgroundImage: state.live.backgroundMode === "image" && state.live.backgroundImage ? `url(${state.live.backgroundImage})` : undefined }} />
-      )}
+      {scheduledBroadcast?.broadcastVideoUrl && <video className="scheduled-broadcast-video" src={scheduledBroadcast.broadcastVideoUrl} autoPlay loop playsInline />}
+      {showLive && <BroadcastBackgroundLayer live={liveComposition} orientation={screen.orientation} className="live-broadcast-background" />}
       {showLive && (
-        <div className={`live-overlay mask-${state.live.frame.maskShape ?? "rectangle"}`} style={{ left: `${state.live.frame.x}%`, top: `${state.live.frame.y}%`, width: `${state.live.frame.width}%`, height: `${state.live.frame.height}%`, clipPath: state.live.frame.maskShape === "polygon" ? livePolygonClip(state.live.frame) : undefined, border: state.live.frameBorderWidth > 0 ? `${state.live.frameBorderWidth}px solid ${state.live.frameBorderColor}` : "none", backgroundColor: state.live.panelColor, boxSizing: "border-box" }}>
-          <div className="live-camera-transform" style={{ transform: `rotate(${state.live.frame.rotation ?? 0}deg) scale(${state.live.frame.mirrorX ? -1 : 1}, ${state.live.frame.mirrorY ? -1 : 1})` }}>
-            <ChromaVideo stream={stream} chromaKey={state.live.chromaKey} effects={state.live.effects} crop={state.live.frame.crop} />
+        <div className={`live-overlay broadcast-frame-surface mask-${liveComposition.frame.maskShape ?? "rectangle"}`} style={{ left: `${liveComposition.frame.x}%`, top: `${liveComposition.frame.y}%`, width: `${liveComposition.frame.width}%`, height: `${liveComposition.frame.height}%`, clipPath: liveComposition.frame.maskShape === "polygon" ? livePolygonClip(liveComposition.frame) : undefined, ...frameSurfaceStyle(liveComposition) }}>
+          <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${liveCropEdges.top}% ${liveCropEdges.right}% ${liveCropEdges.bottom}% ${liveCropEdges.left}%)` }}>
+            <div className="live-camera-transform" style={{ transform: `rotate(${liveComposition.frame.rotation ?? 0}deg) scale(${liveComposition.frame.mirrorX ? -1 : 1}, ${liveComposition.frame.mirrorY ? -1 : 1})` }}>
+              <ChromaVideo stream={stream} chromaKey={liveComposition.chromaKey} effects={liveComposition.effects} crop={liveComposition.frame.crop} fitMode={liveComposition.frame.fitMode} renderTrackedOverlay={displayCostumeRenderer} />
+            </div>
           </div>
           {!stream && <div className="video-waiting">Waiting for local video signal</div>}
         </div>
@@ -6125,7 +7848,7 @@ function Slider({
   editableValue = false
 }: {
   label: string;
-  info: string;
+  info?: string;
   value: number;
   onChange: (value: number) => void;
   min?: number;
@@ -6136,7 +7859,7 @@ function Slider({
     <label className="field slider-field">
       <span>
         {label}
-        <InfoDot text={info} />
+        {info && <InfoDot text={info} />}
       </span>
       {editableValue
         ? <input className="slider-number-input" type="number" aria-label={`${label} value`} min={min} max={max} step={1} value={value} onChange={(event) => {
@@ -6155,22 +7878,24 @@ function LabeledSelect({
   value,
   options,
   optionLabels,
+  disabled = false,
   onChange
 }: {
   label: string;
-  info: string;
+  info?: string;
   value: string;
   options: string[];
   optionLabels?: Record<string, string>;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <label className="field">
       <span>
         {label}
-        <InfoDot text={info} />
+        {info && <InfoDot text={info} />}
       </span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option} value={option}>
             {optionLabels?.[option] ?? labelForTarget(option)}
@@ -6181,14 +7906,14 @@ function LabeledSelect({
   );
 }
 
-function LabeledInput({ label, info, value, onChange }: { label: string; info: string; value: string; onChange: (value: string) => void }) {
+function LabeledInput({ label, info, value, type = "text", onChange }: { label: string; info?: string; value: string; type?: React.HTMLInputTypeAttribute; onChange: (value: string) => void }) {
   return (
     <label className="field">
       <span>
         {label}
-        <InfoDot text={info} />
+        {info && <InfoDot text={info} />}
       </span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} />
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -6202,6 +7927,33 @@ function playSound(source: string, volume = 85) {
   const audio = new Audio(source);
   audio.volume = Math.max(0, Math.min(1, volume / 100));
   void audio.play().catch(() => undefined);
+}
+
+function playBlipSfx(effect: LanternState["activeBlip"]["startSfx"], volume = 70) {
+  if (effect === "off") return;
+  if (effect === "bell") return playSound(announcementSfxSources.ding, volume);
+  if (effect === "applause" || effect === "laughter") return playSound(announcementSfxSources.chime, volume);
+  try {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const notes = effect === "level-up" ? [330, 440, 660, 880] : [120, 90, 220];
+    notes.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = context.currentTime + index * (effect === "level-up" ? .11 : .16);
+      oscillator.type = effect === "level-up" ? "sine" : index === notes.length - 1 ? "triangle" : "square";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(Math.max(.015, volume / 650), start);
+      gain.gain.exponentialRampToValueAtTime(.001, start + .2);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + .21);
+    });
+    window.setTimeout(() => void context.close(), 1200);
+  } catch {
+    // Displays remain silent when browser audio policy blocks synthesized effects.
+  }
 }
 
 async function readSharedImageFile(file: File | undefined, onLoad: (value: string) => void) {
@@ -6351,7 +8103,10 @@ function scheduleTargetOptions(state: LanternState) {
 }
 
 function targetOptionLabels(state: LanternState) {
-  return Object.fromEntries(targetOptions(state).map((target) => [target, target === "all" ? "All displays" : state.screens[target]?.label ?? target]));
+  return Object.fromEntries(targetOptions(state).map((target) => {
+    const screen = state.screens[target];
+    return [target, target === "all" ? "All displays" : screen ? `${screen.label} (${screen.orientation})` : target];
+  }));
 }
 
 function deviceOptionList(devices: MediaDeviceInfo[], defaultLabel: string, fallbackName: string) {
@@ -6384,6 +8139,8 @@ function donorSubtextVisibleForDisplay(screen: DisplayProfile, donorId: string) 
 
 function titleFor(view: View) {
   switch (view) {
+    case "brigade":
+      return "Toy Soldier Brigade";
     case "donors":
       return "Donors";
     case "theme":
@@ -6411,6 +8168,17 @@ interface ResolvedScheduledAnnouncement {
   startedAt: string;
 }
 
+interface ResolvedBlip {
+  key: string;
+  blip: LanternState["activeBlip"];
+  startedAt: string;
+}
+
+interface ResolvedScheduledBroadcast {
+  key: string;
+  broadcastVideoUrl: string;
+}
+
 function scheduleMatchesDate(entry: ScheduleEntry, now: Date) {
   const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   if (entry.recurrence === "once" && entry.scheduleDate) return entry.scheduleDate === localDate;
@@ -6422,7 +8190,7 @@ function scheduleMatchesDate(entry: ScheduleEntry, now: Date) {
 function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, now = new Date()) {
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return state.schedules?.find((entry) =>
-    entry.contentType !== "announcement"
+    (entry.contentType ?? "board") === "board"
     && entry.active
     && scheduleMatchesDate(entry, now)
     && (entry.target === "all" || entry.target === screenId)
@@ -6431,35 +8199,8 @@ function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, no
   );
 }
 
-function latestPastBoardSchedule(state: LanternState, screenId: ScreenId, now: Date) {
-  let latest: { entry: ScheduleEntry; endedAt: number } | null = null;
-  for (const entry of state.schedules ?? []) {
-    if (entry.contentType === "announcement" || !entry.active || (entry.target !== "all" && entry.target !== screenId)) continue;
-    const candidateDates: Date[] = [];
-    if (entry.recurrence === "once" && entry.scheduleDate) {
-      const [year, month, day] = entry.scheduleDate.split("-").map(Number);
-      candidateDates.push(new Date(year, month - 1, day));
-    } else {
-      for (let offset = 0; offset <= 7; offset += 1) {
-        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
-        if (scheduleMatchesDate(entry, date)) {
-          candidateDates.push(date);
-          break;
-        }
-      }
-    }
-    for (const date of candidateDates) {
-      const endMinutes = timeToMinutes(entry.endTime);
-      date.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-      const endedAt = date.getTime();
-      if (endedAt <= now.getTime() && (!latest || endedAt > latest.endedAt)) latest = { entry, endedAt };
-    }
-  }
-  return latest?.entry;
-}
-
 function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now = new Date()) {
-  const scheduled = resolveCurrentBoardSchedule(state, screenId, now) ?? latestPastBoardSchedule(state, screenId, now);
+  const scheduled = resolveCurrentBoardSchedule(state, screenId, now);
   if (scheduled) {
     const program = state.boardPrograms.find((candidate) => candidate.id === scheduled.boardId && candidate.active);
     if (program) return program;
@@ -6506,9 +8247,31 @@ function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, n
   };
 }
 
+function resolveScheduledBlip(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedBlip | null {
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const entry = state.schedules?.find((item) => item.contentType === "blip" && item.active && item.blipId && scheduleMatchesDate(item, now) && (item.target === "all" || item.target === screenId) && time >= item.startTime && time < item.endTime);
+  if (!entry?.blipId) return null;
+  const saved = state.savedBlips.find((item) => item.id === entry.blipId);
+  if (!saved) return null;
+  const startMinutes = timeToMinutes(entry.startTime);
+  const endMinutes = timeToMinutes(entry.endTime);
+  const startedAt = new Date(now);
+  startedAt.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+  const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return { key: `${entry.id}-${dateKey}`, startedAt: startedAt.toISOString(), blip: { ...saved, active: true, target: entry.target, startedAt: startedAt.toISOString(), durationMinutes: Math.max(1 / 60, (endMinutes - startMinutes) / 60) } };
+}
+
+function resolveScheduledBroadcast(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedScheduledBroadcast | null {
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const entry = state.schedules?.find((item) => item.contentType === "broadcast" && (item.broadcastMode ?? "recorded") === "recorded" && item.active && item.broadcastVideoUrl && scheduleMatchesDate(item, now) && (item.target === "all" || item.target === screenId) && time >= item.startTime && time < item.endTime);
+  if (!entry?.broadcastVideoUrl) return null;
+  const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return { key: `${entry.id}-${dateKey}`, broadcastVideoUrl: entry.broadcastVideoUrl };
+}
+
 function activeScheduleMessage(state: LanternState, screenId: ScreenId, now = new Date()) {
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return state.schedules?.find((entry) => entry.contentType !== "announcement" && entry.active && entry.message && scheduleMatchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
+  return state.schedules?.find((entry) => (entry.contentType ?? "board") === "board" && entry.active && entry.message && scheduleMatchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
 }
 
 function statusLabel(status: string) {

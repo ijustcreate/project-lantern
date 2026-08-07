@@ -1,0 +1,39 @@
+.chroma-sample-trigger { width: fit-content; }
+
+.chroma-key-sampler {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(90, 215, 212, .28);
+  border-radius: 10px;
+  background: rgba(4, 14, 29, .36);
+}
+.chroma-key-sampler > header,
+.chroma-key-sampler > footer { display: flex; align-items: center; gap: 8px; }
+.chroma-key-sampler > header { justify-content: space-between; color: var(--text); font-size: 10px; font-weight: 700; }
+.chroma-key-sampler > header > span { display: flex; align-items: center; gap: 6px; }
+.chroma-key-sampler > p { margin: 0; color: var(--muted); font-size: 10px; }
+.chroma-key-sampler > footer { color: var(--muted); font-size: 9px; }
+.chroma-key-sampler > footer i { width: 18px; height: 18px; border: 1px solid rgba(255,255,255,.3); border-radius: 5px; }
+.chroma-key-sampler > footer code { margin-left: auto; color: var(--text); }
+.chroma-sampler-video { position: relative; overflow: hidden; aspect-ratio: 16 / 9; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; background: #030812; cursor: crosshair; }
+.chroma-sampler-video video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.chroma-sampler-crosshair { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; border: 1px solid rgba(255,255,255,.8); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.55); pointer-events: none; transform: translate(-50%, -50%); }
+.chroma-sampler-crosshair::before,
+.chroma-sampler-crosshair::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(255,255,255,.85); transform: translate(-50%, -50%); }
+.chroma-sampler-crosshair::before { width: 24px; height: 1px; }
+.chroma-sampler-crosshair::after { width: 1px; height: 24px; }
+
+.chroma-preset-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.chroma-preset-button { display: inline-flex; min-height: 34px; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: rgba(255,255,255,.035); font: inherit; font-size: 10px; cursor: pointer; }
+.chroma-preset-button i { width: 17px; height: 17px; border: 1px solid rgba(255,255,255,.28); border-radius: 50%; }
+.chroma-preset-button.selected { border-color: rgba(95, 220, 217, .55); background: rgba(75, 196, 194, .13); }
+.chroma-custom-color { position: relative; overflow: hidden; }
+.chroma-custom-color input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+.background-removal-toggle { border-color: rgba(91, 215, 212, .26); }
+.background-removal-methods { display: grid; gap: 8px; }
+.background-removal-help { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.background-removal-help strong { color: var(--text); }
+.background-image-status { display: flex; align-items: center; gap: 9px; }
+.background-image-status img { width: 52px; height: 36px; object-fit: cover; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Camera } from "@babylonjs/core/Cameras/camera";
 import { Engine } from "@babylonjs/core/Engines/engine";
@@ -19,7 +19,9 @@ import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import "@babylonjs/core/Meshes/Builders/tubeBuilder";
-import type { Announcement, DisplayProfile, Donor, LanternState, ScheduleEntry, ScreenId } from "../types";
+import type { Announcement, BoardDonorAnimation, BoardDonorHighlight, DisplayProfile, Donor, LanternState, RecognitionIcon, ScheduleEntry, ScreenId } from "../types";
+import { boardUsesDonorAnimation, resolveBoardDonorPresentation, type ResolvedBoardDonorPresentation } from "../boardPresentation";
+import { buildDonorNameGridLayout, splitDonorNameLines } from "../donorNameLayout";
 
 interface BabylonDonorWallProps {
   state: LanternState;
@@ -42,6 +44,36 @@ const boardPanelImageCache = new Map<string, HTMLImageElement>();
 export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), onFps }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previousAnnouncementActive = useRef(announcementActive);
+  const [scheduleMinute, setScheduleMinute] = useState(() => Math.floor(Date.now() / 60_000));
+  const previewProgram = useMemo(
+    () => previewProgramId ? state.boardPrograms.find((program) => program.id === previewProgramId) : undefined,
+    [previewProgramId, state.boardPrograms]
+  );
+
+  useEffect(() => {
+    if (previewProgram) return;
+
+    const refreshScheduleMinute = () => setScheduleMinute(Math.floor(Date.now() / 60_000));
+    refreshScheduleMinute();
+    let minuteInterval: number | undefined;
+    const nextMinuteDelay = 60_000 - (Date.now() % 60_000) + 25;
+    const minuteTimeout = window.setTimeout(() => {
+      refreshScheduleMinute();
+      minuteInterval = window.setInterval(refreshScheduleMinute, 60_000);
+    }, nextMinuteDelay);
+
+    return () => {
+      window.clearTimeout(minuteTimeout);
+      if (minuteInterval !== undefined) window.clearInterval(minuteInterval);
+    };
+  }, [previewProgram]);
+
+  const activeProgram = useMemo(() => {
+    return previewProgram ?? resolveActiveProgram(state, screenId, new Date(scheduleMinute * 60_000));
+  }, [previewProgram, scheduleMinute, screenId, state.boardPrograms, state.schedules, state.screens]);
+  const accessibleDonors = (activeProgram?.donorIds ?? [])
+    .map((id) => state.donors.find((donor) => donor.id === id))
+    .filter((donor): donor is Donor => Boolean(donor?.active));
   const sceneStateKey = useMemo(
     () => {
       const screen = state.screens[screenId];
@@ -58,7 +90,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
         donors: state.donors,
         board: state.board,
         boardPrograms: state.boardPrograms,
-        schedules: state.schedules,
+        activeProgramId: activeProgram?.id,
         theme: state.theme,
         screen: renderScreen,
           announcementCharacter,
@@ -72,11 +104,10 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
             characterWalkSeconds: announcementCharacterAsset.characterWalkSeconds,
             characterWaitSeconds: announcementCharacterAsset.characterWaitSeconds
           } : null,
-        announcementActive,
-        previewProgramId
+        announcementActive
       });
     },
-    [state.revision, state.donors, state.board, state.boardPrograms, state.schedules, state.theme, state.screens, screenId, announcementCharacter, announcementCharacterAsset, announcementActive, previewProgramId]
+    [state.revision, state.donors, state.board, state.boardPrograms, state.theme, state.screens, screenId, activeProgram?.id, announcementCharacter, announcementCharacterAsset, announcementActive]
   );
 
   useEffect(() => {
@@ -84,6 +115,11 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     if (!canvas) {
       return;
     }
+    // A board can live in the main control document or in a portaled pop-out.
+    // Schedule all sizing work against the canvas's actual window so resizing
+    // a movable preview refits the orthographic board camera immediately.
+    const renderWindow = canvas.ownerDocument.defaultView ?? window;
+    const RenderResizeObserver = renderWindow.ResizeObserver ?? ResizeObserver;
 
     const engine = new Engine(canvas, true, {
       antialias: true,
@@ -91,11 +127,13 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       stencil: true
     });
     const scene = new Scene(engine);
+    const reduceMotion = renderWindow.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     scene.clearColor = viewMode === "3d"
       ? new Color4(0.004, 0.01, 0.022, 1)
       : new Color4(0.015, 0.045, 0.075, 1);
 
     const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
+    const showFrame = activeProgram?.showFrame ?? screen.showFrame ?? true;
     const isPortrait = screen.orientation === "Portrait";
     const panelWidth = isPortrait ? 4.8 : 11.4;
     const panelHeight = isPortrait ? 8.1 : 5.7;
@@ -169,7 +207,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       camera.beta = Math.PI / 2;
       camera.setTarget(Vector3.Zero());
       camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
-      const frameInset = screen.showFrame === false ? 0 : 0.2;
+      const frameInset = showFrame ? 0.2 : 0;
       const fitPadding = 1.035;
       let halfWidth = ((panelWidth + frameInset) / 2) * fitPadding;
       let halfHeight = ((panelHeight + frameInset) / 2) * fitPadding;
@@ -198,7 +236,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     let redrawPanel: (animationTime?: number) => void = () => undefined;
     prepareBackgroundMedia(screen, () => redrawPanel());
     prepareBoardPanelImages(state, () => redrawPanel());
-    const panelTexture = makePanelTexture(scene, state, screenId, screen, previewProgramId);
+    const panelTexture = makePanelTexture(scene, state, screenId, screen, activeProgram?.id);
     const texture = panelTexture.texture;
     texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
     texture.anisotropicFilteringLevel = 16;
@@ -256,7 +294,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     panelBack.position.z = -0.118;
     panelBack.material = backMaterial;
 
-    if (screen.showFrame !== false) {
+    if (showFrame) {
       const trimMaterial = new StandardMaterial("trim", scene);
       trimMaterial.diffuseColor = trimColor(state.theme.trim);
       trimMaterial.specularColor = new Color3(0.82, 0.74, 0.52);
@@ -281,7 +319,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     }
     previousAnnouncementActive.current = announcementActive;
 
-    if (state.theme.motion > 15 && !fitToScreen && !interactive) {
+    if (!reduceMotion && state.theme.motion > 15 && !fitToScreen && !interactive) {
       scene.onBeforeRenderObservable.add(() => {
         camera.alpha = Math.PI / 2 + Math.sin(performance.now() / 3600) * 0.018;
       });
@@ -292,8 +330,8 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     engine.runRenderLoop(() => {
       const now = performance.now();
       const animatedBackground = screen.backgroundMode === "image" && screen.backgroundImage && (screen.backgroundMediaType === "video" || screen.backgroundMediaAnimated);
-      const animatedDonors = state.donors.some((donor) => donor.animation && donor.animation !== "none");
-      if ((animatedBackground || screen.donorScrollEnabled || animatedDonors || screen.particleAnimationEnabled) && now - lastMediaRedraw > 33) {
+      const animatedDonors = !reduceMotion && boardUsesDonorAnimation(activeProgram);
+      if ((animatedBackground || (!reduceMotion && screen.donorScrollEnabled) || animatedDonors || (!reduceMotion && screen.particleAnimationEnabled)) && now - lastMediaRedraw > 33) {
         lastMediaRedraw = now;
         redrawPanel(now);
       }
@@ -306,20 +344,20 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
     let resizeFrame = 0;
     const resize = () => {
-      window.cancelAnimationFrame(resizeFrame);
-      resizeFrame = window.requestAnimationFrame(resizeCamera);
+      renderWindow.cancelAnimationFrame(resizeFrame);
+      resizeFrame = renderWindow.requestAnimationFrame(resizeCamera);
     };
-    const resizeObserver = new ResizeObserver(resize);
+    const resizeObserver = new RenderResizeObserver(resize);
     resizeObserver.observe(canvas);
     if (canvas.parentElement) resizeObserver.observe(canvas.parentElement);
-    window.addEventListener("resize", resize);
-    initialResizeFrame = window.requestAnimationFrame(resize);
+    renderWindow.addEventListener("resize", resize);
+    initialResizeFrame = renderWindow.requestAnimationFrame(resize);
 
     return () => {
-      window.cancelAnimationFrame(resizeFrame);
-      window.cancelAnimationFrame(initialResizeFrame);
+      renderWindow.cancelAnimationFrame(resizeFrame);
+      renderWindow.cancelAnimationFrame(initialResizeFrame);
       resizeObserver.disconnect();
-      window.removeEventListener("resize", resize);
+      renderWindow.removeEventListener("resize", resize);
       canvas.removeEventListener("contextmenu", containContextMenu);
       canvas.removeEventListener("wheel", containWheel);
       engine.stopRenderLoop();
@@ -328,10 +366,17 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     };
   }, [sceneStateKey, screenId, interactive, fitToScreen, viewMode, resetKey, onFps]);
 
-  return <canvas className="wall-canvas" ref={canvasRef} tabIndex={interactive ? 0 : -1} aria-label={`Interactive preview for ${state.screens[screenId]?.label ?? screenId}`} />;
+  return <>
+    <canvas className="wall-canvas" ref={canvasRef} tabIndex={interactive ? 0 : -1} role="img" aria-label={`${activeProgram?.name ?? "Recognition board"}. ${accessibleDonors.length} recognized supporters.`} />
+    <section className="sr-only board-accessible-summary" aria-label={`${activeProgram?.name ?? "Recognition board"} supporter list`}>
+      <h2>{activeProgram?.heading ?? activeProgram?.name ?? "Recognition board"}</h2>
+      {activeProgram?.description && <p>{activeProgram.description}</p>}
+      <ul>{accessibleDonors.map((donor) => <li key={donor.id}>{donor.name}, {donor.tier} Level</li>)}</ul>
+    </section>
+  </>;
 }
 
-function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, previewProgramId?: string) {
+function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, programId?: string) {
   const isPortrait = screen.orientation === "Portrait";
   const width = isPortrait ? 2160 : 3840;
   const height = isPortrait ? 3840 : 2160;
@@ -347,7 +392,7 @@ function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId,
 
   texture.hasAlpha = false;
   const redraw = (animationTime = performance.now()) => {
-    drawTextureContent(context, width, height, state, screenId, screen, previewProgramId, animationTime);
+    drawTextureContent(context, width, height, state, screenId, screen, programId, animationTime);
     texture.update(false);
   };
   redraw();
@@ -361,12 +406,11 @@ function drawTextureContent(
   state: LanternState,
   screenId: ScreenId,
   screen: DisplayProfile,
-  previewProgramId?: string,
+  programId?: string,
   animationTime = performance.now()
 ) {
   const isPortrait = screen.orientation === "Portrait";
-  const previewProgram = previewProgramId ? state.boardPrograms.find((program) => program.id === previewProgramId) : undefined;
-  const activeProgram = previewProgram ?? resolveActiveProgram(state, screenId, new Date());
+  const activeProgram = programId ? state.boardPrograms.find((program) => program.id === programId) : undefined;
   // Board programs are the source of truth for a saved board. Display-level
   // roster/layout fields are retained only for legacy boards without panels.
   const rosterIds = activeProgram?.donorIds ?? [];
@@ -378,7 +422,7 @@ function drawTextureContent(
     return !rosterIds.length || rosterIds.includes(donor.id);
   }).sort((a, b) => rosterIds.indexOf(a.id) - rosterIds.indexOf(b.id));
   const baseProgram = activeProgram ?? state.boardPrograms[0];
-  const displayProgram = previewProgram ?? baseProgram;
+  const displayProgram = baseProgram;
   const renderScreen = displayProgram ? {
     ...screen,
     showFrame: displayProgram.showFrame ?? screen.showFrame,
@@ -422,22 +466,21 @@ function drawMuseumBoard(
   screen?: DisplayProfile,
   animationTime = performance.now()
 ) {
-  const navy = "#061a2d";
-  const navy2 = "#0a2c42";
-  const cream = "#f6edd9";
-  const teal = "#39c5c0";
-  const gold = "#f3b52f";
+  const palette = resolveBoardPalette(activeProgram?.palette, state.board.visualStyle);
+  const cream = palette.text;
+  const teal = palette.secondary;
+  const gold = palette.accent;
   const coral = "#f27e60";
   const scale = layoutScale / 100;
 
   const chalkboard = state.board.visualStyle === "chalkboard" || state.board.visualStyle === "chalkboard-minimal";
   const galleryPlaque = state.board.visualStyle === "gallery-plaque";
-  context.fillStyle = galleryPlaque ? "#101518" : chalkboard ? "#12191d" : navy;
+  context.fillStyle = palette.background;
   context.fillRect(0, 0, width, height);
   const wash = context.createLinearGradient(0, 0, width, height);
-  wash.addColorStop(0, galleryPlaque ? "#242c31" : chalkboard ? "#1c252a" : "#092945");
-  wash.addColorStop(0.55, galleryPlaque ? "#151b1f" : chalkboard ? "#131b20" : navy);
-  wash.addColorStop(1, galleryPlaque ? "#0a0e11" : chalkboard ? "#0b1014" : "#04111f");
+  wash.addColorStop(0, palette.gradientStart);
+  wash.addColorStop(0.55, palette.background);
+  wash.addColorStop(1, palette.gradientEnd);
   context.fillStyle = wash;
   context.fillRect(0, 0, width, height);
   if (screen && ((activeProgram?.backgroundMode === "image" && activeProgram.backgroundImage) || (screen.backgroundMode === "image" && screen.backgroundImage))) {
@@ -445,7 +488,8 @@ function drawMuseumBoard(
   }
 
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
-  else if (!chalkboard) drawBoardStars(context, width, height, screen, animationTime);
+  else if (!chalkboard && !["brigade-cream", "brigade-sunshine"].includes(activeProgram?.palette ?? "")) drawBoardStars(context, width, height, screen, animationTime);
+  if (activeProgram?.palette && activeProgram.palette !== "classic") drawBrigadeAccents(context, width, height, palette);
   if (activeProgram?.donorScrollEnabled ?? screen?.donorScrollEnabled) {
     drawScrollingDonorBoard(context, width, height, donors, state, isPortrait, scale, activeProgram, screen!, animationTime);
     return;
@@ -524,18 +568,17 @@ function drawScrollingDonorBoard(
       const showSubtext = donorSubtextVisible(screen, donor.id);
       const nameSize = Math.max(15, Math.round((screen.nameSize ?? (isPortrait ? 34 : 28)) * scale));
       const nameY = y + (showSubtext ? rowHeight * 0.34 : rowHeight * 0.46);
+      const presentation = resolveProgramDonorPresentation(activeProgram, donor.id, { fontFamily: family, nameColor: ivory, accentColor: gold });
       context.save();
-      drawDonorHighlight(context, donor, width / 2, nameY, width * (isPortrait ? 0.72 : 0.62), nameSize, gold);
-      applyDonorCanvasEffect(context, donor, animationTime);
-      context.fillStyle = donor.nameColor || ivory;
-      context.font = `500 ${nameSize}px ${donorFont(donor, family)}, Inter, sans-serif`;
-      fitText(context, donor.name.toUpperCase(), width / 2, nameY, width * (isPortrait ? 0.72 : 0.62), nameSize, 13);
-      if (screen.showIcons) {
-        drawDonorIcons(context, width * (isPortrait ? 0.18 : 0.25), width * (isPortrait ? 0.82 : 0.75), nameY - nameSize * 0.3, donor, screen, donor.accentColor || gold, Math.max(8, nameSize * 0.42));
+      drawBoardDonorHighlight(context, presentation.highlight, width / 2, nameY, width * (isPortrait ? 0.72 : 0.62), nameSize, presentation.accentColor);
+      context.font = `500 ${nameSize}px ${presentation.fontFamily}, Inter, sans-serif`;
+      drawBoardDonorName(context, donor.name.toUpperCase(), width / 2, nameY, width * (isPortrait ? 0.72 : 0.62), nameSize, 13, presentation, animationTime, donor.id);
+      if (screen.showIcons && presentation.recognitionIcon !== "none") {
+        drawBoardRecognitionIcons(context, width * (isPortrait ? 0.18 : 0.25), width * (isPortrait ? 0.82 : 0.75), nameY - nameSize * 0.3, presentation, screen, Math.max(8, nameSize * 0.42));
       }
       if (showSubtext && (donor.subtext || donor.note)) {
         context.fillStyle = muted;
-        context.font = `400 ${Math.max(10, Math.round(nameSize * 0.48))}px ${donorFont(donor, family)}, Inter, sans-serif`;
+        context.font = `400 ${Math.max(10, Math.round(nameSize * 0.48))}px ${presentation.fontFamily}, Inter, sans-serif`;
         fitText(context, donor.subtext || donor.note, width / 2, y + rowHeight * 0.7, width * (isPortrait ? 0.65 : 0.55), Math.round(nameSize * 0.48), 9);
       }
       context.restore();
@@ -599,14 +642,15 @@ function drawComposableBoard(
   screen?: DisplayProfile,
   animationTime = performance.now()
 ) {
-  const ivory = "#f5f2eb";
-  const gold = "#d9a657";
-  const muted = "#bdc7c7";
-  const teal = "#79cac6";
+  const palette = resolveBoardPalette(program.palette, state.board.visualStyle);
+  const ivory = palette.text;
+  const gold = palette.accent;
+  const muted = palette.muted;
+  const teal = palette.secondary;
   const panels = program.panels ?? [];
 
   if (screen?.showFrame !== false) {
-    context.strokeStyle = "rgba(217, 166, 87, 0.62)";
+    context.strokeStyle = palette.frame;
     context.lineWidth = Math.max(2, 4 * scale);
     context.strokeRect(width * 0.03, height * 0.022, width * 0.94, height * 0.956);
   }
@@ -642,12 +686,21 @@ function drawComposableBoard(
     }
 
     if (panel.type === "donors") {
+      const panelDonors = donors.filter((donor) =>
+        (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
+        && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
+      );
       const columns = panel.columns ?? program.columns;
       const nameFontUnit = Math.max(8, requestedSize * height / 900);
-      const rows = panel.rows ?? Math.max(1, Math.ceil(donors.length / columns));
-      const visibleDonors = donors.slice(0, rows * columns);
+      const rows = panel.rows ?? Math.max(1, Math.ceil(panelDonors.length / columns));
+      const visibleDonors = panelDonors.slice(0, rows * columns);
       const listTop = y;
-      const rowHeight = panelHeight / rows;
+      const layout = buildDonorNameGridLayout(visibleDonors.map((donor) => ({
+        name: donor.name,
+        hasSubtext: donorSubtextVisible(screen, donor.id) && Boolean(donor.subtext || donor.note)
+      })), columns, rows);
+      const sharedBaseSize = Math.min(nameFontUnit, Math.max(7, panelHeight * .82 / layout.totalUnits));
+      const rowOffsets = layout.rowUnits.reduce<number[]>((offsets, units) => [...offsets, offsets[offsets.length - 1] + units], [0]);
       context.textAlign = "center";
       visibleDonors.forEach((donor, index) => {
         const showSubtext = donorSubtextVisible(screen, donor.id);
@@ -655,19 +708,27 @@ function drawComposableBoard(
         const row = Math.floor(index / columns);
         const cellWidth = contentWidth / columns;
         const x = left + cellWidth * (column + 0.5);
-        const baseline = listTop + rowHeight * (row + (showSubtext && (donor.subtext || donor.note) ? 0.47 : 0.58));
-        const baseSize = Math.min(nameFontUnit, Math.max(9, rowHeight * (showSubtext ? 0.34 : 0.48)));
+        const rowTop = listTop + panelHeight * rowOffsets[row] / layout.totalUnits;
+        const rowBottom = listTop + panelHeight * rowOffsets[row + 1] / layout.totalUnits;
+        const rowHeight = rowBottom - rowTop;
+        const lines = splitDonorNameLines(donor.name);
+        const hasSubtext = showSubtext && Boolean(donor.subtext || donor.note);
+        const baseline = rowTop + rowHeight * (hasSubtext ? .43 : .5);
+        const baseSize = sharedBaseSize;
+        const presentation = resolveBoardDonorPresentation(program, donor.id, {
+          fontFamily: font,
+          nameColor: panelTextColor || ivory,
+          accentColor: gold
+        });
         context.save();
-        drawDonorHighlight(context, donor, x, baseline, cellWidth * 0.72, baseSize * scale, gold);
-        applyDonorCanvasEffect(context, donor, animationTime);
-        context.fillStyle = panelTextColor || donor.nameColor || ivory;
-        context.font = `500 ${Math.round(baseSize * scale)}px ${donorFont(donor, font)}, Inter, sans-serif`;
-        fitText(context, donor.name, x, baseline, cellWidth * 0.72, Math.round(baseSize * scale), 7);
-        if (screen?.showIcons) drawDonorIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, donor, screen, donor.accentColor || gold, Math.max(7, baseSize * 0.35));
+        drawBoardDonorHighlight(context, presentation.highlight, x, baseline, cellWidth * 0.72, baseSize * Math.max(1, lines.length * .92) * scale, presentation.accentColor);
+        context.font = `500 ${Math.round(baseSize * scale)}px ${presentation.fontFamily}, Inter, sans-serif`;
+        drawBoardDonorName(context, donor.name, x, baseline, cellWidth * 0.88, Math.round(baseSize * scale), 7, presentation, animationTime, donor.id);
+        if (screen?.showIcons && presentation.recognitionIcon !== "none") drawBoardRecognitionIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, presentation, screen, Math.max(7, baseSize * 0.35));
         if (showSubtext && (donor.subtext || donor.note)) {
-          context.fillStyle = "rgba(245, 242, 235, 0.6)";
-          context.font = `400 ${Math.max(8, Math.round(baseSize * 0.48))}px ${donorFont(donor, font)}, Inter, sans-serif`;
-          fitText(context, donor.subtext || donor.note, x, baseline + rowHeight * 0.28, cellWidth * 0.84, Math.round(baseSize * 0.48), 7);
+          context.fillStyle = muted;
+          context.font = `400 ${Math.max(8, Math.round(baseSize * 0.48))}px ${presentation.fontFamily}, Inter, sans-serif`;
+          fitText(context, donor.subtext || donor.note, x, baseline + baseSize * (lines.length * .46 + .62), cellWidth * 0.84, Math.round(baseSize * 0.48), 7);
         }
         context.restore();
         const dividerThickness = panel.donorDividerThickness ?? 1;
@@ -677,8 +738,8 @@ function drawComposableBoard(
           context.globalAlpha = (panel.donorDividerOpacity ?? 18) / 100;
           context.lineWidth = dividerThickness * scale;
           context.beginPath();
-          context.moveTo(left + cellWidth * column + cellWidth * 0.08, listTop + rowHeight * (row + 0.94));
-          context.lineTo(left + cellWidth * (column + 1) - cellWidth * 0.08, listTop + rowHeight * (row + 0.94));
+          context.moveTo(left + cellWidth * column + cellWidth * 0.08, rowBottom - rowHeight * .06);
+          context.lineTo(left + cellWidth * (column + 1) - cellWidth * 0.08, rowBottom - rowHeight * .06);
           context.stroke();
           context.restore();
         }
@@ -688,7 +749,7 @@ function drawComposableBoard(
     if (panel.type === "message" || panel.type === "story") {
       const imageWidth = panel.type === "story" ? contentWidth * 0.28 : 0;
       if (panel.type === "story") {
-        context.fillStyle = "rgba(121, 202, 198, 0.12)";
+        context.fillStyle = palette.panelTint;
         context.fillRect(left, y + panelHeight * 0.08, imageWidth, panelHeight * 0.84);
       }
       const textLeft = left + imageWidth + (imageWidth ? contentWidth * 0.04 : 0);
@@ -703,12 +764,27 @@ function drawComposableBoard(
       fitText(context, panel.title, textX, y + panelHeight * 0.52, textWidth * 0.96, Math.round(panelHeight * 0.19 * scale), 12);
       context.fillStyle = panelTextColor ?? muted;
       context.font = `400 ${Math.max(10, Math.round(panelHeight * 0.095 * scale))}px ${font}, Inter, sans-serif`;
-      const lines = wrapLines(context, panel.body ?? "", textWidth * 0.94, 2);
-      lines.forEach((line, lineIndex) => context.fillText(line, textX, y + panelHeight * (0.72 + lineIndex * 0.13)));
+      const bodyLines = panel.size === "feature" && panel.type === "message" ? 5 : 2;
+      const lines = wrapLines(context, panel.body ?? "", textWidth * 0.94, bodyLines);
+      const bodyStart = bodyLines > 2 ? 0.62 : 0.72;
+      const bodyStep = bodyLines > 2 ? 0.09 : 0.13;
+      lines.forEach((line, lineIndex) => context.fillText(line, textX, y + panelHeight * (bodyStart + lineIndex * bodyStep)));
     }
 
     if (panel.type === "image") {
-      drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain");
+      if (panel.imageUrl) drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain");
+      else {
+        context.fillStyle = palette.panelTint;
+        context.fillRect(left, y, contentWidth, panelHeight);
+        context.strokeStyle = palette.frame;
+        context.setLineDash([8 * scale, 8 * scale]);
+        context.strokeRect(left + 2 * scale, y + 2 * scale, contentWidth - 4 * scale, panelHeight - 4 * scale);
+        context.setLineDash([]);
+        context.fillStyle = muted;
+        context.textAlign = "center";
+        context.font = `600 ${Math.max(10, Math.round(panelHeight * .07))}px ${font}, Inter, sans-serif`;
+        context.fillText(panel.title || "Choose a donor photo", centerX, centerY);
+      }
     }
 
     if (panel.type === "footer") {
@@ -806,11 +882,10 @@ function drawPortraitBoard(
     context.fillText(label, width * 0.28, y);
     members.forEach((donor, index) => {
       const donorY = y + 42 * scale + index * 31 * scale;
+      const presentation = resolveProgramDonorPresentation(activeProgram, donor.id, { fontFamily: "Inter", nameColor: cream, accentColor: accent });
       context.save();
-      applyDonorCanvasEffect(context, donor, animationTime);
-      context.fillStyle = donor.nameColor || cream;
-      context.font = `500 ${Math.round(24 * scale)}px ${donorFont(donor, "Inter")}, Segoe UI, sans-serif`;
-      context.fillText(donor.name, width * 0.28, donorY);
+      context.font = `500 ${Math.round(24 * scale)}px ${presentation.fontFamily}, Segoe UI, sans-serif`;
+      drawBoardDonorName(context, donor.name, width * 0.28, donorY, width * 0.54, Math.round(24 * scale), 11, presentation, animationTime, donor.id);
       context.restore();
     });
     context.strokeStyle = "rgba(246, 237, 217, 0.34)";
@@ -876,16 +951,15 @@ function drawChalkboardPortrait(
     const y = startY + row * rowHeight;
     const baseSize = Math.min(screen?.nameSize ?? (columns === 1 ? 29 : 25), columns === 1 ? 38 : 30);
     const family = screen?.fontFamily ?? "Montserrat";
+    const presentation = resolveProgramDonorPresentation(activeProgram, donor.id, { fontFamily: family, nameColor: cream, accentColor: gold });
     context.save();
-    drawDonorHighlight(context, donor, x, y, width * (columns === 1 ? 0.7 : 0.36), baseSize * scale, gold);
-    applyDonorCanvasEffect(context, donor, animationTime);
-    context.fillStyle = donor.nameColor || cream;
-    context.font = `500 ${Math.round(baseSize * scale)}px ${donorFont(donor, family)}, Inter, Segoe UI, sans-serif`;
-    fitText(context, donor.name.toUpperCase(), x, y, width * (columns === 1 ? 0.7 : 0.36), Math.round(baseSize * scale), Math.round(13 * scale));
-    if (screen?.showIcons) drawDonorIcons(context, x - width * (columns === 1 ? 0.36 : 0.205), x + width * (columns === 1 ? 0.36 : 0.205), y - baseSize * 0.3, donor, screen, donor.accentColor || gold, 11 * scale);
+    drawBoardDonorHighlight(context, presentation.highlight, x, y, width * (columns === 1 ? 0.7 : 0.36), baseSize * scale, presentation.accentColor);
+    context.font = `500 ${Math.round(baseSize * scale)}px ${presentation.fontFamily}, Inter, Segoe UI, sans-serif`;
+    drawBoardDonorName(context, donor.name.toUpperCase(), x, y, width * (columns === 1 ? 0.7 : 0.36), Math.round(baseSize * scale), Math.round(13 * scale), presentation, animationTime, donor.id);
+    if (screen?.showIcons && presentation.recognitionIcon !== "none") drawBoardRecognitionIcons(context, x - width * (columns === 1 ? 0.36 : 0.205), x + width * (columns === 1 ? 0.36 : 0.205), y - baseSize * 0.3, presentation, screen, 11 * scale);
     if (showSubtext && (donor.subtext || donor.note)) {
       context.fillStyle = "rgba(246, 237, 217, 0.62)";
-      context.font = `400 ${Math.round(Math.max(10, baseSize * 0.48) * scale)}px ${donorFont(donor, family)}, Inter, sans-serif`;
+      context.font = `400 ${Math.round(Math.max(10, baseSize * 0.48) * scale)}px ${presentation.fontFamily}, Inter, sans-serif`;
       fitText(context, donor.subtext || donor.note, x, y + rowHeight * 0.3, width * (columns === 1 ? 0.65 : 0.34), Math.round(baseSize * 0.48 * scale), Math.round(9 * scale));
     }
     context.restore();
@@ -1004,16 +1078,17 @@ function drawGalleryPlaque(
     const x = columns === 1 ? width / 2 : width * (column === 0 ? 0.29 : 0.71);
     const cellWidth = width * (columns === 1 ? 0.7 : 0.35);
     const y = donorTop + row * rowHeight + rowHeight * (showSubtext ? 0.37 : 0.46);
+    const presentation = resolveProgramDonorPresentation(activeProgram, donor.id, { fontFamily: family, nameColor: ivory, accentColor: gold });
     context.save();
-    drawDonorHighlight(context, donor, x, y, cellWidth, nameSize, gold);
-    applyDonorCanvasEffect(context, donor, animationTime);
-    drawTrackedLabel(context, donor.name.toUpperCase(), x, y, cellWidth, Math.round(nameSize), 11, donorFont(donor, family), 400, donor.nameColor || ivory, 0.13);
+    drawBoardDonorHighlight(context, presentation.highlight, x, y, cellWidth, nameSize, presentation.accentColor);
+    context.font = `400 ${Math.round(nameSize)}px ${presentation.fontFamily}, Inter, sans-serif`;
+    drawBoardDonorName(context, donor.name.toUpperCase(), x, y, cellWidth, Math.round(nameSize), 11, presentation, animationTime, donor.id);
 
-    if (screen?.showIcons) {
-      drawDonorIcons(context, x - cellWidth * 0.54, x + cellWidth * 0.54, y - nameSize * 0.3, donor, screen, donor.accentColor || gold, Math.max(8, nameSize * 0.42));
+    if (screen?.showIcons && presentation.recognitionIcon !== "none") {
+      drawBoardRecognitionIcons(context, x - cellWidth * 0.54, x + cellWidth * 0.54, y - nameSize * 0.3, presentation, screen, Math.max(8, nameSize * 0.42));
     }
     if (showSubtext && (donor.subtext || donor.note)) {
-      drawTrackedLabel(context, donor.subtext || donor.note, x, y + rowHeight * 0.25, cellWidth * 0.92, Math.round(Math.max(10, nameSize * 0.48)), 9, donorFont(donor, family), 400, "rgba(242, 241, 237, 0.5)", 0.025);
+      drawTrackedLabel(context, donor.subtext || donor.note, x, y + rowHeight * 0.25, cellWidth * 0.92, Math.round(Math.max(10, nameSize * 0.48)), 9, presentation.fontFamily, 400, "rgba(242, 241, 237, 0.5)", 0.025);
     }
     context.restore();
 
@@ -1125,52 +1200,165 @@ function drawTrackedLabel(
   context.restore();
 }
 
-function applyDonorCanvasEffect(context: CanvasRenderingContext2D, donor: Donor, animationTime: number) {
-  const phase = (animationTime / 1000 + donor.id.length * 0.37) % (Math.PI * 2);
-  if (donor.animation === "gentle-pulse") context.globalAlpha *= 0.88 + (Math.sin(phase * 1.25) + 1) * 0.06;
-  if (donor.animation === "soft-glow") {
-    context.shadowColor = donor.accentColor || donor.nameColor || "#d9a657";
-    context.shadowBlur = 5 + (Math.sin(phase) + 1) * 6;
+function drawBoardDonorName(
+  context: CanvasRenderingContext2D,
+  name: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  initialSize: number,
+  minSize: number,
+  presentation: ResolvedBoardDonorPresentation,
+  animationTime: number,
+  donorId: string
+) {
+  const alignment = context.textAlign;
+  const textLeft = alignment === "left" || alignment === "start" ? x : alignment === "right" || alignment === "end" ? x - maxWidth : x - maxWidth / 2;
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const animation: BoardDonorAnimation = reduceMotion ? "none" : presentation.animation;
+  const seed = donorId.split("").reduce((total, character) => total + character.charCodeAt(0), 0) % 97;
+  const elapsed = animationTime / 1000 + seed * 0.037;
+  const lines = splitDonorNameLines(name);
+  const lineHeight = initialSize * .92;
+  const drawLines = (lineX = x, lineY = y) => lines.forEach((line, index) => {
+    drawStyledText(context, line, lineX, lineY + (index - (lines.length - 1) / 2) * lineHeight);
+  });
+  context.save();
+  context.fillStyle = presentation.nameColor;
+
+  if (animation === "grow-shrink") {
+    const size = 1.01 + Math.sin(elapsed * Math.PI * 0.72) * 0.045;
+    context.translate(x, y);
+    context.scale(size, size);
+    drawLines(0, 0);
+    context.restore();
+    return;
   }
-  if (donor.animation === "shimmer") {
-    context.shadowColor = donor.accentColor || "#f2d08c";
-    context.shadowBlur = 3 + (Math.sin(phase * 0.72) + 1) * 4;
-    context.globalAlpha *= 0.9 + (Math.sin(phase * 0.72) + 1) * 0.05;
+
+  if (animation === "slow-shimmer") {
+    const sweep = 0.08 + ((elapsed / 5.8) % 1) * 0.84;
+    const gradient = context.createLinearGradient(textLeft, y, textLeft + maxWidth, y);
+    gradient.addColorStop(0, presentation.nameColor);
+    gradient.addColorStop(Math.max(0, sweep - 0.09), presentation.nameColor);
+    gradient.addColorStop(sweep, presentation.accentColor);
+    gradient.addColorStop(Math.min(1, sweep + 0.09), presentation.nameColor);
+    gradient.addColorStop(1, presentation.nameColor);
+    context.fillStyle = gradient;
+    // A text fill is the mask: the shimmer never paints the surrounding box.
+    drawLines();
+    context.restore();
+    return;
   }
+
+  if (animation === "letter-wave") {
+    if (lines.length > 1) {
+      drawLines();
+      context.restore();
+      return;
+    }
+    const letters = Array.from(lines[0]);
+    const widths = letters.map((letter) => context.measureText(letter).width);
+    const fullWidth = widths.reduce((total, width) => total + width, 0);
+    const activeLetter = (elapsed * 2.15) % Math.max(1, letters.length + 5) - 2;
+    let cursor = alignment === "left" || alignment === "start" ? x : alignment === "right" || alignment === "end" ? x - fullWidth : x - fullWidth / 2;
+    context.textAlign = "center";
+    letters.forEach((letter, index) => {
+      const letterWidth = widths[index];
+      const distance = Math.abs(index - activeLetter);
+      const letterScale = 1 + Math.max(0, 1 - distance) * 0.2;
+      context.save();
+      context.translate(cursor + letterWidth / 2, y);
+      context.scale(letterScale, letterScale);
+      context.fillText(letter, 0, 0);
+      context.restore();
+      cursor += letterWidth;
+    });
+    context.restore();
+    return;
+  }
+
+  drawLines();
+  context.restore();
 }
 
-function drawDonorHighlight(context: CanvasRenderingContext2D, donor: Donor, x: number, y: number, width: number, height: number, fallbackAccent: string) {
-  const accent = donor.accentColor || fallbackAccent;
-  if (donor.highlight === "underline") {
-    context.save();
-    context.strokeStyle = accent;
-    context.globalAlpha = 0.72;
-    context.lineWidth = Math.max(1, height * 0.035);
-    context.beginPath();
-    context.moveTo(x - width * 0.34, y + height * 0.34);
-    context.lineTo(x + width * 0.34, y + height * 0.34);
-    context.stroke();
-    context.restore();
-  } else if (donor.highlight === "soft-box") {
-    context.save();
+function resolveProgramDonorPresentation(
+  program: LanternState["boardPrograms"][number] | undefined,
+  donorId: string,
+  fallbacks: { fontFamily: NonNullable<DisplayProfile["fontFamily"]>; nameColor: string; accentColor: string }
+): ResolvedBoardDonorPresentation {
+  if (program) return resolveBoardDonorPresentation(program, donorId, fallbacks);
+  return {
+    ...fallbacks,
+    highlight: "none",
+    recognitionIcon: "star",
+    animation: "none"
+  };
+}
+
+function drawBoardDonorHighlight(
+  context: CanvasRenderingContext2D,
+  highlight: BoardDonorHighlight,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  accent: string
+) {
+  if (highlight === "none") return;
+  context.save();
+  if (highlight === "soft-highlight") {
     context.fillStyle = accent;
     context.globalAlpha = 0.1;
-    context.fillRect(x - width * 0.45, y - height * 0.68, width * 0.9, height * 1.08);
+    context.fillRect(x - width * 0.46, y - height * 0.76, width * 0.92, height * 1.14);
     context.strokeStyle = accent;
-    context.globalAlpha = 0.32;
-    context.lineWidth = 1;
-    context.strokeRect(x - width * 0.45, y - height * 0.68, width * 0.9, height * 1.08);
+    context.globalAlpha = 0.28;
+    context.lineWidth = Math.max(1, height * 0.025);
+    context.strokeRect(x - width * 0.46, y - height * 0.76, width * 0.92, height * 1.14);
     context.restore();
+    return;
   }
+  context.strokeStyle = accent;
+  context.globalAlpha = highlight === "soft-underline" ? 0.48 : 0.78;
+  context.lineWidth = Math.max(1, height * (highlight === "soft-underline" ? 0.085 : 0.035));
+  context.lineCap = "round";
+  if (highlight === "soft-underline") {
+    context.shadowColor = accent;
+    context.shadowBlur = Math.max(2, height * 0.16);
+  }
+  context.beginPath();
+  context.moveTo(x - width * 0.35, y + height * 0.36);
+  context.lineTo(x + width * 0.35, y + height * 0.36);
+  context.stroke();
+  context.restore();
 }
 
-function donorFont(donor: Donor, fallback: string) {
-  return donor.fontOverride || fallback;
+function boardRecognitionIconGlyph(icon: RecognitionIcon) {
+  return ({ none: "", star: "★", heart: "♥", leaf: "◆", sparkle: "✦", diamond: "◇", crown: "♛", laurel: "❧", sun: "☀" } satisfies Record<RecognitionIcon, string>)[icon];
 }
 
-function drawDonorIcons(context: CanvasRenderingContext2D, leftX: number, rightX: number, y: number, donor: Donor, screen: DisplayProfile, color: string, size: number) {
-  drawDonorIcon(context, leftX, y, screen.donorIconStyle ?? "circle", color, size, donor.customIconImage);
-  if (screen.donorIconPlacement === "both") drawDonorIcon(context, rightX, y, screen.donorIconStyle ?? "circle", color, size, donor.customIconImage);
+function drawBoardRecognitionIcons(
+  context: CanvasRenderingContext2D,
+  leftX: number,
+  rightX: number,
+  y: number,
+  presentation: ResolvedBoardDonorPresentation,
+  screen: DisplayProfile,
+  size: number
+) {
+  const positions = screen.donorIconPlacement === "both" ? [leftX, rightX] : [leftX];
+  positions.forEach((x) => {
+    if (presentation.recognitionIconImage) {
+      drawDonorIcon(context, x, y, screen.donorIconStyle ?? "circle", presentation.accentColor, size, presentation.recognitionIconImage);
+      return;
+    }
+    context.save();
+    context.fillStyle = presentation.accentColor;
+    context.font = `700 ${Math.max(9, size * 1.55)}px Georgia, serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(boardRecognitionIconGlyph(presentation.recognitionIcon), x, y);
+    context.restore();
+  });
 }
 
 function drawDonorIcon(context: CanvasRenderingContext2D, x: number, y: number, icon: "circle" | "diamond" | "dash", color: string, size: number, customIconImage?: string) {
@@ -1290,11 +1478,10 @@ function drawLandscapeBoard(
     context.font = `800 ${Math.round(18 * scale)}px Inter, Segoe UI, sans-serif`;
     context.fillText(label, x, top + 34);
     donors.filter((donor) => donor.category === category).slice(0, 5).forEach((donor, donorIndex) => {
+      const presentation = resolveProgramDonorPresentation(activeProgram, donor.id, { fontFamily: "Inter", nameColor: cream, accentColor: accent });
       context.save();
-      applyDonorCanvasEffect(context, donor, animationTime);
-      context.fillStyle = donor.nameColor || cream;
-      context.font = `500 ${Math.round(18 * scale)}px ${donorFont(donor, "Inter")}, Segoe UI, sans-serif`;
-      context.fillText(donor.name, x, top + 76 + donorIndex * 34);
+      context.font = `500 ${Math.round(18 * scale)}px ${presentation.fontFamily}, Segoe UI, sans-serif`;
+      drawBoardDonorName(context, donor.name, x, top + 76 + donorIndex * 34, width * 0.18, Math.round(18 * scale), 9, presentation, animationTime, donor.id);
       context.restore();
     });
     context.strokeStyle = "rgba(246, 237, 217, 0.2)";
@@ -1416,7 +1603,6 @@ function donorSubtextVisible(screen: DisplayProfile | undefined, donorId: string
 }
 
 function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date) {
-  const day = now.getDay();
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const matchesDate = (entry: ScheduleEntry, date: Date) => {
@@ -1426,38 +1612,14 @@ function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date
     if (entry.scheduleEndDate && dateKey > entry.scheduleEndDate) return false;
     return entry.days.includes(date.getDay());
   };
-  const schedule = state.schedules?.find((entry) => entry.contentType !== "announcement" && entry.active && matchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
-  if (schedule) return state.boardPrograms?.find((program) => program.id === schedule.boardId);
-  let latest: { entry: ScheduleEntry; endedAt: number } | null = null;
-  for (const entry of state.schedules ?? []) {
-    if (entry.contentType === "announcement" || !entry.active || (entry.target !== "all" && entry.target !== screenId)) continue;
-    const dates: Date[] = [];
-    if (entry.recurrence === "once" && entry.scheduleDate) {
-      const [year, month, date] = entry.scheduleDate.split("-").map(Number);
-      dates.push(new Date(year, month - 1, date));
-    } else {
-      for (let offset = 0; offset <= 7; offset += 1) {
-        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
-        if (matchesDate(entry, date)) {
-          dates.push(date);
-          break;
-        }
-      }
-    }
-    for (const date of dates) {
-      const [hours, minutes] = entry.endTime.split(":").map(Number);
-      date.setHours(hours, minutes, 0, 0);
-      const endedAt = date.getTime();
-      if (endedAt <= now.getTime() && (!latest || endedAt > latest.endedAt)) latest = { entry, endedAt };
-    }
-  }
-  if (latest) {
-    const program = state.boardPrograms?.find((candidate) => candidate.id === latest!.entry.boardId);
+  const schedule = state.schedules?.find((entry) => (entry.contentType ?? "board") === "board" && entry.active && matchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
+  if (schedule) {
+    const program = state.boardPrograms?.find((candidate) => candidate.id === schedule.boardId && candidate.active);
     if (program) return program;
   }
   const assignedProgramId = state.screens[screenId]?.boardProgramId;
   return state.boardPrograms?.find((program) => program.id === assignedProgramId)
-    ?? state.boardPrograms?.find((program) => program.orientation === state.screens[screenId]?.orientation)
+    ?? state.boardPrograms?.find((program) => program.active && program.orientation === state.screens[screenId]?.orientation)
     ?? state.boardPrograms?.[0];
 }
 
@@ -2051,6 +2213,69 @@ async function addCustomAnnouncementCharacter(scene: Scene, isPortrait: boolean,
 
 function targetIncludesAnnouncement(state: LanternState, screenId: ScreenId) {
   return state.announcement.targets?.length ? state.announcement.targets.includes(screenId) : state.announcement.target === "all" || state.announcement.target === screenId;
+}
+
+interface ResolvedBoardPalette {
+  background: string;
+  gradientStart: string;
+  gradientEnd: string;
+  text: string;
+  accent: string;
+  secondary: string;
+  muted: string;
+  frame: string;
+  panelTint: string;
+}
+
+function resolveBoardPalette(palette: LanternState["boardPrograms"][number]["palette"], visualStyle: LanternState["board"]["visualStyle"]): ResolvedBoardPalette {
+  if (palette === "brigade-blue") return {
+    background: "#0c537a", gradientStart: "#1679a6", gradientEnd: "#082f50", text: "#fff6df", accent: "#f4c45d", secondary: "#f06b55", muted: "#d8edf0", frame: "rgba(244, 196, 93, .78)", panelTint: "rgba(255, 246, 223, .10)"
+  };
+  if (palette === "brigade-red") return {
+    background: "#9e3026", gradientStart: "#c54b39", gradientEnd: "#661d20", text: "#fff6df", accent: "#f4c45d", secondary: "#72c6d5", muted: "#f7dcd1", frame: "rgba(244, 196, 93, .78)", panelTint: "rgba(255, 246, 223, .10)"
+  };
+  if (palette === "brigade-sunshine") return {
+    background: "#e0a11e", gradientStart: "#f4ca61", gradientEnd: "#c87712", text: "#173f61", accent: "#a82f28", secondary: "#146f98", muted: "#3f5669", frame: "rgba(23, 63, 97, .58)", panelTint: "rgba(255, 248, 226, .18)"
+  };
+  if (palette === "brigade-cream") return {
+    background: "#f6eedb", gradientStart: "#fffaf0", gradientEnd: "#ead9b8", text: "#173f61", accent: "#bc3b2f", secondary: "#1575a2", muted: "#586a76", frame: "rgba(21, 117, 162, .48)", panelTint: "rgba(21, 117, 162, .08)"
+  };
+  if (visualStyle === "gallery-plaque") return {
+    background: "#101518", gradientStart: "#242c31", gradientEnd: "#0a0e11", text: "#f2f1ed", accent: "#c9954e", secondary: "#79cac6", muted: "rgba(242, 241, 237, .62)", frame: "rgba(201, 149, 78, .62)", panelTint: "rgba(121, 202, 198, .10)"
+  };
+  if (visualStyle === "chalkboard" || visualStyle === "chalkboard-minimal") return {
+    background: "#12191d", gradientStart: "#1c252a", gradientEnd: "#0b1014", text: "#f5f2eb", accent: "#d9a657", secondary: "#79cac6", muted: "#bdc7c7", frame: "rgba(217, 166, 87, .62)", panelTint: "rgba(121, 202, 198, .10)"
+  };
+  return {
+    background: "#061a2d", gradientStart: "#092945", gradientEnd: "#04111f", text: "#f6edd9", accent: "#f3b52f", secondary: "#39c5c0", muted: "#bdc7c7", frame: "rgba(217, 166, 87, .62)", panelTint: "rgba(121, 202, 198, .10)"
+  };
+}
+
+function drawBrigadeAccents(context: CanvasRenderingContext2D, width: number, height: number, palette: ResolvedBoardPalette) {
+  context.save();
+  context.globalAlpha = 0.34;
+  context.strokeStyle = palette.secondary;
+  context.lineWidth = Math.max(3, Math.min(width, height) * 0.004);
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(-width * 0.04, height * 0.035);
+  context.bezierCurveTo(width * 0.22, height * 0.1, width * 0.33, -height * 0.02, width * 0.58, height * 0.035);
+  context.bezierCurveTo(width * 0.76, height * 0.08, width * 0.83, height * 0.01, width * 1.04, height * 0.055);
+  context.stroke();
+  context.strokeStyle = palette.accent;
+  context.beginPath();
+  context.moveTo(-width * 0.03, height * 0.96);
+  context.bezierCurveTo(width * 0.2, height * 0.9, width * 0.34, height * 1.01, width * 0.56, height * 0.955);
+  context.bezierCurveTo(width * 0.76, height * 0.91, width * 0.86, height * 1.02, width * 1.03, height * 0.965);
+  context.stroke();
+  context.globalAlpha = 0.18;
+  context.fillStyle = palette.accent;
+  [0.08, 0.92].forEach((x) => {
+    context.beginPath();
+    context.arc(width * x, height * 0.11, Math.min(width, height) * 0.018, 0, Math.PI * 2);
+    context.fill();
+  });
+  context.restore();
 }
 
 function materialColor(material: string) {

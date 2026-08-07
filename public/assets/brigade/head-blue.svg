@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-labelledby="title">
+  <title id="title">Child-drawn blue toy soldier head</title>
+  <path d="M48 58c7-31 67-40 84-4l-3 34H52z" fill="#2485b5" stroke="#173f61" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M58 52c19 9 43 8 66-2M45 78c31-7 62-4 91 2" fill="none" stroke="#f4c45d" stroke-width="8" stroke-linecap="round"/>
+  <path d="M61 84c-2 39 12 57 32 59 23 0 35-24 29-59" fill="#edb588" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="77" cy="105" r="4" fill="#173f61"/><circle cx="107" cy="106" r="4" fill="#173f61"/>
+  <path d="M79 125c9 6 18 7 27 0M92 108l-4 11 7 1" fill="none" stroke="#173f61" stroke-width="5" stroke-linecap="round"/>
+  <path d="M56 91l-12 8 10 11M126 92l12 8-10 12" fill="none" stroke="#173f61" stroke-width="7" stroke-linecap="round"/>
+</svg>

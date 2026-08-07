@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" role="img" aria-labelledby="title desc">
+  <title id="title">Children's Museum of Stockton portrait broadcast background</title>
+  <desc id="desc">Warm paper, hand-painted museum shapes, and open space for a portrait broadcast.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fff9e9"/>
+      <stop offset="1" stop-color="#f4ead2"/>
+    </linearGradient>
+    <filter id="wobble" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency=".006" numOctaves="2" seed="8" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="7"/>
+    </filter>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#paper)"/>
+  <path d="M-40 210C165 92 338 118 505 214S838 342 1125 168" fill="none" stroke="#207296" stroke-width="38" stroke-linecap="round" opacity=".9" filter="url(#wobble)"/>
+  <path d="M-55 300C170 196 344 208 522 304S867 412 1130 284" fill="none" stroke="#e0523e" stroke-width="20" stroke-linecap="round" opacity=".9" filter="url(#wobble)"/>
+  <circle cx="872" cy="430" r="116" fill="#f3c755" opacity=".9" filter="url(#wobble)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#wobble)">
+    <path d="M113 1465c95-83 192-70 270 15s154 119 243 29" stroke="#4aa6ad" stroke-width="32"/>
+    <path d="M703 1528l83-184 77 179 145-35" stroke="#e0523e" stroke-width="26"/>
+    <path d="M86 1660c162 58 303 63 451 15s301-51 486 22" stroke="#f0bd43" stroke-width="42"/>
+  </g>
+  <g fill="#153f5b" font-family="Trebuchet MS, sans-serif" text-anchor="middle">
+    <text x="540" y="162" font-size="44" font-weight="700" letter-spacing="4">CHILDREN'S MUSEUM</text>
+    <text x="540" y="218" font-size="28" font-weight="700" letter-spacing="10">OF STOCKTON</text>
+  </g>
+  <g transform="translate(116 1585) rotate(-4)" font-family="Trebuchet MS, sans-serif" fill="#153f5b">
+    <text font-size="28" font-weight="700" letter-spacing="3">MAKE WONDER POSSIBLE</text>
+    <path d="M0 22c170 12 349 5 520-8" fill="none" stroke="#e0523e" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <path d="M84 420v925M994 544v800" fill="none" stroke="#153f5b" stroke-width="5" stroke-dasharray="3 22" stroke-linecap="round" opacity=".16"/>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Children's Museum of Stockton landscape broadcast background</title>
+  <desc id="desc">Warm paper, hand-painted museum shapes, and open space for a landscape broadcast.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff9e9"/>
+      <stop offset="1" stop-color="#f1e5cb"/>
+    </linearGradient>
+    <filter id="wobble" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency=".006" numOctaves="2" seed="11" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="8"/>
+    </filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#paper)"/>
+  <path d="M-60 176C263 30 495 42 745 172s520 187 794 35 334-96 455-36" fill="none" stroke="#207296" stroke-width="40" stroke-linecap="round" opacity=".92" filter="url(#wobble)"/>
+  <path d="M-38 260c292-122 536-106 777 14s491 145 742 26 342-105 488-40" fill="none" stroke="#e0523e" stroke-width="22" stroke-linecap="round" opacity=".9" filter="url(#wobble)"/>
+  <circle cx="1668" cy="296" r="105" fill="#f3c755" opacity=".92" filter="url(#wobble)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#wobble)">
+    <path d="M84 846c183-90 346-74 475 24s284 117 452 6" stroke="#4aa6ad" stroke-width="31"/>
+    <path d="M1220 907l78-177 85 173 167-62 160 39" stroke="#e0523e" stroke-width="27"/>
+    <path d="M-28 1010c276-80 537-67 778 8s507 75 747-12 379-91 501-57" stroke="#f0bd43" stroke-width="44"/>
+  </g>
+  <g fill="#153f5b" font-family="Trebuchet MS, sans-serif">
+    <text x="102" y="124" font-size="40" font-weight="700" letter-spacing="4">CHILDREN'S MUSEUM OF STOCKTON</text>
+    <text x="1484" y="998" font-size="25" font-weight="700" letter-spacing="3">MAKE WONDER POSSIBLE</text>
+  </g>
+  <path d="M92 342v416M1824 420v352" fill="none" stroke="#153f5b" stroke-width="5" stroke-dasharray="3 22" stroke-linecap="round" opacity=".16"/>
+</svg>

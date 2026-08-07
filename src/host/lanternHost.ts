@@ -1,10 +1,15 @@
-import { initialState } from "../sampleData";
-import type { HostMessage, LanternState, ScreenId, TargetScreen } from "../types";
+import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, initialState, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { withBrigadeOpeningPayment } from "../donorDomain";
+import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
+import type { Announcement, BoardDonorPresentation, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
+import { normalizeVisitorMessageRotation, normalizeVisitorMessages } from "../visitorMessages";
+import { normalizeBroadcastComposition } from "../broadcastComposition";
+import { normalizeEffectStudioState, normalizePhase4LiveEffects, PHASE4_CONTENT_VERSION } from "../effectStudio";
 
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
-const DEMO_DATA_VERSION = "5";
+const DEMO_DATA_VERSION = "7";
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
 const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
@@ -12,12 +17,26 @@ const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT a
   || "";
 const configuredReadEndpoint = (import.meta.env.VITE_LANTERN_READ_ENDPOINT as string | undefined)?.trim()
   || configuredWriteEndpoint;
-const LANTERN_READ_SERVICE_ROOT = configuredReadEndpoint.replace(/\/bugs\/?$/, "");
+const LANTERN_READ_SERVICE_ROOT = import.meta.env.DEV ? "" : configuredReadEndpoint.replace(/\/bugs\/?$/, "");
 const LANTERN_WRITE_SERVICE_ROOT = import.meta.env.DEV ? "" : configuredWriteEndpoint.replace(/\/bugs\/?$/, "");
+const LEGACY_CONTENT_MIGRATION_VERSION = 3;
+const MAX_AUDIT_HISTORY = 350;
+const MAX_BROADCAST_REMINDER_ACKNOWLEDGEMENTS = 250;
 let sharedPersistenceEnabled = false;
 let sharedSaveTimer: number | undefined;
 
 type Listener = (message: HostMessage) => void;
+
+/** Read-only compatibility shape for migrating profiles saved before v5. */
+type LegacyDonorAppearance = {
+  icon?: "none" | "star" | "heart" | "leaf" | "sparkle" | "diamond" | "crown" | "laurel" | "sun" | "hand";
+  customIconImage?: string;
+  fontOverride?: LanternState["boardPrograms"][number]["fontFamily"];
+  nameColor?: string;
+  accentColor?: string;
+  highlight?: "none" | "underline" | "soft-box";
+  animation?: "none" | "gentle-pulse" | "soft-glow" | "shimmer";
+};
 
 export function loadLanternState(): LanternState {
   const stored = window.localStorage.getItem(LANTERN_STORAGE_KEY);
@@ -26,45 +45,21 @@ export function loadLanternState(): LanternState {
   }
 
   try {
-    const saved = { ...initialState, ...JSON.parse(stored) } as LanternState;
-    if (window.localStorage.getItem(DEMO_DATA_VERSION_KEY) !== DEMO_DATA_VERSION) {
-      const savedPrograms = saved.boardPrograms?.length ? saved.boardPrograms : initialState.boardPrograms;
-      const portraitProgram = savedPrograms.find((program) => program.orientation === "Portrait") ?? savedPrograms[0];
-      const landscapeProgram = savedPrograms.find((program) => program.orientation === "Landscape") ?? savedPrograms[1] ?? savedPrograms[0];
-      const retainedSchedules = (saved.schedules ?? []).filter((entry) => !["schedule-first-half", "schedule-second-half", "schedule-portrait-hours", "schedule-portrait-board", "schedule-landscape-board"].includes(entry.id));
-      const boardSchedules = [
-        { ...initialState.schedules.find((entry) => entry.id === "schedule-portrait-board")!, boardId: portraitProgram.id },
-        { ...initialState.schedules.find((entry) => entry.id === "schedule-landscape-board")!, boardId: landscapeProgram.id }
-      ];
-      const migrated = normalizeState({
-        ...saved,
-        donors: initialState.donors,
-        donorGroups: initialState.donorGroups,
-        recognitionSettings: initialState.recognitionSettings,
-        board: { ...saved.board, storyImageUrl: "" },
-        boardPrograms: savedPrograms,
-        schedules: [...boardSchedules, ...retainedSchedules],
-        savedAnnouncements: saved.savedAnnouncements?.length ? saved.savedAnnouncements : initialState.savedAnnouncements,
-        screens: Object.fromEntries(Object.entries(saved.screens).map(([id, screen]) => [id, {
-          ...screen,
-          orientation: id === "display-1" ? "Portrait" : screen.orientation,
-          resolution: id === "display-1" ? "1080 x 1920" : screen.resolution,
-          boardProgramId: id === "display-1" ? "board-classic" : screen.boardProgramId,
-          style: screen.style === "image" ? "donor-wall" : screen.style,
-          backgroundMode: screen.style === "image" ? "image" : screen.backgroundMode,
-          backgroundImage: undefined,
-          backgroundMediaId: undefined,
-          backgroundMediaType: undefined,
-          donorIds: initialState.boardPrograms[0].donorIds,
-          donorRosterConfigured: true
-        }])) as LanternState["screens"]
-      });
-      window.localStorage.setItem(DEMO_DATA_VERSION_KEY, DEMO_DATA_VERSION);
-      saveLanternState(migrated);
-      void deleteAllLanternMedia();
-      return migrated;
+    const parsed = JSON.parse(stored) as Partial<LanternState>;
+    const saved = { ...initialState, ...parsed, contentVersion: parsed.contentVersion ?? 0 } as LanternState;
+    const normalized = normalizeState(saved);
+    const demoVersionChanged = window.localStorage.getItem(DEMO_DATA_VERSION_KEY) !== DEMO_DATA_VERSION;
+    const contentVersionChanged = normalized.contentVersion !== parsed.contentVersion;
+    if (demoVersionChanged || contentVersionChanged) {
+      // Persist content migrations even when the legacy demo marker was already
+      // advanced by another route. This keeps the version stored with the data
+      // authoritative for both local and shared-state normalization.
+      const savedSuccessfully = saveLanternState(normalized);
+      if (savedSuccessfully) {
+        window.localStorage.setItem(DEMO_DATA_VERSION_KEY, DEMO_DATA_VERSION);
+      }
     }
-    return normalizeState(saved);
+    return normalized;
   } catch {
     return normalizeState(initialState);
   }
@@ -83,20 +78,24 @@ export function saveLanternState(state: LanternState) {
   try {
     const serializable = {
       ...state,
+      boardPrograms: state.boardPrograms.map((program) => program.backgroundMediaId && program.backgroundImage?.startsWith("blob:") ? { ...program, backgroundImage: undefined } : program),
       screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
         id,
         screen.backgroundMediaId && screen.backgroundImage?.startsWith("blob:") ? { ...screen, backgroundImage: undefined } : screen
       ]))
     };
     window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
+    return true;
   } catch (error) {
     console.warn("Project Lantern could not persist the current media asset locally.", error);
+    return false;
   }
 }
 
 function serializableSharedState(state: LanternState): LanternState {
   return {
     ...state,
+    boardPrograms: state.boardPrograms.map((program) => program.backgroundImage?.startsWith("blob:") ? { ...program, backgroundImage: undefined } : program),
     screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
       id,
       screen.backgroundImage?.startsWith("blob:") ? { ...screen, backgroundImage: undefined } : screen
@@ -109,7 +108,7 @@ export async function loadSharedLanternState(): Promise<LanternState | null> {
   const response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, { headers: { "Accept": "application/json" } });
   if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
   const body = await response.json() as { state?: LanternState | null };
-  return body.state ? normalizeState({ ...initialState, ...body.state }) : null;
+  return body.state ? normalizeState({ ...initialState, ...body.state, contentVersion: body.state.contentVersion ?? 0 }) : null;
 }
 
 export function enableSharedStatePersistence() {
@@ -164,20 +163,33 @@ async function shareImageUrl(value: string | undefined, name: string) {
 }
 
 export async function shareLanternImages(state: LanternState): Promise<LanternState> {
-  const boardPrograms = await Promise.all(state.boardPrograms.map(async (program) => ({
-    ...program,
-    panels: program.panels ? await Promise.all(program.panels.map(async (panel) => ({
-      ...panel,
-      imageUrl: await shareImageUrl(panel.imageUrl, `${program.id}-${panel.id}`)
-    }))) : program.panels
-  })));
-  const donors = await Promise.all(state.donors.map(async (donor) => ({
-    ...donor,
-    customIconImage: await shareImageUrl(donor.customIconImage, `${donor.id}-icon`)
-  })));
+  const boardPrograms = await Promise.all(state.boardPrograms.map(async (program) => {
+    const backgroundImage = await shareImageUrl(program.backgroundImage, `${program.id}-background`);
+    const donorStyles = program.donorStyles
+      ? Object.fromEntries(await Promise.all(Object.entries(program.donorStyles).map(async ([donorId, style]) => [donorId, {
+          ...style,
+          recognitionIconImage: await shareImageUrl(style.recognitionIconImage, `${program.id}-${donorId}-icon`)
+        }])))
+      : undefined;
+    return {
+      ...program,
+      backgroundImage,
+      backgroundMediaId: backgroundImage?.startsWith("http") ? undefined : program.backgroundMediaId,
+      donorStyles,
+      panels: program.panels ? await Promise.all(program.panels.map(async (panel) => ({
+        ...panel,
+        imageUrl: await shareImageUrl(panel.imageUrl, `${program.id}-${panel.id}`)
+      }))) : program.panels
+    };
+  }));
+  const donors = state.donors;
   const savedAnnouncements = await Promise.all(state.savedAnnouncements.map(async (announcement) => ({
     ...announcement,
     imageUrl: await shareImageUrl(announcement.imageUrl, `${announcement.id}-image`)
+  })));
+  const savedBlips = await Promise.all(state.savedBlips.map(async (blip) => ({
+    ...blip,
+    imageUrl: await shareImageUrl(blip.imageUrl, `${blip.id}-image`)
   })));
   const screens = Object.fromEntries(await Promise.all(Object.entries(state.screens).map(async ([id, screen]) => {
     const backgroundImage = await shareImageUrl(screen.backgroundImage, `${id}-background`);
@@ -192,8 +204,10 @@ export async function shareLanternImages(state: LanternState): Promise<LanternSt
     boardPrograms,
     donors,
     savedAnnouncements,
+    savedBlips,
     screens,
     announcement: { ...state.announcement, imageUrl: await shareImageUrl(state.announcement.imageUrl, "active-announcement") },
+    activeBlip: { ...state.activeBlip, imageUrl: await shareImageUrl(state.activeBlip.imageUrl, "active-blip") },
     live: {
       ...state.live,
       backgroundImage: await shareImageUrl(state.live.backgroundImage, "live-composition-background"),
@@ -232,24 +246,34 @@ export async function deleteLanternMedia(id?: string) {
 
 export async function hydrateLanternMedia(state: LanternState): Promise<LanternState> {
   const mediaScreens = Object.values(state.screens).filter((screen) => screen.backgroundMediaId && !screen.backgroundImage);
-  if (!mediaScreens.length) return state;
+  const mediaPrograms = state.boardPrograms.filter((program) => program.backgroundMediaId && !program.backgroundImage);
+  if (!mediaScreens.length && !mediaPrograms.length) return state;
   const database = await openMediaDatabase();
-  const hydrated = await Promise.all(mediaScreens.map(async (screen) => {
-    const mediaId = screen.backgroundMediaId as string;
+  const loadMediaUrl = async (mediaId: string) => {
     const blob = await new Promise<Blob | undefined>((resolve, reject) => {
       const transaction = database.transaction(LANTERN_MEDIA_STORE, "readonly");
       const request = transaction.objectStore(LANTERN_MEDIA_STORE).get(mediaId);
       request.onsuccess = () => resolve(request.result as Blob | undefined);
       request.onerror = () => reject(request.error);
     });
-    return blob ? [screen.id, URL.createObjectURL(blob)] as const : null;
+    return blob ? URL.createObjectURL(blob) : undefined;
+  };
+  const hydratedScreens = await Promise.all(mediaScreens.map(async (screen) => {
+    const url = await loadMediaUrl(screen.backgroundMediaId as string);
+    return url ? [screen.id, url] as const : null;
+  }));
+  const hydratedPrograms = await Promise.all(mediaPrograms.map(async (program) => {
+    const url = await loadMediaUrl(program.backgroundMediaId as string);
+    return url ? [program.id, url] as const : null;
   }));
   database.close();
-  const urls = new Map(hydrated.filter((item): item is readonly [string, string] => Boolean(item)));
-  if (!urls.size) return state;
+  const screenUrls = new Map(hydratedScreens.filter((item): item is readonly [string, string] => Boolean(item)));
+  const programUrls = new Map(hydratedPrograms.filter((item): item is readonly [string, string] => Boolean(item)));
+  if (!screenUrls.size && !programUrls.size) return state;
   return {
     ...state,
-    screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [id, urls.has(id) ? { ...screen, backgroundImage: urls.get(id) } : screen])) as LanternState["screens"]
+    boardPrograms: state.boardPrograms.map((program) => programUrls.has(program.id) ? { ...program, backgroundImage: programUrls.get(program.id) } : program),
+    screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [id, screenUrls.has(id) ? { ...screen, backgroundImage: screenUrls.get(id) } : screen])) as LanternState["screens"]
   };
 }
 
@@ -322,24 +346,43 @@ export function nextRevision(state: LanternState, note: string): LanternState {
   };
 }
 
-export function openBrowserDisplayWindows(screens = Object.values(loadLanternState().screens)) {
-  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  const screen = screens[0];
-  if (!screen) return;
-
-  // Browser mode cannot safely create one popup per display: popup blockers
-  // reject window.open calls even when they originate from a user action.
-  // Navigate in the current tab instead; the display route remains shareable
-  // and the browser never treats this as a popup.
-  window.location.assign(`${appUrl}#/display/${screen.id}`);
+export interface DisplayWindowOpenResult {
+  opened: string[];
+  blocked: string[];
 }
 
-export async function openDisplayWindows(screens = Object.values(loadLanternState().screens)) {
+export function openBrowserDisplayWindows(screens = Object.values(loadLanternState().screens)): DisplayWindowOpenResult {
+  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  const result: DisplayWindowOpenResult = { opened: [], blocked: [] };
+  if (!screens.length) return result;
+  // Browsers consume transient user activation after one window.open call.
+  // A single wall popup therefore carries every requested display on first click;
+  // the native Tauri path below still opens independent physical windows.
+  const multiDisplay = screens.length > 1;
+  const route = multiDisplay
+    ? `#/display-wall/${screens.map((screen) => encodeURIComponent(screen.id)).join(",")}`
+    : `#/display/${encodeURIComponent(screens[0].id)}`;
+  const portrait = !multiDisplay && screens[0].orientation === "Portrait";
+  const popup = window.open(
+    `${appUrl}${route}`,
+    multiDisplay ? "lantern-display-wall" : `lantern-display-${screens[0].id}`,
+    `popup=yes,width=${multiDisplay ? 1240 : portrait ? 540 : 960},height=${multiDisplay ? 800 : portrait ? 900 : 620},left=80,top=60`
+  );
+  if (popup) {
+    result.opened.push(...screens.map((screen) => screen.id));
+    popup.focus();
+  } else {
+    result.blocked.push(...screens.map((screen) => screen.id));
+  }
+  window.dispatchEvent(new CustomEvent("lantern:display-open-result", { detail: result }));
+  return result;
+}
+
+export async function openDisplayWindows(screens = Object.values(loadLanternState().screens)): Promise<DisplayWindowOpenResult> {
   // Keep browser popups inside the originating click event. Waiting for the
   // Tauri module import first causes browsers to block all but the first window.
   if (!(window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) {
-    openBrowserDisplayWindows(screens);
-    return;
+    return openBrowserDisplayWindows(screens);
   }
 
   try {
@@ -351,16 +394,32 @@ export async function openDisplayWindows(screens = Object.values(loadLanternStat
         orientation: screen.orientation
       }))
     });
+    return { opened: screens.map((screen) => screen.id), blocked: [] };
   } catch {
-    openBrowserDisplayWindows(screens);
+    return openBrowserDisplayWindows(screens);
   }
 }
 
 export function fitWarnings(state: LanternState) {
-  const activeDonors = state.donors.filter((donor) => donor.active);
   const warnings: string[] = [];
 
   Object.values(state.screens).forEach((screen) => {
+    const program = state.boardPrograms.find((candidate) => candidate.id === screen.boardProgramId);
+    const activeDonors = state.donors.filter((donor) => donor.active && (!program || program.donorIds.includes(donor.id)));
+    const donorPanels = program?.panels?.filter((panel) => panel.type === "donors") ?? [];
+    if (donorPanels.length) {
+      donorPanels.forEach((panel) => {
+        const panelDonors = activeDonors.filter((donor) =>
+          (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
+          && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
+        );
+        const columns = panel.columns ?? program?.columns ?? 1;
+        const rows = panel.rows ?? Math.max(1, Math.ceil(panelDonors.length / columns));
+        const capacity = columns * rows;
+        if (panelDonors.length > capacity) warnings.push(`${screen.label} · ${panel.title || "donor list"} needs ${panelDonors.length - capacity} fewer names or more rows.`);
+      });
+      return;
+    }
     const capacity = screen.orientation === "Portrait"
       ? state.theme.letteringDepth > 70 ? 16 : 22
       : state.theme.letteringDepth > 70 ? 24 : 32;
@@ -370,6 +429,420 @@ export function fitWarnings(state: LanternState) {
   });
 
   return warnings;
+}
+
+function appendMissingById<T extends { id: string }>(existing: T[], defaults: readonly T[]) {
+  const existingIds = new Set(existing.map((item) => item.id));
+  return [...existing, ...defaults.filter((item) => !existingIds.has(item.id))];
+}
+
+function uniqueStrings(...values: Array<readonly string[] | undefined>) {
+  return [...new Set(values.flatMap((items) => items ?? []))];
+}
+
+function uniqueRecordsById<T extends { id: string }>(...values: Array<readonly T[] | undefined>) {
+  return [...new Map(values.flatMap((items) => items ?? []).map((item) => [item.id, item])).values()];
+}
+
+function legacyDonorPresentation(donor: Donor): BoardDonorPresentation | undefined {
+  const legacy = donor as Donor & LegacyDonorAppearance;
+  const presentation: BoardDonorPresentation = {
+    fontFamily: legacy.fontOverride,
+    nameColor: legacy.nameColor,
+    accentColor: legacy.accentColor,
+    highlight: legacy.highlight === "underline"
+      ? "fine-underline"
+      : legacy.highlight === "soft-box"
+        ? "soft-highlight"
+        : undefined,
+    recognitionIcon: legacy.icon && legacy.icon !== "none" && legacy.icon !== "hand" ? legacy.icon : undefined,
+    recognitionIconImage: legacy.customIconImage,
+    animation: legacy.animation === "gentle-pulse"
+      ? "grow-shrink"
+      : legacy.animation === "shimmer" || legacy.animation === "soft-glow"
+        ? "slow-shimmer"
+        : undefined
+  };
+  return Object.values(presentation).some(Boolean) ? presentation : undefined;
+}
+
+function migrateLegacyDonorPresentation(
+  programs: LanternState["boardPrograms"],
+  donors: Donor[]
+): LanternState["boardPrograms"] {
+  return programs.map((program) => {
+    const memberIds = new Set([
+      ...program.donorIds,
+      ...(program.panels?.flatMap((panel) => panel.donorIds ?? []) ?? [])
+    ]);
+    const migratedStyles = donors.reduce<NonNullable<typeof program.donorStyles>>((styles, donor) => {
+      if (!memberIds.has(donor.id)) return styles;
+      const legacyStyle = legacyDonorPresentation(donor);
+      if (!legacyStyle) return styles;
+      styles[donor.id] = { ...legacyStyle, ...(styles[donor.id] ?? {}) };
+      return styles;
+    }, { ...(program.donorStyles ?? {}) });
+    return { ...program, donorStyles: Object.keys(migratedStyles).length ? migratedStyles : undefined };
+  });
+}
+
+function donorIdentityKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\band\b/g, "&")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function mergeDonorProfiles(primary: Donor, secondary: Donor): Donor {
+  return {
+    ...secondary,
+    ...primary,
+    note: primary.note || secondary.note,
+    tags: uniqueStrings(primary.tags, secondary.tags),
+    donations: uniqueRecordsById(primary.donations, secondary.donations),
+    displayIds: primary.displayIds ?? secondary.displayIds,
+    boardIds: uniqueStrings(primary.boardIds, secondary.boardIds)
+  };
+}
+
+function mergeOfficialDonor(profile: Donor | undefined, official: Donor): Donor {
+  if (!profile) return { ...official, tags: [...(official.tags ?? [])], donations: [...(official.donations ?? [])], displayIds: official.displayIds ? [...official.displayIds] : undefined };
+  return {
+    ...official,
+    ...profile,
+    // Roster identity, giving level, and pledge terms come from the approved
+    // source. Operational fields on the profile remain user-owned.
+    id: official.id,
+    name: official.name,
+    tier: official.tier,
+    category: official.category,
+    since: official.since,
+    groupId: official.groupId,
+    givingProgramId: official.givingProgramId,
+    givingLevelId: official.givingLevelId,
+    pledgeAnnualAmount: official.pledgeAnnualAmount,
+    pledgeYears: official.pledgeYears,
+    pledgeStartYear: official.pledgeStartYear,
+    recognitionOrder: official.recognitionOrder,
+    pledgeStatus: profile.pledgeStatus ?? official.pledgeStatus,
+    tags: uniqueStrings(profile.tags, official.tags),
+    donations: [...(profile.donations ?? official.donations ?? [])],
+    displayIds: profile.displayIds ? [...profile.displayIds] : official.displayIds ? [...official.displayIds] : undefined,
+    boardIds: profile.boardIds ? [...profile.boardIds] : official.boardIds ? [...official.boardIds] : undefined
+  };
+}
+
+function isKnownDemoDonor(donor: Donor) {
+  return donor.id.startsWith("test-") && (
+    /^test\b/i.test(donor.name)
+    || donor.tags?.some((tag) => tag.toLowerCase() === "(test)")
+    || /^test record\b/i.test(donor.note)
+  );
+}
+
+function migrateOfficialDonors(incoming: Donor[], officialDonors: Donor[]) {
+  const officialById = new Map(officialDonors.map((donor) => [donor.id, donor]));
+  const officialByName = new Map(officialDonors.map((donor) => [donorIdentityKey(donor.name), donor]));
+  const matches = new Map<string, Donor[]>();
+  const aliases = new Map<string, string>();
+  const retained: Donor[] = [];
+
+  incoming.forEach((donor) => {
+    const official = officialById.get(donor.id) ?? officialByName.get(donorIdentityKey(donor.name));
+    if (official) {
+      matches.set(official.id, [...(matches.get(official.id) ?? []), donor]);
+      if (donor.id !== official.id) aliases.set(donor.id, official.id);
+      return;
+    }
+
+    // IDs in this namespace were generated by the retired placeholder roster.
+    // Real donors created in the UI use donor-* IDs and are always retained.
+    if (/^toy-(explorer|play)-\d+$/.test(donor.id) || isKnownDemoDonor(donor)) return;
+    retained.push(donor);
+  });
+
+  const official = officialDonors.map((seed) => {
+    const candidates = matches.get(seed.id) ?? [];
+    const exact = candidates.find((candidate) => candidate.id === seed.id);
+    const ordered = exact ? [exact, ...candidates.filter((candidate) => candidate !== exact)] : candidates;
+    const profile = ordered.length ? ordered.slice(1).reduce(mergeDonorProfiles, ordered[0]) : undefined;
+    return mergeOfficialDonor(profile, seed);
+  });
+
+  return { donors: [...retained, ...official], aliases };
+}
+
+function remapDonorIds(ids: string[] | undefined, aliases: Map<string, string>) {
+  if (!ids) return undefined;
+  return uniqueStrings(ids.map((id) => aliases.get(id) ?? id));
+}
+
+function isUntouchedLegacyDemoBoard(program: LanternState["boardPrograms"][number]) {
+  const donorsAreDemoOnly = program.donorIds.length > 0 && program.donorIds.every((id) => id.startsWith("test-"));
+  const hasOnlyLegacyFields = Object.keys(program).every((key) => [
+    "id", "name", "orientation", "heading", "subtitle", "description", "footer", "columns", "donorIds", "active"
+  ].includes(key));
+  if (!donorsAreDemoOnly || !hasOnlyLegacyFields || program.heading !== "THANK YOU" || program.active !== true) return false;
+  if (program.id === "board-classic") {
+    return program.name === "Our Generous Donors"
+      && program.subtitle === "OUR GENEROUS DONORS"
+      && program.description === "TOGETHER, WE MAKE A DIFFERENCE."
+      && program.footer === "TOGETHER, WE MAKE A DIFFERENCE."
+      && program.columns === 2;
+  }
+  if (program.id === "board-spotlight") {
+    return program.name === "Community Spotlight"
+      && program.subtitle === "COMMUNITY PARTNERS"
+      && program.description === "YOUR SUPPORT BUILDS A BRIGHTER FUTURE."
+      && program.footer === "WITH GRATITUDE TO OUR COMMUNITY."
+      && program.columns === 1;
+  }
+  return false;
+}
+
+function isUntouchedLegacyDemoScreen(id: string, screen: LanternState["screens"][string] | undefined) {
+  if (!screen || (id !== "display-1" && id !== "display-2")) return false;
+  const portrait = id === "display-1";
+  return screen.label === (portrait ? "Display 1" : "Display 2")
+    && screen.assignment === "Test window"
+    && screen.orientation === (portrait ? "Portrait" : "Landscape")
+    && screen.resolution === (portrait ? "1080 x 1920" : "1920 x 1080")
+    && screen.boardProgramId === (portrait ? "board-classic" : "board-spotlight")
+    && screen.style === "donor-wall"
+    && (screen.backgroundMode ?? "board") === "board"
+    && screen.backgroundCrop?.scale === 1
+    && screen.backgroundCrop?.x === 0
+    && screen.backgroundCrop?.y === 0
+    && (screen.backgroundCrop?.rotation ?? 0) === 0
+    && screen.layoutScale === 100
+    && screen.brightness === 72
+    && screen.enabled !== false
+    && screen.customHeading === "THANK YOU"
+    && screen.customSubheading === "OUR GENEROUS DONORS"
+    && screen.fontFamily === "Montserrat"
+    && screen.nameSize === (portrait ? 30 : 28)
+    && screen.columns === (portrait ? 1 : 2)
+    && screen.donorScrollEnabled === false
+    && screen.donorScrollSpeed === 4
+    && screen.particleAnimationEnabled === false
+    && screen.particleDriftDirection === "natural"
+    && screen.particleDriftSpeed === 4
+    && screen.particleGravity === 3
+    && screen.showIcons === false
+    && screen.donorIconStyle === "circle"
+    && screen.donorIconPlacement === "left"
+    && screen.showSubtext === false
+    && !screen.backgroundImage
+    && !screen.backgroundMediaId
+    && !screen.backgroundMediaName
+    && !screen.backgroundMediaType
+    && !screen.showFrame
+    && !screen.textFinish
+    && !screen.textShadowEnabled
+    && !screen.particleColorStyle
+    && screen.particleCount === undefined
+    && screen.particleSize === undefined
+    && screen.particleSpread === undefined
+    && screen.particleWander === undefined
+    && screen.particleLifetime === undefined
+    && screen.particleLifetimeRange === undefined
+    && !screen.roomVideoDeviceId
+    && !screen.roomAudioDeviceId
+    && !(screen.donorIds?.length)
+    && !Object.keys(screen.donorSubtextVisibility ?? {}).length;
+}
+
+function isUntouchedLegacyDemoBoardSchedule(entry: ScheduleEntry) {
+  const portrait = entry.id === "schedule-portrait-board";
+  const landscape = entry.id === "schedule-landscape-board";
+  if (!portrait && !landscape) return false;
+  return entry.name === (portrait ? "Portrait board · Display 1" : "Landscape board · Display 2")
+    && entry.target === (portrait ? "display-1" : "display-2")
+    && entry.boardId === (portrait ? "board-classic" : "board-spotlight")
+    && (entry.contentType ?? "board") === "board"
+    && entry.days.join(",") === "0,3,4,5,6"
+    && entry.recurrence === "weekly"
+    && entry.startTime === "07:00"
+    && entry.endTime === "18:00"
+    && entry.color === (portrait ? "#5f55bd" : "#218ba2")
+    && entry.active === true
+    && !entry.scheduleDate
+    && !entry.scheduleEndDate
+    && !entry.message
+    && !entry.announcementId
+    && !entry.blipId
+    && !entry.broadcastMode
+    && !entry.broadcastVideoUrl
+    && !entry.broadcastVideoName
+    && !entry.presenterName;
+}
+
+function fullRosterBoardIdForLegacy(id: string) {
+  return id === "board-classic" ? "board-toy-soldier-portrait"
+    : id === "board-spotlight" ? "board-toy-soldier-landscape"
+      : id;
+}
+
+function mergeOfficialGivingProgram(existing: GivingProgram, official: GivingProgram): GivingProgram {
+  return {
+    ...official,
+    ...existing,
+    id: official.id,
+    name: official.name,
+    classLabel: official.classLabel,
+    classYear: official.classYear,
+    description: official.description,
+    fundDesignation: official.fundDesignation,
+    spotlightDonorId: official.spotlightDonorId,
+    levels: official.levels.map((level) => ({
+      ...existing.levels.find((candidate) => candidate.id === level.id),
+      ...level,
+      color: existing.levels.find((candidate) => candidate.id === level.id)?.color ?? level.color
+    }))
+  };
+}
+
+function isKnownDemoAnnouncement(announcement: Pick<Announcement, "id" | "title" | "message">) {
+  return /^announcement-test-\d+$/.test(announcement.id)
+    && /^test message \d+$/i.test(announcement.title.trim())
+    && /^test message \d+$/i.test(announcement.message.trim());
+}
+
+function isKnownDemoSchedule(entry: ScheduleEntry, retiredAnnouncementIds: Set<string>) {
+  return /^schedule-test-message-\d+$/.test(entry.id)
+    && Boolean(entry.announcementId && retiredAnnouncementIds.has(entry.announcementId));
+}
+
+function scheduleReferenceIsValid(
+  entry: ScheduleEntry,
+  boardIds: Set<string>,
+  announcementIds: Set<string>,
+  blipIds: Set<string>,
+  screenIds: Set<string>
+) {
+  if (entry.target !== "all" && !screenIds.has(entry.target)) return false;
+  const contentType = entry.contentType ?? "board";
+  if (contentType === "announcement") return Boolean(entry.announcementId && announcementIds.has(entry.announcementId));
+  if (contentType === "blip") return Boolean(entry.blipId && blipIds.has(entry.blipId));
+  if (contentType === "broadcast") return true;
+  return boardIds.has(entry.boardId);
+}
+
+function userIdentityKey(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function normalizeUsers(incoming: LanternState["users"] | null | undefined) {
+  const seedById = new Map(initialState.users.map((user) => [user.id, user]));
+  const seedByName = new Map(initialState.users.map((user) => [userIdentityKey(user.name), user]));
+  const aliases = new Map<string, string>();
+  const users: LanternState["users"] = [];
+
+  (Array.isArray(incoming) ? incoming : []).forEach((candidate) => {
+    const candidateId = typeof candidate?.id === "string" ? candidate.id.trim() : "";
+    const candidateName = typeof candidate?.name === "string" ? candidate.name.trim() : "";
+    if (!candidateName) return;
+
+    const seed = seedById.get(candidateId)
+      ?? (candidate.accessMode !== "authenticated" ? seedByName.get(userIdentityKey(candidateName)) : undefined);
+    const id = seed?.id ?? candidateId;
+    if (!id) return;
+    if (candidateId && candidateId !== id) aliases.set(candidateId, id);
+
+    const fallbackTimestamp = seed?.createdAt ?? initialState.users[0].createdAt;
+    const normalized = {
+      ...seed,
+      ...candidate,
+      id,
+      name: candidateName,
+      createdAt: candidate.createdAt || fallbackTimestamp,
+      updatedAt: candidate.updatedAt || candidate.createdAt || fallbackTimestamp,
+      accessMode: candidate.accessMode === "authenticated" ? "authenticated" as const : "local-demo" as const
+    };
+    const existingIndex = users.findIndex((user) => user.id === id);
+    if (existingIndex >= 0) users[existingIndex] = { ...users[existingIndex], ...normalized };
+    else users.push(normalized);
+  });
+
+  initialState.users.forEach((seed) => {
+    if (!users.some((user) => user.id === seed.id)) users.push({ ...seed });
+  });
+
+  return { users, aliases };
+}
+
+function defaultPreferencesForUser(userId: string): LanternState["userPreferences"][number] {
+  const defaults = initialState.userPreferences.find((preference) => preference.userId === userId)
+    ?? initialState.userPreferences[0];
+  return {
+    ...defaults,
+    userId,
+    roomWindows: { ...(defaults?.roomWindows ?? {}) },
+    roomMirrorByDisplay: { ...(defaults?.roomMirrorByDisplay ?? {}) },
+    editor: { ...(defaults?.editor ?? {}) }
+  };
+}
+
+function normalizeUserPreferences(
+  incoming: LanternState["userPreferences"] | null | undefined,
+  users: LanternState["users"],
+  aliases: Map<string, string>
+) {
+  const preferencesByUser = new Map<string, LanternState["userPreferences"][number]>();
+
+  (Array.isArray(incoming) ? incoming : []).forEach((candidate) => {
+    const incomingUserId = typeof candidate?.userId === "string" ? candidate.userId.trim() : "";
+    if (!incomingUserId) return;
+    const userId = aliases.get(incomingUserId) ?? incomingUserId;
+    const defaults = defaultPreferencesForUser(userId);
+    const previous = preferencesByUser.get(userId) ?? defaults;
+    preferencesByUser.set(userId, {
+      ...previous,
+      ...candidate,
+      userId,
+      theme: ["dark", "light", "ocean", "warm", "contrast", "sparkle"].includes(candidate.theme)
+        ? candidate.theme
+        : previous.theme,
+      donorSort: ["manual", "az", "za"].includes(candidate.donorSort)
+        ? candidate.donorSort
+        : previous.donorSort,
+      roomWindows: { ...previous.roomWindows, ...(candidate.roomWindows ?? {}) },
+      roomMirrorByDisplay: { ...previous.roomMirrorByDisplay, ...(candidate.roomMirrorByDisplay ?? {}) },
+      editor: { ...previous.editor, ...(candidate.editor ?? {}) }
+    });
+  });
+
+  users.forEach((user) => {
+    if (!preferencesByUser.has(user.id)) preferencesByUser.set(user.id, defaultPreferencesForUser(user.id));
+  });
+
+  return [...preferencesByUser.values()];
+}
+
+function normalizeAuditHistory(
+  incoming: LanternState["auditHistory"] | null | undefined,
+  aliases: Map<string, string>
+) {
+  return (Array.isArray(incoming) ? incoming : [])
+    .map((record) => ({ ...record, userId: aliases.get(record.userId) ?? record.userId }))
+    .slice(0, MAX_AUDIT_HISTORY);
+}
+
+function normalizeBroadcastReminderAcknowledgements(
+  incoming: LanternState["broadcastReminderAcknowledgements"] | null | undefined,
+  aliases: Map<string, string>
+) {
+  const latestByOccurrence = new Map<string, LanternState["broadcastReminderAcknowledgements"][number]>();
+  (Array.isArray(incoming) ? incoming : []).forEach((record) => {
+    if (!record?.occurrenceKey || latestByOccurrence.has(record.occurrenceKey)) return;
+    latestByOccurrence.set(record.occurrenceKey, {
+      ...record,
+      userId: record.userId ? aliases.get(record.userId) ?? record.userId : undefined
+    });
+  });
+  return [...latestByOccurrence.values()].slice(0, MAX_BROADCAST_REMINDER_ACKNOWLEDGEMENTS);
 }
 
 export function normalizeState(state: LanternState): LanternState {
@@ -391,14 +864,193 @@ export function normalizeState(state: LanternState): LanternState {
   }
 
   const chromaKey = { ...initialState.live.chromaKey, ...state.live?.chromaKey };
-  const effects = { ...initialState.live.effects, ...state.live?.effects };
+  let effects = normalizePhase4LiveEffects(state.live?.effects, initialState.live.effects);
   // Background removal methods are alternatives. Older saved states could have
   // both enabled, which caused chroma keying to punch holes in an AI composite.
   if (chromaKey.enabled) effects.background = "original";
+  const incomingContentVersion = Number.isFinite(state.contentVersion) ? state.contentVersion : 0;
+  // Version 3 installed and reconciled the approved donor/content roster. Newer
+  // schema-only upgrades must not rerun that migration because its seed ordering
+  // would overwrite a curator's saved donor order and recognition order.
+  const needsLegacyContentMigration = incomingContentVersion < LEGACY_CONTENT_MIGRATION_VERSION;
+  const needsDonorDomainMigration = incomingContentVersion < 5;
+  const needsPhase3ContentMigration = incomingContentVersion < PHASE3_CONTENT_VERSION;
+  const needsEffectStudioMigration = incomingContentVersion < PHASE4_CONTENT_VERSION;
+  const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
+
+  const incomingDonors = state.donors ?? initialState.donors;
+  const donorMigration = needsLegacyContentMigration
+    ? migrateOfficialDonors(incomingDonors, initialState.donors)
+    : { donors: incomingDonors, aliases: new Map<string, string>() };
+  const donors = donorMigration.donors;
+  const donorAliases = donorMigration.aliases;
+
+  const incomingPrograms = state.boardPrograms ?? initialState.boardPrograms;
+  const incomingSchedules = state.schedules ?? initialState.schedules;
+  const retireableLegacyBoardIds = new Set(incomingPrograms.filter(isUntouchedLegacyDemoBoard).map((program) => program.id));
+  const legacyBoardIds = new Set([...retireableLegacyBoardIds].filter((boardId) => {
+    const hasCustomizedScreenReference = Object.entries(legacyScreens).some(([id, screen]) =>
+      screen.boardProgramId === boardId && !isUntouchedLegacyDemoScreen(id, screen)
+    );
+    const hasCustomizedScheduleReference = incomingSchedules.some((entry) =>
+      (entry.contentType ?? "board") === "board"
+      && entry.boardId === boardId
+      && !isUntouchedLegacyDemoBoardSchedule(entry)
+    );
+    return !hasCustomizedScreenReference && !hasCustomizedScheduleReference;
+  }));
+  const retainedPrograms = needsLegacyContentMigration
+    ? incomingPrograms.filter((program) => !legacyBoardIds.has(program.id))
+    : incomingPrograms;
+  const migratedPrograms = needsLegacyContentMigration
+    ? appendMissingById(retainedPrograms, brigadeBoardPrograms)
+    : retainedPrograms;
+  const normalizedBoardPrograms = migratedPrograms.map((program) => ({
+    ...program,
+    donorIds: remapDonorIds(program.donorIds, donorAliases) ?? [],
+    panels: program.panels?.map((panel) => panel.donorIds
+      ? { ...panel, donorIds: remapDonorIds(panel.donorIds, donorAliases) }
+      : panel)
+  }));
+  const boardPrograms = needsDonorDomainMigration
+    ? migrateLegacyDonorPresentation(normalizedBoardPrograms, donors)
+    : normalizedBoardPrograms;
+
+  const incomingAnnouncements = state.savedAnnouncements ?? initialState.savedAnnouncements;
+  const retiredAnnouncements = needsLegacyContentMigration
+    ? incomingAnnouncements.filter(isKnownDemoAnnouncement)
+    : [];
+  const retainedAnnouncements = needsLegacyContentMigration
+    ? incomingAnnouncements.filter((announcement) => !isKnownDemoAnnouncement(announcement))
+    : incomingAnnouncements;
+  // An empty library is a valid user choice. Only install new templates when a
+  // pre-existing library is being migrated (or defaults filled an absent field).
+  const legacyMigratedAnnouncements = needsLegacyContentMigration && incomingAnnouncements.length
+    ? appendMissingById(retainedAnnouncements, brigadeAnnouncements)
+    : retainedAnnouncements;
+  const savedAnnouncements = needsPhase3ContentMigration
+    ? appendMissingPhase3Content(legacyMigratedAnnouncements, phase3Announcements)
+    : legacyMigratedAnnouncements;
+
+  const incomingBlips = state.savedBlips ?? initialState.savedBlips;
+  const savedBlips = needsLegacyContentMigration && incomingBlips.length
+    ? appendMissingById(incomingBlips, brigadeBlips)
+    : incomingBlips;
+
+  const donorGroups = needsLegacyContentMigration
+    ? appendMissingById(state.donorGroups ?? initialState.donorGroups, initialState.donorGroups)
+    : state.donorGroups ?? initialState.donorGroups;
+
+  const incomingGivingPrograms = state.givingPrograms ?? initialState.givingPrograms;
+  const officialGivingPrograms = new Map(initialState.givingPrograms.map((program) => [program.id, program]));
+  const migratedGivingPrograms = needsLegacyContentMigration
+    ? incomingGivingPrograms.map((program) => {
+        const official = officialGivingPrograms.get(program.id);
+        return official ? mergeOfficialGivingProgram(program, official) : program;
+      })
+    : incomingGivingPrograms;
+  const givingPrograms = (needsLegacyContentMigration
+    ? appendMissingById(migratedGivingPrograms, initialState.givingPrograms)
+    : migratedGivingPrograms).map((program) => {
+      const defaultProgram = initialState.givingPrograms.find((candidate) => candidate.id === program.id);
+      const donorDomainProgram = needsDonorDomainMigration && defaultProgram
+        ? {
+            ...defaultProgram,
+            ...program,
+            levels: appendMissingById(program.levels.map((level) => ({
+              ...defaultProgram.levels.find((candidate) => candidate.id === level.id),
+              ...level
+            })), defaultProgram.levels)
+          }
+        : program;
+      return {
+        ...donorDomainProgram,
+        spotlightDonorId: donorDomainProgram.spotlightDonorId
+          ? donorAliases.get(donorDomainProgram.spotlightDonorId) ?? donorDomainProgram.spotlightDonorId
+          : undefined
+      };
+    });
+
+  const remappedScreens = Object.fromEntries(Object.entries(screens).map(([id, screen]) => {
+    const legacyScreen = legacyScreens[id];
+    const migrateUntouchedDemoScreen = needsLegacyContentMigration
+      && screen.boardProgramId
+      && legacyBoardIds.has(screen.boardProgramId)
+      && isUntouchedLegacyDemoScreen(id, legacyScreen);
+    const replacement = migrateUntouchedDemoScreen ? initialState.screens[id] : undefined;
+    const migratedScreen = replacement ? {
+      ...replacement,
+      status: screen.status,
+      fps: screen.fps,
+      lastHeartbeat: screen.lastHeartbeat,
+      currentRevision: screen.currentRevision
+    } : screen;
+    return [id, {
+      ...migratedScreen,
+      donorIds: remapDonorIds(migratedScreen.donorIds, donorAliases) ?? [],
+      donorSubtextVisibility: Object.fromEntries(Object.entries(migratedScreen.donorSubtextVisibility ?? {}).map(([donorId, visible]) => [donorAliases.get(donorId) ?? donorId, visible]))
+    }];
+  })) as LanternState["screens"];
+
+  const retiredAnnouncementIds = new Set(retiredAnnouncements.map((announcement) => announcement.id));
+  const migratedSchedules = needsLegacyContentMigration
+    ? incomingSchedules.map((entry) => {
+        if (!legacyBoardIds.has(entry.boardId) || !isUntouchedLegacyDemoBoardSchedule(entry)) return entry;
+        const replacement = initialState.schedules.find((candidate) => candidate.id === entry.id);
+        return replacement ? { ...replacement } : { ...entry, boardId: fullRosterBoardIdForLegacy(entry.boardId) };
+      })
+    : incomingSchedules;
+  const retainedSchedules = needsLegacyContentMigration
+    ? migratedSchedules.filter((entry) => !isKnownDemoSchedule(entry, retiredAnnouncementIds))
+    : migratedSchedules;
+  const phase3MigratedSchedules = migratePhase3Schedules(retainedSchedules, incomingContentVersion);
+  const boardIds = new Set(boardPrograms.map((program) => program.id));
+  const announcementIds = new Set(savedAnnouncements.map((announcement) => announcement.id));
+  const blipIds = new Set(savedBlips.map((blip) => blip.id));
+  const screenIds = new Set(Object.keys(remappedScreens));
+  const schedules = phase3MigratedSchedules.map((entry, index) => {
+    const approvedHours = ["schedule-portrait-board", "schedule-landscape-board"].includes(entry.id)
+      && entry.startTime === "09:00"
+      && entry.endTime === "16:00"
+      ? { startTime: "07:00", endTime: "18:00" }
+      : {};
+    const normalized = {
+      ...entry,
+      ...approvedHours,
+      target: normalizeTarget(entry.target),
+      contentType: entry.contentType ?? "board" as const,
+      color: entry.color ?? ["#5f55bd", "#218ba2", "#a95777", "#956330"][index % 4]
+    };
+    return scheduleReferenceIsValid(normalized, boardIds, announcementIds, blipIds, screenIds)
+      ? normalized
+      : { ...normalized, active: false };
+  });
+  const userMigration = normalizeUsers(state.users);
+  const userPreferences = normalizeUserPreferences(state.userPreferences, userMigration.users, userMigration.aliases);
+  const auditHistory = normalizeAuditHistory(state.auditHistory, userMigration.aliases);
+  const broadcastReminderAcknowledgements = normalizeBroadcastReminderAcknowledgements(
+    state.broadcastReminderAcknowledgements,
+    userMigration.aliases
+  );
+  const visitorMessages = normalizeVisitorMessages(state.visitorMessages);
+  const visitorMessageRotation = normalizeVisitorMessageRotation(state.visitorMessageRotation, visitorMessages);
+  const effectStudio = normalizeEffectStudioState(state.effectStudio, userMigration.users, needsEffectStudioMigration);
+  effects = normalizePhase4LiveEffects(effects, initialState.live.effects, effectStudio);
 
   return {
     ...initialState,
     ...state,
+    contentVersion: normalizedContentVersion,
+    users: userMigration.users,
+    userPreferences,
+    auditHistory,
+    broadcastReminderAcknowledgements,
+    visitorMessages,
+    visitorMessageRotation,
+    effectStudio,
+    nextScheduledEvent: needsLegacyContentMigration && /^Test Message\b/i.test(state.nextScheduledEvent ?? "")
+      ? initialState.nextScheduledEvent
+      : state.nextScheduledEvent,
     board: {
       ...initialState.board,
       ...state.board,
@@ -407,58 +1059,89 @@ export function normalizeState(state: LanternState): LanternState {
         ...state.board?.footerVisibility
       }
     },
-    boardPrograms: (state.boardPrograms ?? initialState.boardPrograms).map((program) => ({
+    boardPrograms: boardPrograms.map((program) => ({
       ...program,
       orientation: program.orientation
         ?? Object.values(screens).find((screen) => screen.boardProgramId === program.id)?.orientation
         ?? initialState.boardPrograms.find((candidate) => candidate.id === program.id)?.orientation
         ?? "Portrait"
     })),
-    schedules: (state.schedules ?? initialState.schedules).map((entry, index) => ({
-      ...entry,
-      contentType: entry.contentType ?? "board",
-      color: entry.color ?? ["#5f55bd", "#218ba2", "#a95777", "#956330"][index % 4]
-    })),
-    savedAnnouncements: (state.savedAnnouncements?.length ? state.savedAnnouncements : initialState.savedAnnouncements).map((announcement) => ({
+    schedules,
+    savedAnnouncements: savedAnnouncements.map((announcement) => ({
       ...announcement,
       character: announcement.character ?? "off",
       target: normalizeTarget(announcement.target)
     })),
-    donors: (state.donors ?? initialState.donors).map((donor) => ({
-      ...donor,
-      tags: donor.tags ?? [],
-      donationDate: donor.donationDate ?? donor.since,
-      basicInfo: donor.basicInfo ?? donor.subtext ?? donor.note,
-      expandedInfo: donor.expandedInfo ?? "",
-      donations: donor.donations ?? (donor.amount ? [{ id: `${donor.id}-legacy-gift`, date: donor.donationDate ?? donor.since, amount: donor.amount, type: donor.donationType ?? "Cash", note: donor.note }] : []),
-      donationType: donor.donationType ?? (donor.category === "Legacy" ? "Legacy" : donor.category === "Corporate" ? "Sponsorship" : "Cash"),
-      amount: donor.amount ?? 0,
-      // Older donor records predate per-display assignment and belonged to every screen.
-      // An explicitly empty array now means the donor is intentionally shown nowhere.
-      displayIds: donor.displayIds ?? Object.keys(screens),
-      icon: donor.icon ?? "none",
-      highlight: donor.highlight ?? "none",
-      animation: donor.animation ?? "none"
+    savedBlips: savedBlips.map((blip) => ({
+      ...blip,
+      target: normalizeTarget(blip.target)
     })),
-    donorGroups: state.donorGroups ?? initialState.donorGroups,
+    donors: donors.map((donor) => {
+      const hasReceivedGift = Boolean(donor.donations?.length) || Boolean(donor.amount && donor.amount > 0);
+      const pledgeOnly = Boolean(donor.givingProgramId) && !hasReceivedGift;
+      const seededBrigadeDonor = initialState.donors.some((seeded) => seeded.id === donor.id && seeded.givingProgramId === "toy-soldier-brigade");
+      const migratedDonor = needsDonorDomainMigration && seededBrigadeDonor
+        ? withBrigadeOpeningPayment(donor)
+        : donor;
+      const legacyDonor = migratedDonor as Donor & LegacyDonorAppearance;
+      const {
+        fontOverride: _fontOverride,
+        nameColor: _nameColor,
+        accentColor: _accentColor,
+        highlight: _highlight,
+        animation: _animation,
+        icon: _icon,
+        customIconImage: _customIconImage,
+        ...profile
+      } = legacyDonor;
+      return {
+        ...profile,
+        tags: (donor.tags ?? []).filter((tag) => tag.trim().toLocaleLowerCase() !== "unrestricted support"),
+        donationDate: pledgeOnly ? undefined : donor.donationDate ?? donor.since,
+        basicInfo: donor.basicInfo ?? donor.subtext ?? donor.note,
+        expandedInfo: donor.expandedInfo ?? "",
+        donations: migratedDonor.donations ?? (!pledgeOnly && donor.amount ? [{ id: `${donor.id}-legacy-gift`, date: donor.donationDate ?? donor.since, amount: donor.amount, type: donor.donationType ?? "Cash", note: donor.note }] : []),
+        donationType: pledgeOnly ? undefined : donor.donationType ?? (donor.category === "Legacy" ? "Legacy" : donor.category === "Corporate" ? "Sponsorship" : "Cash"),
+        amount: pledgeOnly ? undefined : donor.amount ?? 0,
+        // Older donor records predate per-display assignment and belonged to every screen.
+        // An explicitly empty array now means the donor is intentionally shown nowhere.
+        displayIds: donor.displayIds ?? Object.keys(remappedScreens),
+        boardIds: donor.boardIds ?? boardPrograms
+          .filter((program) => program.donorIds.includes(donor.id) || program.panels?.some((panel) => panel.donorIds?.includes(donor.id)))
+          .map((program) => program.id)
+      };
+    }),
+    givingPrograms,
+    donorGroups,
     recognitionSettings: {
-      tiers: state.recognitionSettings?.tiers?.length ? state.recognitionSettings.tiers : initialState.recognitionSettings.tiers,
-      categories: state.recognitionSettings?.categories?.length ? state.recognitionSettings.categories : initialState.recognitionSettings.categories,
-      tags: [...new Set([...(state.recognitionSettings?.tags ?? initialState.recognitionSettings.tags), ...(state.donors ?? initialState.donors).flatMap((donor) => donor.tags ?? [])])].sort(),
+      tiers: uniqueStrings(state.recognitionSettings?.tiers, donors.map((donor) => donor.tier), initialState.recognitionSettings.tiers),
+      categories: uniqueStrings(state.recognitionSettings?.categories, donors.map((donor) => donor.category), initialState.recognitionSettings.categories),
+      tags: uniqueStrings(state.recognitionSettings?.tags, donors.flatMap((donor) => donor.tags ?? []), initialState.recognitionSettings.tags)
+        .filter((tag) => tag.trim().toLocaleLowerCase() !== "unrestricted support")
+        .sort(),
       appearance: ["dark", "light", "ocean", "warm", "contrast", "sparkle"].includes(state.recognitionSettings?.appearance ?? "")
         ? state.recognitionSettings.appearance
         : "dark"
     },
-    announcement: {
-      ...initialState.announcement,
-      ...state.announcement,
-      character: state.announcement?.character ?? "off",
-      target: normalizeTarget(state.announcement?.target)
+    announcement: needsLegacyContentMigration && state.announcement && isKnownDemoAnnouncement(state.announcement)
+      ? { ...initialState.announcement, active: false }
+      : {
+          ...initialState.announcement,
+          ...state.announcement,
+          character: state.announcement?.character ?? "off",
+          target: normalizeTarget(state.announcement?.target)
+        },
+    activeBlip: {
+      ...initialState.activeBlip,
+      ...state.activeBlip,
+      target: normalizeTarget(state.activeBlip?.target)
     },
-    live: {
+    live: normalizeBroadcastComposition({
       ...initialState.live,
       ...state.live,
-      source: state.live?.source ?? (state.live?.usingCamera ? "camera" : "demo"),
+      source: (["demo", "camera", "screen", "recording"] as LiveSource[]).includes(state.live?.source as LiveSource)
+        ? state.live!.source
+        : state.live?.usingCamera ? "camera" : "demo",
       frame: {
         ...initialState.live.frame,
         ...state.live?.frame,
@@ -467,8 +1150,8 @@ export function normalizeState(state: LanternState): LanternState {
       chromaKey,
       effects,
       target: normalizeTarget(state.live?.target)
-    },
-    screens
+    }),
+    screens: remappedScreens
   };
 }
 
@@ -481,8 +1164,8 @@ function normalizeScreen(
     ...fallback,
     ...screen,
     id,
-    label: screen?.label?.startsWith("Entrance") || screen?.label?.startsWith("Main Gallery") ? fallback.label : screen?.label ?? fallback.label,
-    style: screen?.style === "constellation" || screen?.style === "image" ? "donor-wall" : screen?.style ?? fallback.style,
+    label: screen?.label ?? fallback.label,
+    style: screen?.style ?? fallback.style,
     backgroundMode: screen?.backgroundMode ?? (screen?.style === "image" ? "image" : "board"),
     backgroundMediaType: screen?.backgroundMediaType ?? (screen?.backgroundImage?.startsWith("data:video/") ? "video" : screen?.backgroundImage ? "image" : undefined),
     backgroundMediaName: screen?.backgroundMediaName,

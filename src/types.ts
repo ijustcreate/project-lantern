@@ -1,3 +1,5 @@
+import type { VisitorMessage, VisitorMessageRotation } from "./visitorMessages";
+
 export type ScreenId = string;
 
 export type TargetScreen = ScreenId | "all";
@@ -7,6 +9,8 @@ export type DisplayStatus = "offline" | "ready" | "live" | "warning";
 export type QualityTier = "Baseline" | "Balanced" | "Showcase";
 
 export type RendererMode = "WebGL2" | "Certified WebGPU";
+
+export type PortalAppearance = "dark" | "light" | "ocean" | "warm" | "contrast" | "sparkle";
 
 export type DisplayStyle = "donor-wall" | "constellation" | "image";
 
@@ -37,20 +41,126 @@ export interface Donor {
   displayIds?: ScreenId[];
   /** Boards whose donor rosters include this donor. Display placement is derived from the board. */
   boardIds?: string[];
-  icon?: "none" | "star" | "heart" | "leaf" | "sparkle" | "diamond" | "crown" | "laurel" | "sun" | "hand";
-  customIconImage?: string;
-  fontOverride?: DisplayProfile["fontFamily"];
-  nameColor?: string;
-  accentColor?: string;
-  highlight?: "none" | "underline" | "soft-box";
-  animation?: "none" | "gentle-pulse" | "soft-glow" | "shimmer";
+  /** Optional pledge society membership. Kept separate from received-gift history. */
+  givingProgramId?: string;
+  givingLevelId?: string;
+  pledgeAnnualAmount?: number;
+  pledgeYears?: number;
+  pledgeOneTime?: boolean;
+  pledgeStartYear?: string;
+  pledgeStatus?: "Pledged" | "Active" | "Fulfilled" | "Paused";
+  recognitionOrder?: number;
+}
+
+export interface GivingLevel {
+  id: string;
+  name: string;
+  annualPledge: number;
+  years: number;
+  description: string;
+  color: string;
+  minAmount?: number;
+  maxAmount?: number;
+  displayOrder?: number;
+  active?: boolean;
+}
+
+export interface GivingProgram {
+  id: string;
+  name: string;
+  classLabel: string;
+  classYear: string;
+  description: string;
+  fundDesignation: string;
+  invitation: string;
+  impactStatement: string;
+  goodDeedPrompt: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  website: string;
+  address: string;
+  levels: GivingLevel[];
+  spotlightDonorId?: string;
+  displayOrder?: number;
+  active?: boolean;
+  allowOneTimeQualification?: boolean;
+}
+
+export interface LanternUser {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Local demo users are passwordless and must not be mistaken for authenticated accounts. */
+  accessMode: "local-demo" | "authenticated";
+  authProvider?: string;
+  authSubject?: string;
+}
+
+export interface FloatingWindowLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface LanternUserPreferences {
+  userId: string;
+  theme: PortalAppearance;
+  donorSort: "manual" | "az" | "za";
+  lastDisplayId?: ScreenId;
+  lastScheduleDisplay?: TargetScreen;
+  lastBoardId?: string;
+  roomWindows: Record<ScreenId, FloatingWindowLayout>;
+  roomMirrorByDisplay: Record<ScreenId, boolean>;
+  editor: {
+    scheduleView?: "week" | "day" | "month" | "agenda";
+    liveTab?: "setup" | "frame" | "effects";
+    directMode?: "frame" | "crop";
+  };
+}
+
+export interface AuditRecord {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  entityType: string;
+  entityId: string;
+  action: "create" | "update" | "delete" | "reorder" | "publish" | "run";
+  summary: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+export interface BroadcastReminderAcknowledgement {
+  occurrenceKey: string;
+  scheduleId: string;
+  status: "prompted" | "dismissed" | "acknowledged" | "cleared";
+  updatedAt: string;
+  userId?: string;
+  snoozedUntil?: string;
 }
 
 export interface DonationRecord {
   id: string;
+  /** Date the museum actually received the contribution. */
   date: string;
   amount: number;
-  type: "Cash" | "In-kind" | "Sponsorship" | "Legacy" | "Volunteer";
+  /** Legacy contribution classification retained for existing records and reporting. */
+  type?: "Cash" | "In-kind" | "Sponsorship" | "Legacy" | "Volunteer";
+  paymentMethod?: "Cash" | "Check" | "Credit card" | "ACH" | "Wire" | "In-kind" | "Other";
+  transactionReference?: string;
+  checkNumber?: string;
+  receiptNote?: string;
+  internalNotes?: string;
+  enteredByUserId?: string;
+  updatedByUserId?: string;
+  enteredAt?: string;
+  updatedAt?: string;
+  /** Stable marker used to make data migrations idempotent. */
+  migrationKey?: "brigade-opening-payment-v1";
   note?: string;
 }
 
@@ -106,6 +216,23 @@ export interface BoardContent {
   };
 }
 
+export type RecognitionIcon = "none" | "star" | "heart" | "leaf" | "sparkle" | "diamond" | "crown" | "laurel" | "sun";
+
+export type BoardDonorHighlight = "none" | "fine-underline" | "soft-underline" | "soft-highlight";
+
+export type BoardDonorAnimation = "none" | "grow-shrink" | "slow-shimmer" | "letter-wave";
+
+/** Visitor-facing name styling owned by one board, never by the donor profile. */
+export interface BoardDonorPresentation {
+  fontFamily?: DisplayProfile["fontFamily"];
+  nameColor?: string;
+  accentColor?: string;
+  highlight?: BoardDonorHighlight;
+  recognitionIcon?: RecognitionIcon;
+  recognitionIconImage?: string;
+  animation?: BoardDonorAnimation;
+}
+
 export interface DonorBoardProgram {
   id: string;
   name: string;
@@ -119,6 +246,10 @@ export interface DonorBoardProgram {
   active: boolean;
   panels?: BoardPanel[];
   fontFamily?: DisplayProfile["fontFamily"];
+  /** Defaults for every donor name on this board. */
+  donorPresentation?: BoardDonorPresentation;
+  /** Optional board-local overrides keyed by donor id. */
+  donorStyles?: Record<string, BoardDonorPresentation>;
   nameSize?: number;
   donorScrollEnabled?: boolean;
   donorScrollSpeed?: number;
@@ -135,6 +266,9 @@ export interface DonorBoardProgram {
   textShadowStrength?: number;
   textShadowAngle?: number;
   textShadowDistance?: number;
+  givingProgramId?: string;
+  templatePurpose?: "roster" | "level" | "story" | "invitation" | "good-deeds";
+  palette?: "classic" | "brigade-blue" | "brigade-red" | "brigade-sunshine" | "brigade-cream";
 }
 
 export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image";
@@ -148,6 +282,9 @@ export interface BoardPanel {
   size: "compact" | "standard" | "feature";
   columns?: 1 | 2 | 3 | 4;
   rows?: number;
+  donorIds?: string[];
+  /** Dynamically includes matching tiers from the board roster as membership changes. */
+  donorTierFilter?: string[];
   footerIconPlacement?: "left" | "both";
   x?: number;
   y?: number;
@@ -173,12 +310,13 @@ export interface ScheduleEntry {
   name: string;
   target: TargetScreen;
   boardId: string;
-  contentType?: "board" | "announcement" | "broadcast";
+  contentType?: "board" | "announcement" | "blip" | "broadcast";
   broadcastMode?: "recorded" | "live";
   broadcastVideoUrl?: string;
   broadcastVideoName?: string;
   presenterName?: string;
   announcementId?: string;
+  blipId?: string;
   days: number[];
   recurrence?: "once" | "weekly";
   scheduleDate?: string;
@@ -194,7 +332,7 @@ export interface RecognitionSettings {
   tiers: string[];
   categories: string[];
   tags: string[];
-  appearance: "dark" | "light" | "ocean" | "warm" | "contrast" | "sparkle";
+  appearance: PortalAppearance;
 }
 
 export interface Announcement {
@@ -216,7 +354,9 @@ export interface Announcement {
   targets?: ScreenId[];
   target: TargetScreen;
   priority: "Normal" | "Elevated" | "Urgent";
-  style: "Ribbon" | "Temporary Card" | "Lower Third";
+  style: "Ribbon" | "Temporary Card" | "Lower Third" | "News Ticker";
+  tickerSpeed?: "slow" | "standard" | "fast";
+  tickerDirection?: "left" | "right";
   active: boolean;
   startedAt?: string;
   durationMinutes: number;
@@ -241,7 +381,39 @@ export interface Announcement {
 
 export type SavedAnnouncement = Omit<Announcement, "active" | "startedAt">;
 
-export type LiveSource = "demo" | "camera" | "screen";
+export type BlipKind = "joke" | "quiz" | "celebration";
+export type BlipSfx = "off" | "bell" | "applause" | "level-up" | "ba-dum-tss" | "laughter";
+
+export interface Blip {
+  id: string;
+  name: string;
+  kind: BlipKind;
+  headline: string;
+  prompt: string;
+  answer?: string;
+  subtext?: string;
+  imageUrl?: string;
+  target: TargetScreen;
+  targets?: ScreenId[];
+  active: boolean;
+  startedAt?: string;
+  durationMinutes: number;
+  countdownSeconds: number;
+  showCountdown: boolean;
+  ticking: boolean;
+  startSfx: BlipSfx;
+  revealSfx: BlipSfx;
+  startSoundUrl?: string;
+  revealSoundUrl?: string;
+  sfxVolume: number;
+  backgroundColor: string;
+  accentColor: string;
+  motion: "slide" | "pop" | "gentle";
+}
+
+export type SavedBlip = Omit<Blip, "active" | "startedAt" | "targets">;
+
+export type LiveSource = "demo" | "camera" | "screen" | "recording";
 
 export interface LiveVideoFrame {
   x: number;
@@ -249,6 +421,10 @@ export interface LiveVideoFrame {
   width: number;
   height: number;
   crop: ImageCrop;
+  /** Fit keeps the whole source visible; fill covers the camera panel. */
+  fitMode?: "fit" | "fill";
+  /** Independent, non-destructive edge crops expressed as panel percentages. */
+  cropEdges?: BroadcastCropEdges;
   rotation?: number;
   mirrorX?: boolean;
   mirrorY?: boolean;
@@ -272,10 +448,191 @@ export interface LiveEffectsSettings {
   segmentationFeather: number;
   accessory: "none" | "glasses" | "party-hat";
   glassesEnabled?: boolean;
+  glassesStyle?: "classic" | "playful";
   partyHatEnabled?: boolean;
+  hatEnabled?: boolean;
+  hatStyle?: "party" | "wizard";
+  wizardSpringiness?: number;
+  wizardDamping?: number;
   faceTracking: boolean;
   puppetPreview: boolean;
   trackingDebug?: boolean;
+  trackedPointsOverlay?: boolean;
+  trackingCameraUnderlay?: boolean;
+  costumeEnabled?: boolean;
+  costumeId?: string;
+  calibrationProfileId?: string;
+}
+
+export type TrackingAnchorPoint =
+  | "left-eye"
+  | "right-eye"
+  | "nose"
+  | "mouth-upper"
+  | "mouth-lower"
+  | "left-ear"
+  | "right-ear"
+  | "head-left"
+  | "head-right"
+  | "head-top"
+  | "chin"
+  | "neck"
+  | "chest"
+  | "left-shoulder"
+  | "right-shoulder"
+  | "left-hand"
+  | "right-hand";
+
+export type CalibrationPose = "center" | "left" | "right" | "up" | "down";
+
+export interface LandmarkCalibrationOffset {
+  x: number;
+  y: number;
+  updatedAt: string;
+}
+
+export interface CalibrationPoseSample {
+  pose: CalibrationPose;
+  completedAt: string;
+  offsets: Partial<Record<TrackingAnchorPoint, LandmarkCalibrationOffset>>;
+}
+
+export interface TrackingCalibrationProfile {
+  id: string;
+  name: string;
+  userId: string;
+  deviceId: string;
+  createdAt: string;
+  updatedAt: string;
+  landmarkOffsets: Partial<Record<TrackingAnchorPoint, LandmarkCalibrationOffset>>;
+  poseSamples: Partial<Record<CalibrationPose, CalibrationPoseSample>>;
+}
+
+export type EffectRigJoint = "fixed" | "hinge" | "ball" | "spring";
+
+export interface EffectRigBone {
+  id: string;
+  name: string;
+  parentId?: string;
+  joint: EffectRigJoint;
+  anchor: TrackingAnchorPoint;
+  weight: number;
+  springiness: number;
+  damping: number;
+}
+
+export type CostumePieceRole =
+  | "head-backplate"
+  | "cheek"
+  | "nose"
+  | "upper-mouth"
+  | "lower-mouth"
+  | "chin"
+  | "ear"
+  | "eyebrow"
+  | "eye"
+  | "upper-eyelid"
+  | "lower-eyelid"
+  | "muzzle"
+  | "hand"
+  | "palm"
+  | "forearm"
+  | "body"
+  | "hat"
+  | "glasses"
+  | "custom";
+
+export interface CostumeArtPiece {
+  id: string;
+  name: string;
+  role: CostumePieceRole;
+  anchor: TrackingAnchorPoint;
+  boneId?: string;
+  side?: "left" | "right" | "center";
+  color: string;
+  accentColor?: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  zIndex: number;
+  visible: boolean;
+  inferred?: boolean;
+}
+
+export interface CostumeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  starter?: "teddy" | "skeleton";
+  createdAt: string;
+  updatedAt: string;
+  bones: EffectRigBone[];
+  pieces: CostumeArtPiece[];
+}
+
+export interface EffectStudioState {
+  costumes: CostumeDefinition[];
+  calibrationProfiles: TrackingCalibrationProfile[];
+  activeCalibrationByUserDevice: Record<string, string>;
+}
+
+export interface BroadcastCropEdges {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export type BroadcastFramePresetId =
+  | "custom"
+  | "museum-sketch"
+  | "dark-gold"
+  | "brass"
+  | "gold"
+  | "black"
+  | "white"
+  | "matte-plastic";
+
+export interface BroadcastFrameStyle {
+  presetId: BroadcastFramePresetId;
+  thickness: number;
+  color: string;
+  bevel: boolean;
+  innerOutline: boolean;
+  innerOutlineColor: string;
+  outerOutline: boolean;
+  outerOutlineColor: string;
+}
+
+export type BroadcastBackgroundMode = "board" | "color" | "gradient" | "image" | "none";
+
+export type BroadcastGradientDirection =
+  | "left-to-right"
+  | "right-to-left"
+  | "top-to-bottom"
+  | "bottom-to-top"
+  | "radial";
+
+export interface BroadcastGradientSettings {
+  colors: string[];
+  direction: BroadcastGradientDirection;
+}
+
+export type BroadcastBackgroundPresetId =
+  | "board"
+  | "solid-midnight"
+  | "wonder-gradient"
+  | "museum-branded"
+  | "custom-image"
+  | "none";
+
+export interface BroadcastMediaTransform {
+  fitMode: "fit" | "fill";
+  scale: number;
+  x: number;
+  y: number;
+  rotation: number;
 }
 
 export interface LivePresentation {
@@ -285,14 +642,21 @@ export interface LivePresentation {
   lowerThird: string;
   titlePosition: { x: number; y: number };
   lowerThirdPosition: { x: number; y: number };
-  backgroundMode: "board" | "color" | "image";
+  backgroundMode: BroadcastBackgroundMode;
   backgroundColor: string;
   backgroundImage?: string;
+  backgroundPresetId?: BroadcastBackgroundPresetId;
+  backgroundImagePreset?: "museum-branded" | "custom";
+  backgroundGradient?: BroadcastGradientSettings;
+  backgroundImageTransform?: BroadcastMediaTransform;
   panelColor: string;
   frameBorderColor: string;
   frameBorderWidth: number;
+  frameStyle?: BroadcastFrameStyle;
   usingCamera: boolean;
   source: LiveSource;
+  /** Saved local recording used when source is `recording`. */
+  recordingId?: string;
   frame: LiveVideoFrame;
   chromaKey: ChromaKeySettings;
   effects: LiveEffectsSettings;
@@ -360,6 +724,7 @@ export interface DisplayProfile {
   roomVideoDeviceId?: string;
   roomAudioDeviceId?: string;
   roomAudioEnabled?: boolean;
+  roomAudioGain?: number;
 }
 
 export interface RevisionRecord {
@@ -372,11 +737,19 @@ export interface RevisionRecord {
 }
 
 export interface LanternState {
+  contentVersion: number;
   revision: number;
   publishedAt: string;
   nextScheduledEvent: string;
   lastBackup: string;
   donors: Donor[];
+  users: LanternUser[];
+  userPreferences: LanternUserPreferences[];
+  auditHistory: AuditRecord[];
+  broadcastReminderAcknowledgements: BroadcastReminderAcknowledgement[];
+  visitorMessages: VisitorMessage[];
+  visitorMessageRotation: VisitorMessageRotation;
+  givingPrograms: GivingProgram[];
   donorGroups: DonorGroup[];
   recognitionSettings: RecognitionSettings;
   theme: LanternTheme;
@@ -386,7 +759,10 @@ export interface LanternState {
   schedules: ScheduleEntry[];
   savedAnnouncements: SavedAnnouncement[];
   announcement: Announcement;
+  savedBlips: SavedBlip[];
+  activeBlip: Blip;
   live: LivePresentation;
+  effectStudio: EffectStudioState;
   screens: Record<ScreenId, DisplayProfile>;
   revisions: RevisionRecord[];
 }

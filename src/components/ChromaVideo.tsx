@@ -1,19 +1,56 @@
 import { useEffect, useRef, useState } from "react";
-import type { FaceLandmarker, HandLandmarker, ImageSegmenter, NormalizedLandmark, PoseLandmarker } from "@mediapipe/tasks-vision";
+import type { FaceLandmarker, HandLandmarker, ImageSegmenter, PoseLandmarker } from "@mediapipe/tasks-vision";
 import type { ChromaKeySettings, ImageCrop, LiveEffectsSettings } from "../types";
+import {
+  HandMotionTracker,
+  TrackingPerformanceMonitor,
+  analyzeExperimentalMouth,
+  deriveEyeOpenness,
+  deriveTrackedHands,
+  faceOcclusionConfidence,
+  landmarkMotion,
+  makeTrackingRenderFrame,
+  shouldHoldFaceAnchors,
+  shouldRenderTrackingFrame,
+  smoothTrackingPoints,
+  translateTrackingPoints,
+  type ExperimentalMouthDetail,
+  type TrackingOverlayRenderer,
+  type TrackingPoint,
+  type TrackingRenderFrame,
+  type TrackingRuntimePhase,
+  type TrackingRuntimeStatus
+} from "../trackingRuntime";
+import { createWizardHatRig, drawTrackedGlasses, drawTrackedHat } from "../trackingEffects";
+import { getVisionFileset, getVisionModule, visionBaseOptions, warmVisionResources } from "../visionResources";
 
-interface ChromaVideoProps {
+export interface ChromaVideoProps {
   stream: MediaStream | null;
   chromaKey: ChromaKeySettings;
   effects: LiveEffectsSettings;
   crop: ImageCrop;
+  fitMode?: "fit" | "fill";
   className?: string;
+  onTrackingStatus?: (status: TrackingRuntimeStatus) => void;
+  /** Costume/effect-studio hook. Receives normalized landmarks after stabilization. */
+  renderTrackedOverlay?: TrackingOverlayRenderer;
 }
 
 interface PointTransform {
   width: number;
   height: number;
 }
+
+type RuntimeEffectsSettings = LiveEffectsSettings & {
+  glassesStyle?: "classic" | "playful";
+  hatEnabled?: boolean;
+  hatStyle?: "party" | "wizard";
+  wizardSpringiness?: number;
+  wizardDamping?: number;
+  trackedPointsOverlay?: boolean;
+  trackingCameraUnderlay?: boolean;
+  costumeEnabled?: boolean;
+};
 
 const OUTPUT_WIDTH = 640;
 const OUTPUT_HEIGHT = 360;
@@ -22,24 +59,8 @@ const OUTPUT_HEIGHT = 360;
 const INFERENCE_WIDTH = 384;
 const INFERENCE_HEIGHT = 216;
 const SEGMENT_INTERVAL_MS = 1000 / 10;
-const FACE_INTERVAL_MS = 1000 / 30;
-const VISION_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
-const SEGMENTATION_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite";
-const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task";
-const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task";
-const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
-
-type VisionModule = typeof import("@mediapipe/tasks-vision");
-type VisionFileset = Awaited<ReturnType<VisionModule["FilesetResolver"]["forVisionTasks"]>>;
-
-let visionFilesetPromise: Promise<VisionFileset> | null = null;
-
-function getVisionFileset() {
-  if (!visionFilesetPromise) {
-    visionFilesetPromise = import("@mediapipe/tasks-vision").then(({ FilesetResolver }) => FilesetResolver.forVisionTasks(VISION_WASM_URL));
-  }
-  return visionFilesetPromise;
-}
+const BODY_INTERVAL_MS = 1000 / 30;
+const MOUTH_ANALYSIS_INTERVAL_MS = 1000 / 10;
 
 function hexRgb(value: string) {
   const hex = value.replace("#", "");
@@ -47,21 +68,25 @@ function hexRgb(value: string) {
   return [0, 2, 4].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255);
 }
 
-export function ChromaVideo({ stream, chromaKey, effects, crop, className }: ChromaVideoProps) {
+export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill", className, onTrackingStatus, renderTrackedOverlay }: ChromaVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const settingsRef = useRef({ chromaKey, effects, crop });
   const replacementImageRef = useRef<HTMLImageElement | null>(null);
+  const trackingStatusCallbackRef = useRef(onTrackingStatus);
+  const trackedOverlayRendererRef = useRef(renderTrackedOverlay);
   const [aiStatus, setAiStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [trackingPhase, setTrackingPhase] = useState<TrackingRuntimePhase>("idle");
   settingsRef.current = { chromaKey, effects, crop };
+  trackingStatusCallbackRef.current = onTrackingStatus;
+  trackedOverlayRendererRef.current = renderTrackedOverlay;
 
+  const runtimeEffects = effects as RuntimeEffectsSettings;
   const chromaActive = chromaKey.enabled;
   const aiBackgroundActive = !chromaActive && effects.background !== "original";
-  const glassesEnabled = effects.glassesEnabled ?? effects.accessory === "glasses";
-  const partyHatEnabled = effects.partyHatEnabled ?? effects.accessory === "party-hat";
-  const faceEffectsActive = effects.faceTracking && (glassesEnabled || partyHatEnabled || effects.puppetPreview || effects.trackingDebug);
+  const faceEffectsActive = effects.faceTracking || Boolean(runtimeEffects.costumeEnabled);
   const cropStyle = {
-    objectFit: "cover" as const,
+    objectFit: fitMode === "fit" ? "contain" as const : "cover" as const,
     transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
     transformOrigin: "center"
   };
@@ -86,6 +111,14 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   }, [stream]);
 
   useEffect(() => {
+    if (!stream || faceEffectsActive) return;
+    // Warm the module, WASM, and face model after camera startup. This uses the
+    // browser HTTP cache and never blocks the normal camera preview.
+    const timer = window.setTimeout(() => void warmVisionResources(["face"]), 700);
+    return () => window.clearTimeout(timer);
+  }, [stream, faceEffectsActive]);
+
+  useEffect(() => {
     if (!effects.backgroundImage) {
       replacementImageRef.current = null;
       return;
@@ -102,8 +135,13 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!processingActive || !video || !canvas) return;
+    if (!processingActive || !video || !canvas) {
+      setTrackingPhase("idle");
+      trackingStatusCallbackRef.current?.({ phase: "idle", renderedFps: 0, targetFps: 60, adaptiveFps: 60, faceAnchorHeld: false });
+      return;
+    }
     setAiStatus(aiBackgroundActive ? "loading" : "idle");
+    if (faceEffectsActive) setTrackingPhase("detecting");
 
     const context = canvas.getContext("2d");
     const source = document.createElement("canvas");
@@ -114,7 +152,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     const inference = document.createElement("canvas");
     inference.width = INFERENCE_WIDTH;
     inference.height = INFERENCE_HEIGHT;
-    const inferenceContext = inference.getContext("2d");
+    const inferenceContext = inference.getContext("2d", { willReadFrequently: true });
 
     const foreground = document.createElement("canvas");
     foreground.width = OUTPUT_WIDTH;
@@ -126,7 +164,6 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     if (!context || !sourceContext || !inferenceContext || !foregroundContext || !maskContext) return;
 
     let animationFrame = 0;
-    let videoFrame = 0;
     let disposed = false;
     let segmenter: ImageSegmenter | null = null;
     let faceLandmarker: FaceLandmarker | null = null;
@@ -135,102 +172,138 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
     let personMaskIndex = 15;
     let maskReady = false;
     let smoothedMask: Float32Array | null = null;
-    let landmarks: NormalizedLandmark[] | null = null;
-    let poseLandmarks: NormalizedLandmark[] | null = null;
-    let handLandmarks: NormalizedLandmark[][] = [];
+    let landmarks: TrackingPoint[] | null = null;
+    let poseLandmarks: TrackingPoint[] | null = null;
+    let handLandmarks: TrackingPoint[][] = [];
+    let trackedHands = deriveTrackedHands([]);
+    let experimentalMouth: ExperimentalMouthDetail | undefined;
+    let eyeState = { leftEyeOpen: 1, rightEyeOpen: 1 };
+    let faceHeld = false;
     let lastHandsSeenAt = -Infinity;
     let handsWereSeen = false;
     let lastSegmentAt = -Infinity;
     let lastFaceAt = -Infinity;
+    let lastBodyAt = -Infinity;
+    let lastMouthAnalysisAt = -Infinity;
     let lastFaceSeenAt = -Infinity;
+    let lastOcclusionAt = -Infinity;
+    let lastOcclusionConfidence = 0;
+    let recentFaceMotion = 0;
+    let poseHeadMotion = 0;
+    let lastPoseNose: TrackingPoint | undefined;
+    let poseTranslation = { x: 0, y: 0 };
+    let lastRenderedAt = -Infinity;
+    let lastStatusEmittedAt = -Infinity;
+    let lastEmittedPhase: TrackingRuntimePhase | undefined;
+    const performanceMonitor = new TrackingPerformanceMonitor(performance.now());
+    const handMotionTracker = new HandMotionTracker();
+    const wizardHatRig = createWizardHatRig();
 
-    const initializeVision = async () => {
-      if (!aiBackgroundActive && !faceEffectsActive) return;
+    const emitTrackingStatus = (nowMs: number, force = false) => {
+      if (!faceEffectsActive) return;
+      const status = performanceMonitor.snapshot();
+      if (!force && status.phase === lastEmittedPhase && nowMs - lastStatusEmittedAt < 400) return;
+      lastStatusEmittedAt = nowMs;
+      lastEmittedPhase = status.phase;
+      setTrackingPhase(status.phase);
+      trackingStatusCallbackRef.current?.(status);
+    };
+    if (faceEffectsActive) emitTrackingStatus(performance.now(), true);
+
+    const createWithFallback = async <T extends { close: () => void }>(
+      kind: "face" | "hand" | "pose" | "segmentation",
+      create: (baseOptions: Awaited<ReturnType<typeof visionBaseOptions>>) => Promise<T>
+    ) => {
       try {
-        const [{ ImageSegmenter, FaceLandmarker, HandLandmarker, PoseLandmarker }, vision] = await Promise.all([
-          import("@mediapipe/tasks-vision"),
-          getVisionFileset()
-        ]);
-
-        if (aiBackgroundActive) {
-          let nextSegmenter: ImageSegmenter;
-          try {
-            nextSegmenter = await ImageSegmenter.createFromOptions(vision, {
-              baseOptions: { modelAssetPath: SEGMENTATION_MODEL_URL, delegate: "GPU" },
-              runningMode: "VIDEO",
-              outputCategoryMask: false,
-              outputConfidenceMasks: true
-            });
-          } catch {
-            nextSegmenter = await ImageSegmenter.createFromOptions(vision, {
-              baseOptions: { modelAssetPath: SEGMENTATION_MODEL_URL, delegate: "CPU" },
-              runningMode: "VIDEO",
-              outputCategoryMask: false,
-              outputConfidenceMasks: true
-            });
-          }
-          if (disposed) nextSegmenter.close();
-          else {
-            segmenter = nextSegmenter;
-            const labels = nextSegmenter.getLabels().map((label) => label.toLowerCase());
-            const detectedPersonIndex = labels.findIndex((label) => label.includes("person"));
-            if (detectedPersonIndex >= 0) personMaskIndex = detectedPersonIndex;
-            setAiStatus("ready");
-          }
-        }
-
-        if (faceEffectsActive) {
-          let nextLandmarker: FaceLandmarker;
-          const faceOptions = {
-            runningMode: "VIDEO" as const,
-            numFaces: 1,
-            minFaceDetectionConfidence: 0.62,
-            minFacePresenceConfidence: 0.62,
-            minTrackingConfidence: 0.68,
-            outputFaceBlendshapes: false,
-            outputFacialTransformationMatrixes: false
-          };
-          try {
-            nextLandmarker = await FaceLandmarker.createFromOptions(vision, {
-              ...faceOptions,
-              baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "GPU" }
-            });
-          } catch {
-            nextLandmarker = await FaceLandmarker.createFromOptions(vision, {
-              ...faceOptions,
-              baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "CPU" }
-            });
-          }
-          if (disposed) nextLandmarker.close();
-          else faceLandmarker = nextLandmarker;
-
-          if (settingsRef.current.effects.trackingDebug) {
-            const common = { runningMode: "VIDEO" as const, minTrackingConfidence: 0.55 };
-            const createTracker = async <T,>(gpu: () => Promise<T>, cpu: () => Promise<T>) => { try { return await gpu(); } catch { return cpu(); } };
-            const nextHands = await createTracker(
-              () => HandLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" }, numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5 }),
-              () => HandLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" }, numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5 })
-            );
-            const nextPose = await createTracker(
-              () => PoseLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "GPU" }, numPoses: 1, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5 }),
-              () => PoseLandmarker.createFromOptions(vision, { ...common, baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" }, numPoses: 1, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5 })
-            );
-            if (disposed) { nextHands.close(); nextPose.close(); }
-            else { handLandmarker = nextHands; poseLandmarker = nextPose; }
-          }
-        }
-      } catch (error) {
-        console.error("Background removal could not start.", error);
-        segmenter?.close();
-        faceLandmarker?.close();
-        handLandmarker?.close();
-        poseLandmarker?.close();
-        segmenter = null;
-        faceLandmarker = null;
-        if (aiBackgroundActive && !disposed) setAiStatus("error");
+        return await create(await visionBaseOptions(kind, "GPU"));
+      } catch {
+        return create(await visionBaseOptions(kind, "CPU"));
       }
     };
-    void initializeVision();
+
+    const initializeFaceTracking = async () => {
+      if (!faceEffectsActive) return;
+      try {
+        const [visionModule, vision] = await Promise.all([getVisionModule(), getVisionFileset()]);
+        const faceOptions = {
+          runningMode: "VIDEO" as const,
+          numFaces: 1,
+          minFaceDetectionConfidence: 0.56,
+          minFacePresenceConfidence: 0.56,
+          minTrackingConfidence: 0.62,
+          outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: false
+        };
+        const nextFace = await createWithFallback("face", (baseOptions) => visionModule.FaceLandmarker.createFromOptions(vision, { ...faceOptions, baseOptions }));
+        if (disposed) {
+          nextFace.close();
+          return;
+        }
+        faceLandmarker = nextFace;
+        performanceMonitor.markTrackerReady(performance.now());
+        emitTrackingStatus(performance.now(), true);
+
+        // Face detection becomes usable first. Hands and pose warm in parallel
+        // afterward so occlusion/body support cannot delay the first face.
+        const common = { runningMode: "VIDEO" as const, minTrackingConfidence: 0.5 };
+        const [handsResult, poseResult] = await Promise.allSettled([
+          createWithFallback("hand", (baseOptions) => visionModule.HandLandmarker.createFromOptions(vision, {
+            ...common,
+            baseOptions,
+            numHands: 2,
+            minHandDetectionConfidence: 0.48,
+            minHandPresenceConfidence: 0.48
+          })),
+          createWithFallback("pose", (baseOptions) => visionModule.PoseLandmarker.createFromOptions(vision, {
+            ...common,
+            baseOptions,
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.48,
+            minPosePresenceConfidence: 0.48
+          }))
+        ]);
+        if (disposed) {
+          if (handsResult.status === "fulfilled") handsResult.value.close();
+          if (poseResult.status === "fulfilled") poseResult.value.close();
+          return;
+        }
+        if (handsResult.status === "fulfilled") handLandmarker = handsResult.value;
+        if (poseResult.status === "fulfilled") poseLandmarker = poseResult.value;
+      } catch (error) {
+        console.error("Face tracking could not start.", error);
+        if (!disposed) {
+          performanceMonitor.markError("Face tracking unavailable");
+          emitTrackingStatus(performance.now(), true);
+        }
+      }
+    };
+
+    const initializeSegmentation = async () => {
+      if (!aiBackgroundActive) return;
+      try {
+        const [visionModule, vision] = await Promise.all([getVisionModule(), getVisionFileset()]);
+        const nextSegmenter = await createWithFallback("segmentation", (baseOptions) => visionModule.ImageSegmenter.createFromOptions(vision, {
+          baseOptions,
+          runningMode: "VIDEO",
+          outputCategoryMask: false,
+          outputConfidenceMasks: true
+        }));
+        if (disposed) {
+          nextSegmenter.close();
+          return;
+        }
+        segmenter = nextSegmenter;
+        const labels = nextSegmenter.getLabels().map((label) => label.toLowerCase());
+        const detectedPersonIndex = labels.findIndex((label) => label.includes("person"));
+        if (detectedPersonIndex >= 0) personMaskIndex = detectedPersonIndex;
+        setAiStatus("ready");
+      } catch (error) {
+        console.error("Screenless background removal could not start.", error);
+        if (!disposed) setAiStatus("error");
+      }
+    };
+    void initializeFaceTracking();
+    void initializeSegmentation();
 
     const updatePersonMask = (confidence: Float32Array, width: number, height: number) => {
       if (maskCanvas.width !== width || maskCanvas.height !== height) {
@@ -272,6 +345,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
       if (disposed) return;
       if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
         const { crop: currentCrop, effects: currentEffects, chromaKey: currentChroma } = settingsRef.current;
+        const currentRuntimeEffects = currentEffects as RuntimeEffectsSettings;
         const scale = Math.max(1, currentCrop.scale);
         const sourceWidth = video.videoWidth / scale;
         const sourceHeight = video.videoHeight / scale;
@@ -283,9 +357,11 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
         sourceContext.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
         sourceContext.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
+        const adaptiveFps = performanceMonitor.getAdaptiveFps();
         const shouldSegment = segmenter && now - lastSegmentAt >= SEGMENT_INTERVAL_MS;
-        const shouldTrackFace = faceLandmarker && now - lastFaceAt >= FACE_INTERVAL_MS;
-        if (shouldSegment || shouldTrackFace) {
+        const shouldTrackFace = faceLandmarker && now - lastFaceAt >= 1_000 / adaptiveFps;
+        const shouldTrackBody = (handLandmarker || poseLandmarker) && now - lastBodyAt >= (adaptiveFps === 60 ? BODY_INTERVAL_MS : 1_000 / 20);
+        if (shouldSegment || shouldTrackFace || shouldTrackBody) {
           inferenceContext.clearRect(0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT);
           inferenceContext.drawImage(source, 0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT);
         }
@@ -300,33 +376,110 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
           });
         }
 
-        if (shouldTrackFace && faceLandmarker) {
-          lastFaceAt = now;
-          const detected = faceLandmarker.detectForVideo(inference, now).faceLandmarks[0] ?? null;
-          if (detected) {
-            landmarks = smoothLandmarks(landmarks, detected);
-            lastFaceSeenAt = now;
-          } else if (now - lastFaceSeenAt > 140) {
-            landmarks = null;
+        if (shouldTrackFace || shouldTrackBody) {
+          const inferenceStartedAt = performance.now();
+          try {
+            if (shouldTrackBody) {
+              lastBodyAt = now;
+              if (handLandmarker) {
+                const handResult = handLandmarker.detectForVideo(inference, now);
+                if (handResult.landmarks.length) {
+                  handLandmarks = handResult.landmarks.map((hand, index) => smoothTrackingPoints(handLandmarks[index] ?? null, hand));
+                  trackedHands = handMotionTracker.update(deriveTrackedHands(handLandmarks, handResult.handedness), now);
+                  lastHandsSeenAt = now;
+                  handsWereSeen = true;
+                } else if (now - lastHandsSeenAt > 180) {
+                  handLandmarks = [];
+                  trackedHands = [];
+                }
+              }
+              if (poseLandmarker) {
+                const detectedPose = poseLandmarker.detectForVideo(inference, now).landmarks[0] ?? null;
+                if (detectedPose) {
+                  const nextPose = smoothTrackingPoints(poseLandmarks, detectedPose);
+                  const nextNose = nextPose[0];
+                  if (lastPoseNose && nextNose) {
+                    poseTranslation = { x: nextNose.x - lastPoseNose.x, y: nextNose.y - lastPoseNose.y };
+                    poseHeadMotion = Math.hypot(poseTranslation.x, poseTranslation.y);
+                  } else {
+                    poseTranslation = { x: 0, y: 0 };
+                    poseHeadMotion = 0;
+                  }
+                  lastPoseNose = nextNose;
+                  poseLandmarks = nextPose;
+                } else {
+                  poseLandmarks = null;
+                  poseHeadMotion = 0;
+                  poseTranslation = { x: 0, y: 0 };
+                }
+              }
+            }
+
+            if (shouldTrackFace && faceLandmarker) {
+              lastFaceAt = now;
+              const result = faceLandmarker.detectForVideo(inference, now);
+              const detected = result.faceLandmarks[0] ?? null;
+              if (detected) {
+                recentFaceMotion = landmarkMotion(landmarks, detected);
+                landmarks = smoothTrackingPoints(landmarks, detected, faceHeld ? 0.82 : 1);
+                eyeState = deriveEyeOpenness(landmarks, result.faceBlendshapes[0]?.categories, eyeState);
+                lastFaceSeenAt = now;
+                faceHeld = false;
+                const overlapConfidence = faceOcclusionConfidence(trackedHands, landmarks);
+                if (overlapConfidence > 0) {
+                  lastOcclusionAt = now;
+                  lastOcclusionConfidence = overlapConfidence;
+                }
+                if (now - lastMouthAnalysisAt >= MOUTH_ANALYSIS_INTERVAL_MS) {
+                  experimentalMouth = analyzeExperimentalMouth(inferenceContext.getImageData(0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT), landmarks);
+                  lastMouthAnalysisAt = now;
+                }
+                performanceMonitor.markFaceDetected(now);
+              } else if (landmarks) {
+                const overlapConfidence = faceOcclusionConfidence(trackedHands, landmarks);
+                if (overlapConfidence > 0) {
+                  lastOcclusionAt = now;
+                  lastOcclusionConfidence = overlapConfidence;
+                }
+                faceHeld = shouldHoldFaceAnchors({
+                  nowMs: now,
+                  lastFaceSeenAt,
+                  lastOcclusionAt,
+                  occlusionConfidence: lastOcclusionConfidence,
+                  faceMotion: recentFaceMotion,
+                  poseHeadMotion
+                });
+                if (faceHeld && poseHeadMotion > 0 && poseHeadMotion <= 0.04) {
+                  landmarks = translateTrackingPoints(landmarks, poseTranslation.x, poseTranslation.y);
+                } else if (!faceHeld) {
+                  landmarks = null;
+                  experimentalMouth = undefined;
+                  performanceMonitor.markFaceLost();
+                }
+              } else {
+                performanceMonitor.markFaceLost();
+              }
+              performanceMonitor.setFaceAnchorHeld(faceHeld);
+            }
+          } catch (error) {
+            console.warn("A tracking frame was skipped.", error);
+            performanceMonitor.markDegraded("Tracking is recovering…");
           }
-          if (currentEffects.trackingDebug) {
-            poseLandmarks = poseLandmarker?.detectForVideo(inference, now).landmarks[0] ?? null;
-            const detectedHands = handLandmarker?.detectForVideo(inference, now).landmarks ?? [];
-            if (detectedHands.length) {
-              handLandmarks = detectedHands.map((hand, index) => smoothLandmarks(handLandmarks[index] ?? null, hand));
-              lastHandsSeenAt = now;
-              handsWereSeen = true;
-            } else if (now - lastHandsSeenAt > 180) handLandmarks = [];
-          }
+          performanceMonitor.recordInference(performance.now() - inferenceStartedAt);
         }
 
         context.globalCompositeOperation = "source-over";
         context.filter = "none";
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
-        if (currentEffects.trackingDebug) {
-          context.fillStyle = "#050914";
-          context.fillRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        const trackedPointsOverlay = currentRuntimeEffects.trackedPointsOverlay ?? currentEffects.trackingDebug ?? false;
+        const showCameraUnderLandmarks = currentRuntimeEffects.trackingCameraUnderlay ?? false;
+        if (trackedPointsOverlay) {
+          if (showCameraUnderLandmarks) context.drawImage(source, 0, 0);
+          else {
+            context.fillStyle = "#050914";
+            context.fillRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+          }
         } else if (aiBackgroundActive && currentEffects.background === "blur" && !maskReady) {
           const overscan = Math.max(12, currentEffects.blur * 2);
           context.save();
@@ -359,41 +512,56 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
         }
 
         const transform = { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT };
-        if (landmarks && currentEffects.faceTracking && !currentEffects.trackingDebug) {
+        const trackingFrame = makeTrackingRenderFrame({
+          nowMs: now,
+          width: OUTPUT_WIDTH,
+          height: OUTPUT_HEIGHT,
+          faceLandmarks: landmarks,
+          eyeState,
+          faceHeld,
+          hands: trackedHands,
+          poseLandmarks,
+          experimentalMouth
+        });
+        if (trackingFrame.face && faceEffectsActive) {
           const showGlasses = currentEffects.glassesEnabled ?? currentEffects.accessory === "glasses";
-          const showPartyHat = currentEffects.partyHatEnabled ?? currentEffects.accessory === "party-hat";
-          if (showGlasses) drawAccessory(context, landmarks, transform, "glasses");
-          if (showPartyHat) drawAccessory(context, landmarks, transform, "party-hat");
+          const showHat = currentRuntimeEffects.hatEnabled ?? currentEffects.partyHatEnabled ?? currentEffects.accessory === "party-hat";
+          if (showGlasses) drawTrackedGlasses(context, trackingFrame, currentRuntimeEffects.glassesStyle ?? "classic");
+          if (showHat) drawTrackedHat(context, trackingFrame, currentRuntimeEffects.hatStyle ?? "party", wizardHatRig, {
+            springiness: currentRuntimeEffects.wizardSpringiness ?? 0.62,
+            damping: currentRuntimeEffects.wizardDamping ?? 0.68
+          });
         }
-        if (landmarks && currentEffects.faceTracking && currentEffects.puppetPreview && !currentEffects.trackingDebug) {
+        if (landmarks && faceEffectsActive && currentEffects.puppetPreview && !trackedPointsOverlay) {
           drawPuppetPreview(context, landmarks, transform);
         }
-        if (currentEffects.trackingDebug) drawTrackingNodes(context, landmarks, poseLandmarks, handLandmarks, transform, handsWereSeen ? (handLandmarks.length ? "detected" : now - lastHandsSeenAt <= 180 ? "briefly lost" : "off camera") : "not detected");
+        trackedOverlayRendererRef.current?.(context, trackingFrame);
+        if (trackedPointsOverlay) drawTrackingNodes(context, landmarks, poseLandmarks, handLandmarks, transform, handsWereSeen ? (handLandmarks.length ? "detected" : now - lastHandsSeenAt <= 180 ? "briefly lost" : "off camera") : "not detected", trackingFrame);
       } else {
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
       }
-
-      if (typeof video.requestVideoFrameCallback === "function") {
-        videoFrame = video.requestVideoFrameCallback((timestamp) => render(timestamp));
-      } else {
-        animationFrame = window.requestAnimationFrame(render);
-      }
+      performanceMonitor.recordRenderedFrame(now);
+      emitTrackingStatus(now);
     };
 
-    if (typeof video.requestVideoFrameCallback === "function") {
-      videoFrame = video.requestVideoFrameCallback((timestamp) => render(timestamp));
-    } else {
-      animationFrame = window.requestAnimationFrame(render);
-    }
+    const tick = (now: number) => {
+      if (disposed) return;
+      if (shouldRenderTrackingFrame(now, lastRenderedAt, performanceMonitor.getAdaptiveFps())) {
+        lastRenderedAt = now;
+        render(now);
+      }
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+    animationFrame = window.requestAnimationFrame(tick);
 
     return () => {
       disposed = true;
-      if (videoFrame && typeof video.cancelVideoFrameCallback === "function") video.cancelVideoFrameCallback(videoFrame);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       segmenter?.close();
       faceLandmarker?.close();
       handLandmarker?.close();
       poseLandmarker?.close();
+      if (faceEffectsActive) trackingStatusCallbackRef.current?.({ phase: "idle", renderedFps: 0, targetFps: 60, adaptiveFps: 60, faceAnchorHeld: false });
     };
   }, [stream, chromaActive, aiBackgroundActive, faceEffectsActive, processingActive]);
 
@@ -407,6 +575,9 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, className }: Chr
   />{processingActive && <canvas ref={canvasRef} width={OUTPUT_WIDTH} height={OUTPUT_HEIGHT} className={className ?? "chroma-video"} style={cropStyle} />}
   {aiBackgroundActive && aiStatus !== "ready" && <span className={`ai-background-status ${aiStatus}`}>
     {aiStatus === "error" ? "Background effect unavailable" : "Preparing background effect…"}
+  </span>}
+  {faceEffectsActive && (trackingPhase === "warming" || trackingPhase === "detecting" || trackingPhase === "error") && <span className={`ai-background-status face-tracking-status ${trackingPhase}`} style={aiBackgroundActive && aiStatus !== "ready" ? { bottom: 40 } : undefined} role="status" aria-live="polite">
+    {trackingPhase === "error" ? "Face tracking unavailable" : "Detecting face…"}
   </span>}</>;
 }
 
@@ -442,21 +613,6 @@ function applyChromaKey(context: CanvasRenderingContext2D, width: number, height
   context.putImageData(image, 0, 0);
 }
 
-function smoothLandmarks(previous: NormalizedLandmark[] | null, detected: NormalizedLandmark[]) {
-  if (!previous || previous.length !== detected.length) return detected.map((landmark) => ({ ...landmark }));
-  return detected.map((landmark, index) => {
-    const old = previous[index];
-    const movement = Math.hypot(landmark.x - old.x, landmark.y - old.y);
-    const response = Math.max(0.42, Math.min(0.86, 0.42 + movement * 12));
-    return {
-      ...landmark,
-      x: old.x + (landmark.x - old.x) * response,
-      y: old.y + (landmark.y - old.y) * response,
-      z: old.z + (landmark.z - old.z) * response
-    };
-  });
-}
-
 function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number) {
   const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
@@ -464,38 +620,11 @@ function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, w
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-function point(landmarks: NormalizedLandmark[], index: number, transform: PointTransform) {
+function point(landmarks: TrackingPoint[], index: number, transform: PointTransform) {
   return { x: landmarks[index].x * transform.width, y: landmarks[index].y * transform.height };
 }
 
-function drawAccessory(context: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], transform: PointTransform, accessory: LiveEffectsSettings["accessory"]) {
-  const left = point(landmarks, 33, transform);
-  const right = point(landmarks, 263, transform);
-  const centerX = (left.x + right.x) / 2;
-  const eyeWidth = Math.hypot(right.x - left.x, right.y - left.y);
-  const angle = Math.atan2(right.y - left.y, right.x - left.x);
-  context.save();
-  context.translate(centerX, (left.y + right.y) / 2);
-  context.rotate(angle);
-  if (accessory === "glasses") {
-    context.strokeStyle = "#111820";
-    context.lineWidth = Math.max(4, eyeWidth * 0.045);
-    context.fillStyle = "rgba(85, 199, 191, 0.18)";
-    [-0.29, 0.29].forEach((offset) => { context.beginPath(); context.ellipse(eyeWidth * offset, 0, eyeWidth * 0.28, eyeWidth * 0.16, 0, 0, Math.PI * 2); context.fill(); context.stroke(); });
-    context.beginPath(); context.moveTo(-eyeWidth * 0.03, 0); context.lineTo(eyeWidth * 0.03, 0); context.stroke();
-  } else {
-    const top = point(landmarks, 10, transform);
-    context.translate(0, top.y - (left.y + right.y) / 2 - eyeWidth * 0.28);
-    context.fillStyle = "#f2c46d";
-    context.strokeStyle = "#f07b5f";
-    context.lineWidth = Math.max(3, eyeWidth * 0.025);
-    context.beginPath(); context.moveTo(-eyeWidth * 0.48, 0); context.lineTo(0, -eyeWidth * 0.95); context.lineTo(eyeWidth * 0.48, 0); context.closePath(); context.fill(); context.stroke();
-    context.fillStyle = "#55c7bf"; context.beginPath(); context.arc(0, -eyeWidth, eyeWidth * 0.11, 0, Math.PI * 2); context.fill();
-  }
-  context.restore();
-}
-
-function drawPuppetPreview(context: CanvasRenderingContext2D, landmarks: NormalizedLandmark[], transform: PointTransform) {
+function drawPuppetPreview(context: CanvasRenderingContext2D, landmarks: TrackingPoint[], transform: PointTransform) {
   const mouthTop = point(landmarks, 13, transform);
   const mouthBottom = point(landmarks, 14, transform);
   const left = point(landmarks, 33, transform);
@@ -522,13 +651,14 @@ const HAND_PALM = new Set([0, 1, 2, 5, 9, 13, 17]);
 
 function drawTrackingNodes(
   context: CanvasRenderingContext2D,
-  face: NormalizedLandmark[] | null,
-  pose: NormalizedLandmark[] | null,
-  hands: NormalizedLandmark[][],
+  face: TrackingPoint[] | null,
+  pose: TrackingPoint[] | null,
+  hands: TrackingPoint[][],
   transform: PointTransform,
-  handStatus: "detected" | "briefly lost" | "off camera" | "not detected"
+  handStatus: "detected" | "briefly lost" | "off camera" | "not detected",
+  frame: TrackingRenderFrame
 ) {
-  const dot = (landmark: NormalizedLandmark, color: string, radius = 1.5) => {
+  const dot = (landmark: TrackingPoint, color: string, radius = 1.5) => {
     context.fillStyle = color;
     context.beginPath();
     context.arc(landmark.x * transform.width, landmark.y * transform.height, radius, 0, Math.PI * 2);
@@ -553,7 +683,51 @@ function drawTrackingNodes(
     dot(landmark, HAND_TIPS.has(index) ? "#ff3b3b" : HAND_PALM.has(index) ? "#38e8d1" : sideColor, HAND_TIPS.has(index) ? 3.2 : HAND_PALM.has(index) ? 2.6 : 2);
   }));
 
+  context.save();
+  context.lineCap = "round";
+  context.lineWidth = 3;
+  context.strokeStyle = "rgba(0, 240, 181, 0.78)";
+  [frame.body?.leftArm, frame.body?.rightArm].forEach((arm) => {
+    if (!arm) return;
+    context.setLineDash(arm.inferred ? [7, 5] : []);
+    context.beginPath();
+    context.moveTo(arm.shoulder.x * transform.width, arm.shoulder.y * transform.height);
+    if (arm.elbow) context.lineTo(arm.elbow.x * transform.width, arm.elbow.y * transform.height);
+    if (arm.hand) context.lineTo(arm.hand.x * transform.width, arm.hand.y * transform.height);
+    else context.lineTo((arm.shoulder.x + arm.direction.x * 0.16) * transform.width, (arm.shoulder.y + arm.direction.y * 0.16) * transform.height);
+    context.stroke();
+  });
+  context.setLineDash([]);
+
+  context.font = "600 10px system-ui, sans-serif";
+  context.textAlign = "center";
+  frame.hands.forEach((hand) => {
+    context.fillStyle = hand.side === "left" ? "#ffcf33" : "#ff8b52";
+    context.fillText(`${hand.side} · ${hand.gesture} · ${hand.fingerCount}`, hand.palm.x * transform.width, hand.palm.y * transform.height + 18);
+  });
+  const labelAnchor = (label: string, landmark: TrackingPoint | undefined, color: string) => {
+    if (!landmark) return;
+    context.fillStyle = color;
+    context.fillText(label, landmark.x * transform.width, landmark.y * transform.height - 7);
+  };
+  labelAnchor("L ear", frame.extensionAnchors.leftEar, "#d3adff");
+  labelAnchor("R ear", frame.extensionAnchors.rightEar, "#d3adff");
+  labelAnchor("Head top", frame.extensionAnchors.headTop, "#8ee9ff");
+  labelAnchor("Chin", frame.extensionAnchors.chin, "#ff9a80");
+  labelAnchor("Neck", frame.extensionAnchors.neck, "#58f5c4");
+  context.restore();
+
   context.font = "600 12px system-ui, sans-serif";
+  context.textAlign = "left";
   context.fillStyle = handStatus === "detected" ? "#38e8d1" : handStatus === "briefly lost" ? "#ffcf33" : "#ff7085";
   context.fillText(`Hands: ${handStatus}${hands.length ? ` (${hands.length})` : ""}`, 12, transform.height - 14);
+  if (frame.face) {
+    context.fillStyle = "#f5f7ff";
+    context.fillText(`Eyes: L ${Math.round(frame.face.leftEyeOpen * 100)}% · R ${Math.round(frame.face.rightEyeOpen * 100)}%${frame.face.held ? " · anchors held" : ""}`, 12, 18);
+  }
+  if (frame.extensionAnchors.experimentalMouth) {
+    const detail = frame.extensionAnchors.experimentalMouth;
+    context.fillStyle = detail.status === "detected" ? "#ff8db7" : "#b9c3d7";
+    context.fillText(`Mouth detail (experimental image analysis): ${detail.status}`, 12, 34);
+  }
 }
