@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0170",
+    "title": "Remove unrelated WallTrace assets",
+    "summary": "Removed unrelated WallTrace and surface-lock pages, assets, and duplicate deployment workflow from the Recognition Boards repository.",
+    "author": "Codex",
+    "createdAt": "Aug 7, 2026, 11:07 PM",
+    "areas": [
+      "Deployment",
+      "Repository hygiene"
+    ],
+    "files": [
+      "walltrace.html",
+      "public/walltrace.html",
+      "public/walltrace-v2.html",
+      "public/walltrace-v2.js",
+      "public/walltrace-v2.css",
+      ".github/workflows/pages.yml"
+    ],
+    "tests": "npm run build; all nine scripts/test-*.mjs fixtures passed"
+  },
+  {
     "id": "DEV-0169",
     "title": "Use saved recordings as a Broadcast video source",
     "summary": "Added Saved recording to Video source, replaced camera and microphone controls with a recording selector for that source, routed looping saved clips through preview and live presentation, and cleaned up temporary playback media safely.",
