@@ -1,8 +1,9 @@
 import type { SavedAnnouncement, ScheduleEntry, ScreenId } from "./types";
 
-export const PHASE3_CONTENT_VERSION = 6;
+export const PHASE3_CONTENT_VERSION = 8;
 
-const ALL_WEEK = [0, 1, 2, 3, 4, 5, 6];
+/** Museum hours: Wednesday through Sunday. Regular boards run 07:00–18:00. */
+const ALL_WEEK = [0, 3, 4, 5, 6];
 const ART_CENTER_ASSET = "/assets/announcements/art-center-paintbrush.svg";
 
 const announcementBase = {
@@ -86,29 +87,19 @@ export function phase3DemoRange(reference = new Date()): Phase3DemoRange {
 type DemoSlot = Pick<ScheduleEntry, "name" | "startTime" | "endTime" | "contentType" | "boardId" | "announcementId" | "blipId" | "color">;
 
 const welcomeSlots: DemoSlot[] = [
-  { name: "Welcome / Today at the Museum", startTime: "07:00", endTime: "08:30", contentType: "board", boardId: "board-toy-about-portrait", color: "#3579A6" },
-  { name: "Toy Soldier Brigade Class of 2026", startTime: "08:30", endTime: "09:45", contentType: "board", boardId: "board-toy-soldier-portrait", color: "#1675A8" },
-  { name: "Art Center countdown", startTime: "09:45", endTime: "10:00", contentType: "announcement", boardId: "board-toy-soldier-portrait", announcementId: "art-center-countdown", color: "#D99005" },
-  { name: "The Art Center is Open", startTime: "10:00", endTime: "10:05", contentType: "announcement", boardId: "board-toy-soldier-portrait", announcementId: "art-center-open", color: "#2E9E91" },
-  { name: "Donor stories / Play It Forward", startTime: "10:05", endTime: "12:00", contentType: "board", boardId: "board-supporter-spotlight-portrait", color: "#A95777" },
-  { name: "Visitor kindness prompt", startTime: "12:00", endTime: "13:30", contentType: "blip", boardId: "board-toy-good-deeds-portrait", blipId: "blip-brigade-good-deed", color: "#26A89F" },
-  { name: "Upcoming programs", startTime: "13:30", endTime: "15:00", contentType: "announcement", boardId: "board-toy-about-portrait", announcementId: "brigade-museum-news", color: "#7B61A8" },
-  { name: "Signature board / visitor good deeds", startTime: "15:00", endTime: "16:30", contentType: "board", boardId: "board-toy-good-deeds-portrait", color: "#D09B2A" },
-  { name: "Thank-you rotation", startTime: "16:30", endTime: "17:45", contentType: "board", boardId: "board-toy-soldier-portrait", color: "#B94C43" },
-  { name: "Closing soon / tomorrow preview", startTime: "17:45", endTime: "18:00", contentType: "announcement", boardId: "board-toy-about-portrait", announcementId: "museum-closing-preview", color: "#596579" }
+  { name: "Welcome / Today at the Museum", startTime: "07:00", endTime: "12:00", contentType: "board", boardId: "board-toy-about-portrait", color: "#3579A6" },
+  { name: "Art Center opens", startTime: "09:55", endTime: "10:00", contentType: "announcement", boardId: "board-toy-about-portrait", announcementId: "art-center-countdown", color: "#D99005" },
+  { name: "Supporter spotlight", startTime: "12:00", endTime: "18:00", contentType: "board", boardId: "board-supporter-spotlight-portrait", color: "#A95777" },
+  { name: "Visitor kindness blip", startTime: "13:15", endTime: "13:17", contentType: "blip", boardId: "board-supporter-spotlight-portrait", blipId: "blip-brigade-good-deed", color: "#26A89F" },
+  { name: "After-hours board test · Welcome", startTime: "18:15", endTime: "18:30", contentType: "board", boardId: "board-toy-about-portrait", color: "#596579" }
 ];
 
 const discoverySlots: DemoSlot[] = [
-  { name: "Panoramic Welcome / Today’s Highlights", startTime: "07:00", endTime: "08:30", contentType: "board", boardId: "board-toy-about-landscape", color: "#3579A6" },
-  { name: "Full Recognition Roster", startTime: "08:30", endTime: "09:45", contentType: "board", boardId: "board-toy-soldier-landscape", color: "#1675A8" },
-  { name: "Art Center countdown / directions", startTime: "09:45", endTime: "10:00", contentType: "announcement", boardId: "board-toy-soldier-landscape", announcementId: "art-center-countdown", color: "#D99005" },
-  { name: "The Art Center is Open", startTime: "10:00", endTime: "10:05", contentType: "announcement", boardId: "board-toy-soldier-landscape", announcementId: "art-center-open", color: "#2E9E91" },
-  { name: "Recognition stories / museum impact", startTime: "10:05", endTime: "12:00", contentType: "board", boardId: "board-supporter-spotlight-landscape", color: "#A95777" },
-  { name: "Community message / good-deed prompt", startTime: "12:00", endTime: "13:30", contentType: "blip", boardId: "board-toy-good-deeds-landscape", blipId: "blip-brigade-good-deed", color: "#26A89F" },
-  { name: "Board rotation / announcements", startTime: "13:30", endTime: "15:00", contentType: "announcement", boardId: "board-toy-about-landscape", announcementId: "brigade-museum-news", color: "#7B61A8" },
-  { name: "Play It Forward showcase", startTime: "15:00", endTime: "16:30", contentType: "board", boardId: "board-toy-good-deeds-landscape", color: "#D09B2A" },
-  { name: "Donor and visitor gratitude rotation", startTime: "16:30", endTime: "17:45", contentType: "board", boardId: "board-toy-soldier-landscape", color: "#B94C43" },
-  { name: "Closing-soon panoramic message", startTime: "17:45", endTime: "18:00", contentType: "announcement", boardId: "board-toy-about-landscape", announcementId: "museum-closing-preview", color: "#596579" }
+  { name: "Panoramic Welcome / Today’s Highlights", startTime: "07:00", endTime: "12:00", contentType: "board", boardId: "board-toy-about-landscape", color: "#3579A6" },
+  { name: "Art Center is open", startTime: "10:00", endTime: "10:05", contentType: "announcement", boardId: "board-toy-about-landscape", announcementId: "art-center-open", color: "#2E9E91" },
+  { name: "Supporter spotlight", startTime: "12:00", endTime: "18:00", contentType: "board", boardId: "board-supporter-spotlight-landscape", color: "#A95777" },
+  { name: "Visitor kindness blip", startTime: "14:15", endTime: "14:17", contentType: "blip", boardId: "board-supporter-spotlight-landscape", blipId: "blip-brigade-good-deed", color: "#26A89F" },
+  { name: "After-hours board test · Discovery", startTime: "18:15", endTime: "18:30", contentType: "board", boardId: "board-toy-about-landscape", color: "#596579" }
 ];
 
 export function createPhase3DemoSchedule(reference = new Date()): ScheduleEntry[] {
@@ -130,8 +121,12 @@ export function migratePhase3Schedules(
   reference = new Date()
 ): ScheduleEntry[] {
   if (incomingContentVersion >= PHASE3_CONTENT_VERSION) return [...existing];
+  // Phase 3 entries are generated demo content rather than curator-created
+  // schedules. Replace only those stable IDs so the compact v8 rotation takes
+  // effect without touching custom schedules or legacy content.
+  const withoutPriorDemoSeed = existing.filter((entry) => !isPhase3DemoScheduleId(entry.id));
   return appendMissingPhase3Content(
-    archiveUntouchedLegacyFullDaySchedules(existing),
+    archiveUntouchedLegacyFullDaySchedules(withoutPriorDemoSeed),
     createPhase3DemoSchedule(reference)
   );
 }

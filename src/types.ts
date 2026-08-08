@@ -10,7 +10,7 @@ export type QualityTier = "Baseline" | "Balanced" | "Showcase";
 
 export type RendererMode = "WebGL2" | "Certified WebGPU";
 
-export type PortalAppearance = "dark" | "light" | "ocean" | "warm" | "contrast" | "sparkle";
+export type PortalAppearance = "dark" | "light" | "ocean" | "warm" | "contrast" | "sparkle" | "children";
 
 export type DisplayStyle = "donor-wall" | "constellation" | "image";
 

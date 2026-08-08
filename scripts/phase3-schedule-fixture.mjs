@@ -51,18 +51,21 @@ const expectedRange = { startDate: "2026-07-30", endDate: "2026-09-05" };
 assert.deepEqual(phase3DemoRange(reference), expectedRange);
 
 const seeded = createPhase3DemoSchedule(reference);
-assert.equal(seeded.length, 20);
-assert.equal(seeded.filter((entry) => entry.target === "display-1").length, 10);
-assert.equal(seeded.filter((entry) => entry.target === "display-2").length, 10);
+assert.equal(seeded.length, 10);
+assert.equal(seeded.filter((entry) => entry.target === "display-1").length, 5);
+assert.equal(seeded.filter((entry) => entry.target === "display-2").length, 5);
 assert.ok(seeded.every((entry) => entry.scheduleDate === expectedRange.startDate && entry.scheduleEndDate === expectedRange.endDate));
 assert.ok(seeded.some((entry) => entry.announcementId === "art-center-countdown"));
 assert.ok(seeded.some((entry) => entry.announcementId === "art-center-open"));
+assert.ok(seeded.every((entry) => entry.days.join(",") === "0,3,4,5,6"));
+assert.equal(seeded.filter((entry) => entry.contentType === "board" && entry.endTime === "18:00").length, 2);
+assert.equal(seeded.filter((entry) => entry.name.startsWith("After-hours board test")).length, 2);
 
 const firstPass = migratePhase3Schedules([legacyPortrait, customizedLandscape, customEntry], 5, reference);
 assert.equal(firstPass.find((entry) => entry.id === legacyPortrait.id)?.active, false, "exact legacy seed should be archived");
 assert.deepEqual(firstPass.find((entry) => entry.id === customizedLandscape.id), customizedLandscape, "customized legacy ID must be preserved");
 assert.deepEqual(firstPass.find((entry) => entry.id === customEntry.id), customEntry, "user-created schedule must be preserved");
-assert.equal(firstPass.filter((entry) => entry.id.startsWith("phase3-demo-")).length, 20);
+assert.equal(firstPass.filter((entry) => entry.id.startsWith("phase3-demo-")).length, 10);
 
 const secondPass = migratePhase3Schedules(firstPass, PHASE3_CONTENT_VERSION, reference);
 assert.deepEqual(secondPass, firstPass, "v6 normalization must not reseed or rewrite saved schedules");

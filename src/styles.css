@@ -7441,9 +7441,9 @@ textarea:focus-visible,
 .board-panel-inspector { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
 .inspector-sticky-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-height: 72px; padding: 9px 10px; border-bottom: 1px solid var(--border); }
 .inspector-sticky-head .eyebrow { margin: 0 0 2px; }
-.inspector-sticky-head h2 { margin: 0; font-size: 16px; }
+.inspector-sticky-head h2 { margin: 0; overflow-wrap: anywhere; font-size: 16px; line-height: 1.1; }
 .inspector-title-block { display: grid; min-width: 0; flex: 1; gap: 3px; }
-.board-element-picker select { width: 100%; min-width: 0; height: 28px; padding: 0 24px 0 7px; overflow: hidden; border: 1px solid rgba(145, 158, 219, .22); border-radius: 6px; color: #c8cee6; background: #0d1729; font-size: 9px; text-overflow: ellipsis; }
+.board-element-picker select { width: 100%; min-width: 0; height: 32px; padding: 0 24px 0 7px; overflow: hidden; border: 1px solid rgba(145, 158, 219, .22); border-radius: 6px; color: #c8cee6; background: #0d1729; font-size: 10px; text-overflow: ellipsis; }
 .inspector-selection-note { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .panel-icon-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
 .board-add-menu > summary { min-height: 30px; padding: 0 8px; font-size: 9px; }
@@ -8634,6 +8634,14 @@ textarea:focus-visible,
   outline-color: #e7279d;
   box-shadow: 0 0 0 4px rgba(36, 200, 223, .18);
 }
+.sparkle-click-burst { position: fixed; z-index: 9999; pointer-events: none; color: #ff2fa6; font-size: 22px; font-style: normal; letter-spacing: 7px; text-shadow: 0 0 8px #fff, 0 0 16px #53d9ff; transform: translate(-50%, -50%); animation: sparkle-click-burst .7s ease-out forwards; }
+@keyframes sparkle-click-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.5) rotate(0deg); } to { opacity: 0; transform: translate(-50%, -120%) scale(2.4) rotate(130deg); } }
+
+.app-shell.theme-children { color-scheme: light; --ink: #173f61; --muted: #5b7184; --navy: #fdf7e9; --panel: #fffdf5; --panel-2: #e8f7ff; --line: rgba(23, 63, 97, .18); --line-bright: rgba(228, 59, 56, .55); --teal: #02a9c7; --cyan: #1565d8; --violet: #7256c8; --magenta: #e34278; --coral: #e9433e; --gold: #f4b527; background: linear-gradient(135deg, #fff9df, #e8f7ff 45%, #fff0f0); }
+.theme-children .sidebar, .theme-children .topbar { background: rgba(255, 253, 245, .94); }
+.theme-children h1, .theme-children h2, .theme-children h3, .theme-children .brand-lockup, .theme-children .nav-item b { font-family: "Cabin Sketch", "Comic Sans MS", cursive; letter-spacing: .02em; }
+.theme-children .command-button.primary, .theme-children .segmented button.selected, .theme-children .editor-tabs button.selected { color: #fff; border-color: #e9433e; background: linear-gradient(135deg, #e9433e, #f4b527 48%, #02a9c7); box-shadow: 0 7px 16px rgba(228, 59, 56, .22); }
+.theme-children .nav-item.active { border-color: rgba(2, 169, 199, .38); background: linear-gradient(90deg, rgba(2,169,199,.16), rgba(244,181,39,.18)); box-shadow: inset 4px 0 #e9433e; }
 
 .app-shell.theme-contrast {
   color-scheme: dark;
@@ -9704,6 +9712,10 @@ textarea:focus-visible,
 .schedule-week .week-scroll::-webkit-scrollbar { width: 11px; height: 11px; }
 .schedule-week .week-scroll::-webkit-scrollbar-track { border-radius: 8px; background: rgba(8, 13, 39, .78); }
 .schedule-week .week-scroll::-webkit-scrollbar-thumb { border: 3px solid rgba(8, 13, 39, .78); border-radius: 8px; background: linear-gradient(#6ad4e9, #7659d4); }
+.schedule-week .week-scroll { position: relative; touch-action: none; cursor: grab; }
+.schedule-week .week-scroll:active { cursor: grabbing; }
+.calendar-pan-dots { position: sticky; z-index: 9; top: 50%; left: 5px; display: grid; gap: 4px; width: 8px; margin-top: -16px; pointer-events: none; }
+.calendar-pan-dots i { width: 4px; height: 4px; border-radius: 50%; background: #6ad4e9; box-shadow: 0 0 8px rgba(106, 212, 233, .7); }
 .schedule-week .week-header { grid-template-columns: 48px repeat(7, minmax(0, 1fr)); }
 .schedule-week .week-columns { width: 100%; min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .schedule-week .week-day-column { min-width: 0; }
@@ -11656,6 +11668,23 @@ textarea:focus-visible,
 .themed-stepper button span { font-size: 17px; line-height: 1; }
 .themed-stepper input { width: 100%; min-width: 0; border: 0 !important; outline: 0; text-align: center; box-shadow: none !important; background: transparent !important; }
 .themed-stepper b { padding-inline: 4px 8px; color: var(--muted, #8b96b5); font-size: 9px; font-weight: 800; text-transform: uppercase; }
+
+/* Narrow inspector fixes: preserve readable removal controls and board labels. */
+.live-inspector .effect-settings-card,
+.live-inspector .effect-settings-card > *,
+.live-inspector .background-removal-toggle,
+.live-inspector .background-removal-toggle > span { min-width: 0; max-width: 100%; }
+.live-inspector .effect-settings-card .two-col,
+.live-inspector .effect-settings-card .three-col,
+.live-inspector .effect-settings-card .four-col { grid-template-columns: minmax(0, 1fr); }
+.live-inspector .image-upload,
+.live-inspector .effect-settings-card .command-button { width: 100%; box-sizing: border-box; white-space: normal; }
+
+.vocabulary-select-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: end; }
+.vocabulary-add { display: block; }
+.vocabulary-add > summary { width: max-content; list-style: none; cursor: pointer; }
+.vocabulary-add > summary::-webkit-details-marker { display: none; }
+.vocabulary-add > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 8px; }
 .pledge-data-map { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); overflow: hidden; border: 1px solid var(--border, rgba(120,130,190,.22)); border-radius: 12px; background: var(--border, rgba(120,130,190,.22)); gap: 1px; }
 .pledge-data-map > span { display: grid; gap: 4px; padding: 11px; background: var(--surface-soft, rgba(30,40,76,.85)); }
 .pledge-data-map strong { color: var(--text, #eef2ff); font-size: 9px; }

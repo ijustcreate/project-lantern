@@ -56,10 +56,10 @@ const OUTPUT_WIDTH = 640;
 const OUTPUT_HEIGHT = 360;
 // A little more source detail helps the selfie model preserve thin fingers and
 // hair. Keep the working canvas small enough that segmentation remains realtime.
-const INFERENCE_WIDTH = 384;
-const INFERENCE_HEIGHT = 216;
+const INFERENCE_WIDTH = 320;
+const INFERENCE_HEIGHT = 180;
 const SEGMENT_INTERVAL_MS = 1000 / 10;
-const BODY_INTERVAL_MS = 1000 / 30;
+const BODY_INTERVAL_MS = 1000 / 15;
 const MOUTH_ANALYSIS_INTERVAL_MS = 1000 / 10;
 
 function hexRgb(value: string) {
@@ -85,6 +85,10 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
   const chromaActive = chromaKey.enabled;
   const aiBackgroundActive = !chromaActive && effects.background !== "original";
   const faceEffectsActive = effects.faceTracking || Boolean(runtimeEffects.costumeEnabled);
+  // Ordinary hats and glasses need only a face mesh. Hand/pose inference is
+  // opt-in for costumes and the diagnostic overlay, avoiding a three-model
+  // CPU workload that can collapse a camera preview to single-digit FPS.
+  const bodyTrackingRequested = Boolean(runtimeEffects.costumeEnabled || runtimeEffects.trackedPointsOverlay || effects.trackingDebug);
   const cropStyle = {
     objectFit: fitMode === "fit" ? "contain" as const : "cover" as const,
     transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
@@ -228,9 +232,9 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         const faceOptions = {
           runningMode: "VIDEO" as const,
           numFaces: 1,
-          minFaceDetectionConfidence: 0.56,
-          minFacePresenceConfidence: 0.56,
-          minTrackingConfidence: 0.62,
+          minFaceDetectionConfidence: 0.4,
+          minFacePresenceConfidence: 0.42,
+          minTrackingConfidence: 0.45,
           outputFaceBlendshapes: true,
           outputFacialTransformationMatrixes: false
         };
@@ -246,6 +250,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         // Face detection becomes usable first. Hands and pose warm in parallel
         // afterward so occlusion/body support cannot delay the first face.
         const common = { runningMode: "VIDEO" as const, minTrackingConfidence: 0.5 };
+        if (!bodyTrackingRequested) return;
         const [handsResult, poseResult] = await Promise.allSettled([
           createWithFallback("hand", (baseOptions) => visionModule.HandLandmarker.createFromOptions(vision, {
             ...common,
@@ -360,7 +365,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         const adaptiveFps = performanceMonitor.getAdaptiveFps();
         const shouldSegment = segmenter && now - lastSegmentAt >= SEGMENT_INTERVAL_MS;
         const shouldTrackFace = faceLandmarker && now - lastFaceAt >= 1_000 / adaptiveFps;
-        const shouldTrackBody = (handLandmarker || poseLandmarker) && now - lastBodyAt >= (adaptiveFps === 60 ? BODY_INTERVAL_MS : 1_000 / 20);
+        const shouldTrackBody = bodyTrackingRequested && (handLandmarker || poseLandmarker) && now - lastBodyAt >= BODY_INTERVAL_MS;
         if (shouldSegment || shouldTrackFace || shouldTrackBody) {
           inferenceContext.clearRect(0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT);
           inferenceContext.drawImage(source, 0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT);
@@ -430,7 +435,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
                   lastOcclusionAt = now;
                   lastOcclusionConfidence = overlapConfidence;
                 }
-                if (now - lastMouthAnalysisAt >= MOUTH_ANALYSIS_INTERVAL_MS) {
+                if (currentRuntimeEffects.costumeEnabled && now - lastMouthAnalysisAt >= MOUTH_ANALYSIS_INTERVAL_MS) {
                   experimentalMouth = analyzeExperimentalMouth(inferenceContext.getImageData(0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT), landmarks);
                   lastMouthAnalysisAt = now;
                 }
@@ -523,6 +528,9 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
           poseLandmarks,
           experimentalMouth
         });
+        // Costume pieces render first; wearable accessories are the top-most
+        // layer so glasses and hats sit over the costume rather than behind it.
+        trackedOverlayRendererRef.current?.(context, trackingFrame);
         if (trackingFrame.face && faceEffectsActive) {
           const showGlasses = currentEffects.glassesEnabled ?? currentEffects.accessory === "glasses";
           const showHat = currentRuntimeEffects.hatEnabled ?? currentEffects.partyHatEnabled ?? currentEffects.accessory === "party-hat";
@@ -535,7 +543,6 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         if (landmarks && faceEffectsActive && currentEffects.puppetPreview && !trackedPointsOverlay) {
           drawPuppetPreview(context, landmarks, transform);
         }
-        trackedOverlayRendererRef.current?.(context, trackingFrame);
         if (trackedPointsOverlay) drawTrackingNodes(context, landmarks, poseLandmarks, handLandmarks, transform, handsWereSeen ? (handLandmarks.length ? "detected" : now - lastHandsSeenAt <= 180 ? "briefly lost" : "off camera") : "not detected", trackingFrame);
       } else {
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
@@ -563,7 +570,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
       poseLandmarker?.close();
       if (faceEffectsActive) trackingStatusCallbackRef.current?.({ phase: "idle", renderedFps: 0, targetFps: 60, adaptiveFps: 60, faceAnchorHeld: false });
     };
-  }, [stream, chromaActive, aiBackgroundActive, faceEffectsActive, processingActive]);
+  }, [stream, chromaActive, aiBackgroundActive, faceEffectsActive, bodyTrackingRequested, processingActive]);
 
   return <><video
     ref={videoRef}

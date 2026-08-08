@@ -27,7 +27,7 @@ for (let frame = 1; frame <= 125; frame += 1) monitor.recordRenderedFrame(frame 
 let status = monitor.snapshot();
 assert.equal(status.initializationLatencyMs, 920);
 assert.equal(status.firstDetectionLatencyMs, 1_080);
-assert.equal(status.adaptiveFps, 60);
+assert.equal(status.adaptiveFps, 30, "tracking starts at the stable 30 FPS cadence");
 
 for (let sample = 0; sample < 12; sample += 1) monitor.recordInference(31);
 let time = 2_100;
@@ -138,7 +138,7 @@ console.log(JSON.stringify({
   deterministicSimulation: {
     initializationLatencyMs: 920,
     firstDetectionLatencyMs: 1_080,
-    lightLoadCadence: 60,
+    lightLoadCadence: 30,
     stressedCadence: status.adaptiveFps
   },
   hardwareAfter: "Not measured by this fixture. ChromaVideo.onTrackingStatus reports live initialization latency, first-detection latency, inference latency, rendered FPS, and adaptive cadence on real hardware.",

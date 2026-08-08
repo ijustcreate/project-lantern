@@ -143,7 +143,7 @@ export class TrackingPerformanceMonitor {
   private firstDetectionLatencyMs: number | undefined;
   private inferenceLatencyMs: number | undefined;
   private renderedFps = 0;
-  private adaptiveFps: 60 | 30 = 60;
+  private adaptiveFps: 60 | 30 = 30;
   private frameWindowStartedAt: number;
   private framesInWindow = 0;
   private stressedWindows = 0;
@@ -216,7 +216,7 @@ export class TrackingPerformanceMonitor {
       firstDetectionLatencyMs: this.firstDetectionLatencyMs,
       inferenceLatencyMs: this.inferenceLatencyMs,
       renderedFps: this.renderedFps,
-      targetFps: 60,
+      targetFps: 30,
       adaptiveFps: this.adaptiveFps,
       faceAnchorHeld: this.faceAnchorHeld,
       message: this.message
@@ -417,9 +417,10 @@ export function shouldHoldFaceAnchors({
   poseHeadMotion: number;
 }) {
   const missingFor = nowMs - lastFaceSeenAt;
-  // Preserve a tiny general dropout grace period. Longer holds require recent,
-  // actually observed hand overlap and a head that remained nearly stationary.
-  if (missingFor <= 100) return true;
+  // Preserve the last stable rig through brief profile turns and partial-face
+  // occlusion. Pose translation keeps it attached while the face detector
+  // reacquires; longer holds still require actual hand-over-face evidence.
+  if (missingFor <= 420 && faceMotion <= 0.06 && poseHeadMotion <= 0.06) return true;
   if (faceMotion > 0.03 || poseHeadMotion > 0.04 || nowMs - lastOcclusionAt > 150 || occlusionConfidence <= 0) return false;
   const confidenceWindow = 140 + clamp01(occlusionConfidence) * 300;
   return missingFor <= confidenceWindow;

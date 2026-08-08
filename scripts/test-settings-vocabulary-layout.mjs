@@ -7,7 +7,7 @@ const checks = {
   programsCollapsedByDefault: app.includes('const [expandedId, setExpandedId] = useState("")'),
   vocabularyUsesSelection: app.includes('className="vocabulary-select-row"') && app.includes("Select ${singularTitle}"),
   categoryLabelIsGrammatical: app.includes('title === "Categories" ? "category"'),
-  selectedValueIsEditable: app.includes('className="vocabulary-edit-row"') && app.includes("onClick={save}"),
+  selectedValueIsEditable: app.includes('className="vocabulary-select-row"') && app.includes("onClick={save}"),
   vocabularyCanAddAndDelete: app.includes("onClick={remove}") && app.includes("Add new"),
   workspaceOwnsFourRows: styles.includes("grid-template-rows: repeat(4, max-content);"),
   expandedProgramStaysInFlow: styles.includes(".giving-program-settings { position: relative; z-index: 0; display: grid; min-height: max-content;")

@@ -473,16 +473,24 @@ function ControlCenter() {
       const startedAt = new Date().toISOString();
       return {
         ...current,
-        announcement: {
-          ...current.announcement,
-          id: `visitor-message-live-${message.id}`,
-          title: "A message for every young visitor",
-          message: message.text,
-          details: message.category,
+        activeBlip: {
+          ...current.activeBlip,
+          id: `visitor-message-blip-${message.id}`,
+          name: "A message for every young visitor",
+          kind: "celebration",
+          headline: message.text,
+          prompt: message.category,
           target,
           targets: target === "all" ? Object.keys(current.screens) : [target],
           active: true,
-          startedAt
+          startedAt,
+          durationMinutes: 1,
+          countdownSeconds: 0,
+          showCountdown: false,
+          ticking: false,
+          startSfx: "bell",
+          revealSfx: "off",
+          motion: "pop"
         }
       };
     });
@@ -763,11 +771,26 @@ function ControlCenter() {
 
   useEffect(() => {
     const appearance = state.recognitionSettings.appearance;
-    const classes = ["theme-dark", "theme-light", "theme-ocean", "theme-warm", "theme-contrast", "theme-sparkle"];
+    const classes = ["theme-dark", "theme-light", "theme-ocean", "theme-warm", "theme-contrast", "theme-sparkle", "theme-children"];
     document.body.classList.remove(...classes);
-    if (appearance === "warm" || appearance === "sparkle") document.body.classList.add("theme-light");
+    if (appearance === "warm" || appearance === "sparkle" || appearance === "children") document.body.classList.add("theme-light");
     document.body.classList.add(`theme-${appearance}`);
     return () => document.body.classList.remove(...classes);
+  }, [state.recognitionSettings.appearance]);
+
+  useEffect(() => {
+    if (state.recognitionSettings.appearance !== "sparkle") return;
+    const sparkleAt = (event: PointerEvent) => {
+      const burst = document.createElement("i");
+      burst.className = "sparkle-click-burst";
+      burst.style.left = `${event.clientX}px`;
+      burst.style.top = `${event.clientY}px`;
+      burst.textContent = "✦ ✧ ✦ ✧";
+      document.body.appendChild(burst);
+      window.setTimeout(() => burst.remove(), 720);
+    };
+    window.addEventListener("pointerdown", sparkleAt);
+    return () => window.removeEventListener("pointerdown", sparkleAt);
   }, [state.recognitionSettings.appearance]);
 
   const openBugReport = async () => {
@@ -802,7 +825,7 @@ function ControlCenter() {
   };
 
   return (
-    <div className={`app-shell ${state.recognitionSettings.appearance === "warm" || state.recognitionSettings.appearance === "sparkle" ? "theme-light " : ""}theme-${state.recognitionSettings.appearance}`}>
+    <div className={`app-shell ${state.recognitionSettings.appearance === "warm" || state.recognitionSettings.appearance === "sparkle" || state.recognitionSettings.appearance === "children" ? "theme-light " : ""}theme-${state.recognitionSettings.appearance}`}>
       <aside className="sidebar">
         <div className="sidebar-aurora" aria-hidden="true" />
         <button className="brand-lockup" onClick={() => setView("dashboard")} title="Return to Dashboard" aria-label="Children's Museum of Stockton — return to Dashboard">
@@ -841,6 +864,7 @@ function ControlCenter() {
             <option value="warm">Warm</option>
             <option value="contrast">High contrast</option>
             <option value="sparkle">Sparkle Unicorn</option>
+            <option value="children">Children’s Museum</option>
           </select>
         </label>
         <nav className="nav-list nav-utility-list" aria-label="History and support">
@@ -3316,7 +3340,7 @@ function ThemeStudio({
                 <header><strong>Content</strong><small>Edit here or click text directly on the board.</small></header>
                 {(selectedPanel.type === "heading" || selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer") && <LabeledInput label={selectedPanel.type === "footer" ? "Footer text" : selectedPanel.type === "supporters-heading" ? "Subheader text" : "Heading text"} info="Visitor-facing copy for this element." value={selectedPanel.title} onChange={(title) => patchPanel(selectedPanel.id, { title })} />}
                 {(selectedPanel.type === "message" || selectedPanel.type === "story") && <>
-                  <LabeledInput label="Eyebrow" info="Small introductory label above the headline." value={selectedPanel.eyebrow ?? ""} onChange={(eyebrow) => patchPanel(selectedPanel.id, { eyebrow })} />
+                  <LabeledInput label="Intro" info="Small introductory label above the headline." value={selectedPanel.eyebrow ?? ""} onChange={(eyebrow) => patchPanel(selectedPanel.id, { eyebrow })} />
                   <LabeledInput label="Headline" info="Main headline for this element." value={selectedPanel.title} onChange={(title) => patchPanel(selectedPanel.id, { title })} />
                   <label className="field"><span>Body copy <InfoDot text="Keep visitor-facing stories concise enough to read at a glance." /></span><textarea rows={5} value={selectedPanel.body ?? ""} onChange={(event) => patchPanel(selectedPanel.id, { body: event.target.value })} /></label>
                 </>}
@@ -3401,6 +3425,12 @@ function ThemeStudio({
       {pendingProgramDelete && <LanternConfirmDialog eyebrow="Delete board template" title={`Delete “${pendingProgramDelete.name}”?`} description="This removes the reusable board and its board-specific presentation settings. Donor profiles remain available, and displays using this board move to the next available board." confirmLabel="Delete board" onCancel={() => setPendingProgramDeleteId(null)} onConfirm={() => deleteProgram(pendingProgramDelete.id)} />}
     </section>
   );
+}
+
+/** Keep bundled board assets working when the app is hosted below a repository path on GitHub Pages. */
+function resolveProjectAssetUrl(value: string) {
+  if (!value.startsWith("/")) return value;
+  return `${import.meta.env.BASE_URL}${value.slice(1)}`;
 }
 
 function DirectBoardCanvas({
@@ -3521,7 +3551,7 @@ function DirectBoardCanvas({
     "--board-text-shadow-blur": `${1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 28}px`,
     "--board-text-shadow-alpha": Math.min(.62, .1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 165)
   } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
-    {boardBackgroundImage && <div className="direct-board-background"><img src={boardBackgroundImage} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
+    {boardBackgroundImage && <div className="direct-board-background"><img src={resolveProjectAssetUrl(boardBackgroundImage)} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
       const spread = (display.particleSpread ?? 100) / 100;
@@ -3562,7 +3592,7 @@ function DirectBoardCanvas({
         {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
         {panel.type === "message" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
         {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><div><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></div></>}
-        {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={panel.imageUrl} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
+        {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={resolveProjectAssetUrl(panel.imageUrl)} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
         {panel.type === "footer" && <div className={`direct-footer-line icons-${panel.footerIconPlacement ?? "left"}`}><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />{panel.footerIconPlacement === "both" && <span className="footer-heart">♡</span>}<span /></div>}
       </section>)}
     </div>
@@ -6480,6 +6510,7 @@ function ScheduleCalendarView({
   const [editorPosition, setEditorPosition] = useState({ x: Math.max(12, window.innerWidth - 376), y: 132 });
   const editorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const weekScrollRef = useRef<HTMLDivElement | null>(null);
+  const calendarPanRef = useRef<{ pointerId: number; y: number; scrollTop: number } | null>(null);
   const calendarDragRef = useRef<{
     id: string;
     sourceDate: string;
@@ -6845,7 +6876,7 @@ function ScheduleCalendarView({
     <div className={`schedule-view-container ${visibleMode}`}>
       {visibleMode === "week" && <div className="week-calendar schedule-week" style={{ "--calendar-hour": `${hourHeight}px`, "--calendar-hours": scheduleHourCount } as React.CSSProperties}>
         <div className="week-header"><div />{dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); return <div className={isSameCalendarDate(date, now) ? "today" : ""} key={label}><span>{label.slice(0, 3)}</span><strong>{date.getDate()}</strong></div>; })}</div>
-        <div className="week-scroll" ref={weekScrollRef}><div className="time-gutter">{hours.map((hour) => <span key={hour} style={{ top: `${(hour - scheduleStartHour) * hourHeight}px` }}>{formatHour(hour)}</span>)}</div><div className="week-columns">
+        <div className="week-scroll" ref={weekScrollRef} onPointerDown={(event) => { if ((event.target as Element).closest(".schedule-entry, button, input, select")) return; calendarPanRef.current = { pointerId: event.pointerId, y: event.clientY, scrollTop: event.currentTarget.scrollTop }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const pan = calendarPanRef.current; if (!pan || pan.pointerId !== event.pointerId) return; event.currentTarget.scrollTop = Math.max(0, pan.scrollTop - (event.clientY - pan.y)); }} onPointerUp={(event) => { if (calendarPanRef.current?.pointerId === event.pointerId) { calendarPanRef.current = null; event.currentTarget.releasePointerCapture(event.pointerId); } }} onPointerCancel={() => { calendarPanRef.current = null; }}><div className="calendar-pan-dots" aria-hidden="true"><i /><i /><i /></div><div className="time-gutter">{hours.map((hour) => <span key={hour} style={{ top: `${(hour - scheduleStartHour) * hourHeight}px` }}>{formatHour(hour)}</span>)}</div><div className="week-columns">
           {dayLabels.map((label, index) => { const date = addCalendarDays(weekStart, index); const entries = entriesForDate(date); const today = isSameCalendarDate(date, now); return <div className={`week-day-column${today ? " is-today" : ""}`} key={label} onContextMenu={(event) => openCalendarContextMenu(event, date)}>{hours.map((hour) => <i key={hour} style={{ top: `${(hour - scheduleStartHour) * hourHeight}px` }} />)}{today && nowMinutes >= scheduleStartMinutes && nowMinutes <= scheduleEndMinutes && <div className="calendar-now-line" style={{ top: `${((nowMinutes - scheduleStartMinutes) / 60) * hourHeight}px` }}><span>Now</span></div>}{entries.map((entry) => {
             const lane = scheduleLane(entry, entries);
             const conflict = conflictFor(entry, date);
@@ -7401,6 +7432,7 @@ function VocabularyEditor({ title, description, values, onChange }: { title: str
   const [selectedValue, setSelectedValue] = useState(values[0] ?? "");
   const [editValue, setEditValue] = useState(values[0] ?? "");
   const [newValue, setNewValue] = useState("");
+  const [deletePending, setDeletePending] = useState(false);
   useEffect(() => {
     if (values.includes(selectedValue)) return;
     const nextSelected = values[0] ?? "";
@@ -7426,6 +7458,7 @@ function VocabularyEditor({ title, description, values, onChange }: { title: str
     onChange(nextValues, selectedValue);
     setSelectedValue(nextSelected);
     setEditValue(nextSelected);
+    setDeletePending(false);
   };
   const add = () => {
     const clean = newValue.trim();
@@ -7446,16 +7479,18 @@ function VocabularyEditor({ title, description, values, onChange }: { title: str
       </div>
       <div className="vocabulary-select-row">
         <label><span>Selected {singularTitle}</span><select aria-label={`Select ${singularTitle}`} value={selectedValue} onChange={(event) => select(event.target.value)}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-        <button type="button" className="icon-button danger-icon" onClick={remove} disabled={values.length <= 1} title={selectedValue ? `Delete ${selectedValue}` : `Delete selected ${singularTitle}`}><Trash2 size={14} /></button>
-      </div>
-      <div className="vocabulary-edit-row">
         <label><span>Edit selected</span><input value={editValue} aria-label={`Edit selected ${singularTitle}`} onChange={(event) => setEditValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } }} /></label>
         <button type="button" className="command-button secondary" onClick={save} disabled={!selectedValue || !editValue.trim() || editValue.trim() === selectedValue}>Save</button>
+        <button type="button" className="icon-button danger-icon" onClick={() => setDeletePending(true)} disabled={values.length <= 1} title={selectedValue ? `Delete ${selectedValue}` : `Delete selected ${singularTitle}`}><Trash2 size={14} /></button>
       </div>
-      <div className="vocabulary-add">
+      {deletePending && <div className="gift-delete-confirm"><span>Delete “{selectedValue}”? This cannot be undone.</span><div><button type="button" className="command-button secondary compact" onClick={() => setDeletePending(false)}>Cancel</button><button type="button" className="command-button danger compact" onClick={remove}>Delete</button></div></div>}
+      <details className="vocabulary-add">
+        <summary className="command-button secondary compact"><Plus size={14} /> Add new {singularTitle}</summary>
+        <div>
         <input value={newValue} onChange={(event) => setNewValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }} placeholder={`New ${singularTitle}`} />
         <button type="button" className="command-button primary" onClick={add}><Plus size={14} /> Add new</button>
-      </div>
+        </div>
+      </details>
     </section>
   );
 }

@@ -55,8 +55,7 @@ const toySoldierProgram: GivingProgram = {
   address: "402 W. Weber Ave., Stockton, CA 95203",
   levels: [
     { id: "explore", name: "Explore", annualPledge: 5000, years: 5, description: "$5,000 each year for five years", color: "#1675a8", minAmount: 5000, maxAmount: 5000, displayOrder: 0, active: true },
-    { id: "play", name: "Play", annualPledge: 1000, years: 5, description: "$1,000 each year for five years", color: "#c74432", minAmount: 1000, maxAmount: 4999.99, displayOrder: 1, active: true },
-    { id: "custom-annual", name: "Custom Annual Commitment", annualPledge: 10000, years: 5, description: "A configurable annual commitment above $5,000, with no maximum", color: "#8e7cc3", minAmount: 5000.01, displayOrder: 2, active: true }
+    { id: "play", name: "Play", annualPledge: 1000, years: 5, description: "$1,000 each year for five years", color: "#c74432", minAmount: 1000, maxAmount: 4999.99, displayOrder: 1, active: true }
   ],
   spotlightDonorId: "toy-explorer-5",
   displayOrder: 0,
@@ -279,13 +278,13 @@ function spotlightBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgra
     showFrame: true,
     panels: portrait ? [
       { id: `${short}-heading`, type: "heading", title: "SUPPORTER SPOTLIGHT", size: "feature", x: 9, y: 5, width: 82, height: 8, fontFamily: "DM Sans", fontSize: 30 },
-      { id: `${short}-portrait`, type: "image", title: "Supporter portrait", imageUrl: "/assets/donor-icons/toy-soldier.png", imageFit: "contain", size: "feature", x: 10, y: 17, width: 30, height: 24 },
+      { id: `${short}-portrait`, type: "image", title: "Supporter portrait", imageUrl: "/assets/donor-icons/supporter-spotlight-placeholder.png", imageFit: "cover", size: "feature", x: 10, y: 17, width: 30, height: 24 },
       { id: `${short}-intro`, type: "message", eyebrow: "A LIFE OF GENEROSITY", title: "Francesca Vera", body: "Financial donor · Power of Play Tour Ambassador · Luncheon Table Host", size: "feature", x: 43, y: 17, width: 47, height: 24, fontSize: 20 },
       { id: `${short}-story`, type: "message", eyebrow: "WEALTH · WISDOM · WORK", title: "A champion for the power of play", body: "Francesca supports the museum as a financial donor, including tribute gifts in memory of those who have passed away; a Power of Play Tour Ambassador; and a Table Host for the Every Day is Child’s Play Ask Event Luncheon.", size: "feature", x: 10, y: 45, width: 80, height: 37, fontFamily: "Libre Baskerville", fontSize: 19 },
       { id: `${short}-footer`, type: "footer", title: "WITH GRATITUDE.", size: "compact", x: 11, y: 89, width: 78, height: 6, fontFamily: "DM Sans", fontSize: 11 }
     ] : [
       { id: `${short}-heading`, type: "heading", title: "SUPPORTER SPOTLIGHT", size: "feature", x: 6, y: 6, width: 88, height: 9, fontFamily: "DM Sans", fontSize: 36 },
-      { id: `${short}-portrait`, type: "image", title: "Supporter portrait", imageUrl: "/assets/donor-icons/toy-soldier.png", imageFit: "contain", size: "feature", x: 6, y: 20, width: 23, height: 54 },
+      { id: `${short}-portrait`, type: "image", title: "Supporter portrait", imageUrl: "/assets/donor-icons/supporter-spotlight-placeholder.png", imageFit: "cover", size: "feature", x: 6, y: 20, width: 23, height: 54 },
       { id: `${short}-story`, type: "message", eyebrow: "WEALTH · WISDOM · WORK", title: "Francesca Vera", body: "Francesca supports the museum as a financial donor, including tribute gifts in memory of those who have passed away; a Power of Play Tour Ambassador; and a Table Host for the Every Day is Child’s Play Ask Event Luncheon.", size: "feature", x: 34, y: 20, width: 60, height: 51, fontFamily: "Libre Baskerville", fontSize: 24 },
       { id: `${short}-footer`, type: "footer", title: "WITH GRATITUDE.", size: "compact", x: 12, y: 85, width: 76, height: 7, fontFamily: "DM Sans", fontSize: 12 }
     ]
@@ -314,14 +313,14 @@ function partnershipSpotlightBoard(orientation: "Portrait" | "Landscape"): Donor
     textFinish: "cut-brass",
     panels: portrait ? [
       { id: `${short}-heading`, type: "heading", title: "A PARTNERSHIP FOR PLAY", size: "feature", x: 9, y: 6, width: 82, height: 9, fontFamily: "Cinzel", fontSize: 30 },
-      { id: `${short}-portrait`, type: "image", title: "Supporter photo", imageUrl: "/assets/donor-icons/toy-soldier.png", imageFit: "contain", size: "feature", x: 22, y: 18, width: 56, height: 27 },
+      { id: `${short}-portrait`, type: "image", title: "Supporter photo", imageUrl: "/assets/donor-icons/supporter-spotlight-placeholder.png", imageFit: "cover", size: "feature", x: 22, y: 18, width: 56, height: 27 },
       { id: `${short}-supporters`, type: "supporters-heading", title: "WITH GRATITUDE", size: "compact", x: 13, y: 48, width: 74, height: 5, fontFamily: "DM Sans", fontSize: 12 },
       { id: `${short}-names`, type: "donors", title: "", size: "feature", columns: 1, rows: 1, donorIds: ["toy-explorer-5"], x: 13, y: 53, width: 74, height: 9, fontFamily: "Cormorant Garamond", fontSize: 30, donorDividerOpacity: 0 },
       { id: `${short}-pledge`, type: "message", eyebrow: "EXPLORE LEVEL · CLASS OF 2026", title: "$5,000 per year for five years", body: "A multi-year pledge of unrestricted funds helps keep play and imagination within reach for Stockton’s children.", size: "feature", x: 12, y: 64, width: 76, height: 21, fontFamily: "Libre Baskerville", fontSize: 22 },
       { id: `${short}-footer`, type: "footer", title: "With gratitude from the Children’s Museum of Stockton.", size: "compact", x: 10, y: 90, width: 80, height: 6, fontFamily: "DM Sans", fontSize: 12, footerIconPlacement: "both" }
     ] : [
       { id: `${short}-heading`, type: "heading", title: "A PARTNERSHIP FOR PLAY", size: "feature", x: 6, y: 6, width: 88, height: 10, fontFamily: "Cinzel", fontSize: 36 },
-      { id: `${short}-portrait`, type: "image", title: "Supporter photo", imageUrl: "/assets/donor-icons/toy-soldier.png", imageFit: "contain", size: "feature", x: 6, y: 21, width: 29, height: 53 },
+      { id: `${short}-portrait`, type: "image", title: "Supporter photo", imageUrl: "/assets/donor-icons/supporter-spotlight-placeholder.png", imageFit: "cover", size: "feature", x: 6, y: 21, width: 29, height: 53 },
       { id: `${short}-supporters`, type: "supporters-heading", title: "WITH GRATITUDE", size: "compact", x: 41, y: 21, width: 51, height: 5, fontFamily: "DM Sans", fontSize: 12 },
       { id: `${short}-names`, type: "donors", title: "", size: "feature", columns: 1, rows: 1, donorIds: ["toy-explorer-5"], x: 41, y: 26, width: 51, height: 12, fontFamily: "Cormorant Garamond", fontSize: 32, donorDividerOpacity: 0 },
       { id: `${short}-pledge`, type: "message", eyebrow: "EXPLORE LEVEL · CLASS OF 2026", title: "$5,000 per year for five years", body: "A multi-year pledge of unrestricted funds helps keep play and imagination within reach for Stockton’s children.", size: "feature", x: 40, y: 42, width: 53, height: 29, fontFamily: "Libre Baskerville", fontSize: 24 },
@@ -526,7 +525,7 @@ export const initialState: LanternState = {
     source: "camera",
     frame: { x: 24, y: 13, width: 65, height: 80, crop: { scale: 1.4, x: 6, y: -34 }, maskShape: "rectangle", rotation: -1, mirrorX: false },
     chromaKey: { enabled: false, color: "#18a558", similarity: 0.34, smoothness: 0.12, spill: 0.18 },
-    effects: { background: "remove", blur: 18, segmentationThreshold: 0.42, segmentationFeather: 0.18, accessory: "none", glassesEnabled: false, glassesStyle: "classic", partyHatEnabled: false, hatEnabled: false, hatStyle: "party", wizardSpringiness: .56, wizardDamping: .7, faceTracking: false, puppetPreview: false, trackingDebug: false, trackedPointsOverlay: false, trackingCameraUnderlay: true, costumeEnabled: false, costumeId: "costume-talking-teddy" }
+    effects: { background: "original", blur: 18, segmentationThreshold: 0.42, segmentationFeather: 0.18, accessory: "none", glassesEnabled: false, glassesStyle: "classic", partyHatEnabled: false, hatEnabled: false, hatStyle: "party", wizardSpringiness: .56, wizardDamping: .7, faceTracking: false, puppetPreview: false, trackingDebug: false, trackedPointsOverlay: false, trackingCameraUnderlay: false, costumeEnabled: false, costumeId: "costume-talking-teddy" }
   },
   effectStudio: {
     costumes: seededCostumes.map((costume) => structuredClone(costume)),

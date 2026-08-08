@@ -248,7 +248,18 @@ function drawPiece(
         }
       } else {
         ellipse(context, 0, 0, unit * .43, unit * .48, piece.color, piece.accentColor, Math.max(2, unit * .06));
-        for (let toe = -1; toe <= 1; toe += 1) ellipse(context, toe * unit * .2, -unit * .35, unit * .12, unit * .17, piece.color);
+        const hand = frame.hands.find((candidate) => candidate.side === piece.side);
+        if (hand?.fingertips.length) {
+          hand.fingertips.forEach((tip) => {
+            const point = pointInCanvas(tip, frame.width, frame.height);
+            if (!point) return;
+            const target = { x: point.x - x, y: point.y - y };
+            roundedLine(context, { x: target.x * .42, y: target.y * .42 }, { x: target.x * .74, y: target.y * .74 }, Math.max(2, unit * .085), piece.color, piece.accentColor);
+            ellipse(context, target.x * .78, target.y * .78, unit * .09, unit * .12, piece.color, piece.accentColor, Math.max(1, unit * .025));
+          });
+        } else {
+          for (let toe = -2; toe <= 2; toe += 1) ellipse(context, toe * unit * .14, -unit * .35, unit * .1, unit * .15, piece.color);
+        }
       }
       break;
     case "palm":
@@ -263,6 +274,10 @@ function drawPiece(
       }
       break;
     }
+    case "body":
+      ellipse(context, 0, 0, unit * .92, unit * 1.16, piece.color, piece.accentColor, Math.max(3, unit * .06));
+      ellipse(context, 0, unit * .08, unit * .52, unit * .7, piece.accentColor ?? piece.color);
+      break;
     default:
       ellipse(context, 0, 0, unit * .25, unit * .25, piece.color, piece.accentColor);
   }

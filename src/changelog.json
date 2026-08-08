@@ -1,5 +1,31 @@
 [
   {
+    "id": "DEV-0171",
+    "title": "Improve editor, broadcast, and schedule workflows",
+    "summary": "Fixed hosted board images and editor clipping, added a supporter spotlight placeholder, improved live effects defaults and tracking performance, simplified schedules, and refined visitor-message, vocabulary, and theme controls.",
+    "author": "Codex",
+    "createdAt": "Aug 8, 2026, 12:59 AM",
+    "areas": [
+      "Board Editor",
+      "Broadcast",
+      "Schedule",
+      "Settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/costumeRenderer.ts",
+      "src/effectStudio.ts",
+      "src/host/lanternHost.ts",
+      "src/phase3Schedule.ts",
+      "src/sampleData.ts",
+      "src/styles.css",
+      "src/types.ts",
+      "public/assets/donor-icons/supporter-spotlight-placeholder.png"
+    ],
+    "tests": "npm run build; scripts/phase3-schedule-fixture.mjs; all scripts/test-*.mjs fixtures"
+  },
+  {
     "id": "DEV-0170",
     "title": "Remove unrelated WallTrace assets",
     "summary": "Removed unrelated WallTrace and surface-lock pages, assets, and duplicate deployment workflow from the Recognition Boards repository.",

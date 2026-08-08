@@ -10,7 +10,7 @@ import type {
   TrackingCalibrationProfile
 } from "./types";
 
-export const PHASE4_CONTENT_VERSION = 7;
+export const PHASE4_CONTENT_VERSION = 8;
 export const EFFECT_STUDIO_SEED_TIMESTAMP = "2026-08-06T00:00:00.000Z";
 
 export const CALIBRATION_POSES: Array<{ id: CalibrationPose; label: string; instruction: string }> = [
@@ -96,8 +96,8 @@ export const seededCostumes: CostumeDefinition[] = [
     ],
     pieces: [
       piece("teddy-head-backplate", "Head backplate", "head-backplate", "nose", { boneId: "teddy-head", color: "#a96b3c", accentColor: "#6e3e23", zIndex: 1, scale: 1.16 }),
-      piece("teddy-left-ear", "Left outer ear", "ear", "left-ear", { boneId: "teddy-left-ear", side: "left", color: "#a96b3c", accentColor: "#efb87e", zIndex: 2, scale: 1.08 }),
-      piece("teddy-right-ear", "Right outer ear", "ear", "right-ear", { boneId: "teddy-right-ear", side: "right", color: "#a96b3c", accentColor: "#efb87e", zIndex: 2, scale: 1.08 }),
+      piece("teddy-left-ear", "Left outer ear", "ear", "left-ear", { boneId: "teddy-left-ear", side: "left", color: "#a96b3c", accentColor: "#efb87e", x: -0.24, y: -0.5, zIndex: 2, scale: 1.22 }),
+      piece("teddy-right-ear", "Right outer ear", "ear", "right-ear", { boneId: "teddy-right-ear", side: "right", color: "#a96b3c", accentColor: "#efb87e", x: 0.24, y: -0.5, zIndex: 2, scale: 1.22 }),
       piece("teddy-left-cheek", "Left cheek", "cheek", "left-eye", { side: "left", color: "#dc8b72", accentColor: "#f5b49d", x: -0.14, y: 0.22, zIndex: 5, scale: 0.78 }),
       piece("teddy-right-cheek", "Right cheek", "cheek", "right-eye", { side: "right", color: "#dc8b72", accentColor: "#f5b49d", x: 0.14, y: 0.22, zIndex: 5, scale: 0.78 }),
       piece("teddy-muzzle", "Muzzle patch", "muzzle", "nose", { color: "#efc18f", accentColor: "#fff1d7", y: 0.2, zIndex: 4, scale: 1.05 }),
@@ -116,7 +116,10 @@ export const seededCostumes: CostumeDefinition[] = [
       piece("teddy-left-hand", "Left paw", "hand", "left-hand", { side: "left", color: "#a96b3c", accentColor: "#efc18f", boneId: "teddy-left-paw", zIndex: 30, scale: 1.08 }),
       piece("teddy-right-hand", "Right paw", "hand", "right-hand", { side: "right", color: "#a96b3c", accentColor: "#efc18f", boneId: "teddy-right-paw", zIndex: 30, scale: 1.08 }),
       piece("teddy-left-palm", "Left paw pad", "palm", "left-hand", { side: "left", color: "#edb27e", accentColor: "#f6cfaa", boneId: "teddy-left-paw", zIndex: 31, scale: 0.62 }),
-      piece("teddy-right-palm", "Right paw pad", "palm", "right-hand", { side: "right", color: "#edb27e", accentColor: "#f6cfaa", boneId: "teddy-right-paw", zIndex: 31, scale: 0.62 })
+      piece("teddy-right-palm", "Right paw pad", "palm", "right-hand", { side: "right", color: "#edb27e", accentColor: "#f6cfaa", boneId: "teddy-right-paw", zIndex: 31, scale: 0.62 }),
+      piece("teddy-chest", "Teddy chest", "body", "chest", { color: "#a96b3c", accentColor: "#efb87e", y: 0.5, zIndex: 0, scale: 1.7 }),
+      piece("teddy-left-arm", "Left upper arm", "forearm", "left-shoulder", { side: "left", color: "#a96b3c", accentColor: "#6e3e23", zIndex: 12, scale: 1 }),
+      piece("teddy-right-arm", "Right upper arm", "forearm", "right-shoulder", { side: "right", color: "#a96b3c", accentColor: "#6e3e23", zIndex: 12, scale: 1 })
     ]
   },
   {
