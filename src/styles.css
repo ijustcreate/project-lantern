@@ -7252,6 +7252,14 @@ textarea:focus-visible,
 .direct-donor-name .board-donor-preview-icon { color: var(--board-donor-accent); }
 .direct-donor-name .board-donor-custom-icon { width: 1.2em; height: 1.2em; flex: none; object-fit: contain; }
 
+.panel-donor-star { min-width: 0; min-height: 0; padding: 0; overflow: visible; }
+.direct-star-donor { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.direct-star-donor > img, .direct-star-placeholder { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 3px rgba(5, 28, 52, .38)); transform: scale(1.36); }
+.direct-star-placeholder { display: grid; place-items: center; color: #f3bc1f; font-size: min(16cqw, 82cqh); line-height: 1; }
+.direct-star-donor-name { position: absolute; z-index: 1; inset: 22% 11% 21%; display: grid; place-items: center; overflow: hidden; color: var(--star-donor-color); font-size: min(var(--star-donor-font-size), 12cqw, 22cqh); font-weight: 800; line-height: 1.02; letter-spacing: .025em; text-align: center; text-transform: uppercase; }
+.direct-star-donor-name .donor-name-line { white-space: normal; }
+.direct-board-canvas.text-shadow-enabled .direct-star-donor-name { text-shadow: var(--board-text-shadow-x) var(--board-text-shadow-y) var(--board-text-shadow-blur) rgb(255 255 255 / .26); }
+
 .board-animation-grow-shrink .board-donor-name-text { animation: board-donor-grow-shrink 3.6s ease-in-out infinite; }
 .board-animation-slow-shimmer .board-donor-name-text {
   background: linear-gradient(108deg, var(--board-donor-name) 25%, var(--board-donor-name) 40%, color-mix(in srgb, var(--board-donor-accent) 80%, white) 50%, var(--board-donor-name) 60%, var(--board-donor-name) 75%);
@@ -11747,7 +11755,7 @@ textarea:focus-visible,
 .theme-light .donor-setup-head h2 { color: #fff; }
 .panel-tier-filter > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }.panel-tier-filter button { min-height: 30px; padding: 0 10px; border: 1px solid var(--border,var(--line)); border-radius: 999px; color: var(--muted,#a4aec7); background: rgba(255,255,255,.035); font-size: 9px; font-weight: 750; }.panel-tier-filter button.selected { color: #071722; border-color: #67d9dc; background: #67d9dc; }
 
-.direct-board-canvas.palette-brigade-blue { color: #fff6df; background: linear-gradient(145deg,#1679a6,#082f50); outline-color: #f4c45d; }.direct-board-canvas.palette-brigade-red { color: #fff6df; background: linear-gradient(145deg,#c54b39,#661d20); outline-color: #f4c45d; }.direct-board-canvas.palette-brigade-sunshine { color: #173f61; background: linear-gradient(145deg,#f4ca61,#c87712); outline-color: #173f61; }.direct-board-canvas.palette-brigade-cream { color: #173f61; background: linear-gradient(145deg,#fffaf0,#ead9b8); outline-color: #1575a2; }
+.direct-board-canvas.palette-brigade-blue { color: #fff6df; background: linear-gradient(145deg,#1679a6,#082f50); outline-color: #f4c45d; }.direct-board-canvas.palette-brigade-red { color: #fff6df; background: linear-gradient(145deg,#c54b39,#661d20); outline-color: #f4c45d; }.direct-board-canvas.palette-brigade-sunshine { color: #173f61; background: linear-gradient(145deg,#f4ca61,#c87712); outline-color: #173f61; }.direct-board-canvas.palette-brigade-cream { color: #173f61; background: linear-gradient(145deg,#fffaf0,#ead9b8); outline-color: #1575a2; }.direct-board-canvas.palette-legacy-navy { color: #fff6df; background: linear-gradient(145deg,#0a68b1,#043b73); outline-color: #8ed3df; }.direct-board-canvas.palette-legacy-sky { color: #173f61; background: linear-gradient(145deg,#6eaae1,#397bb8); outline-color: #1a5d91; }
 .direct-board-canvas[class*="palette-brigade-"]::before, .direct-board-canvas[class*="palette-brigade-"]::after { position: absolute; z-index: 1; left: -4%; width: 108%; height: 5px; content: ""; border-radius: 50%; pointer-events: none; opacity: .35; transform: rotate(-2deg); }.direct-board-canvas[class*="palette-brigade-"]::before { top: 3%; background: var(--board-palette-secondary); }.direct-board-canvas[class*="palette-brigade-"]::after { bottom: 3%; background: var(--board-palette-accent); }.direct-board-canvas[class*="palette-brigade-"] .board-eyebrow { color: var(--board-palette-secondary); }.direct-board-canvas[class*="palette-brigade-"] .board-copy,.direct-board-canvas[class*="palette-brigade-"] .direct-donor-name small { color: var(--board-palette-muted); }
 
 @media (max-width: 1250px) {

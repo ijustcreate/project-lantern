@@ -488,8 +488,8 @@ function drawMuseumBoard(
   }
 
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
-  else if (!chalkboard && !["brigade-cream", "brigade-sunshine"].includes(activeProgram?.palette ?? "")) drawBoardStars(context, width, height, screen, animationTime);
-  if (activeProgram?.palette && activeProgram.palette !== "classic") drawBrigadeAccents(context, width, height, palette);
+  else if (!chalkboard && !["brigade-cream", "brigade-sunshine", "legacy-navy", "legacy-sky"].includes(activeProgram?.palette ?? "")) drawBoardStars(context, width, height, screen, animationTime);
+  if (activeProgram?.palette?.startsWith("brigade-")) drawBrigadeAccents(context, width, height, palette);
   if (activeProgram?.donorScrollEnabled ?? screen?.donorScrollEnabled) {
     drawScrollingDonorBoard(context, width, height, donors, state, isPortrait, scale, activeProgram, screen!, animationTime);
     return;
@@ -787,6 +787,47 @@ function drawComposableBoard(
       }
     }
 
+    if (panel.type === "donor-star") {
+      const donor = panel.donorId ? donors.find((candidate) => candidate.id === panel.donorId) : undefined;
+      const name = donor?.name ?? panel.title;
+      const starImage = panel.imageUrl ?? "/assets/donor-icons/star.png";
+      context.save();
+      context.shadowColor = "rgba(7, 27, 53, .55)";
+      context.shadowBlur = Math.max(5, Math.min(contentWidth, panelHeight) * .08);
+      context.shadowOffsetY = Math.max(2, Math.min(contentWidth, panelHeight) * .035);
+      const starBleed = .18;
+      drawBoardPanelImage(
+        context,
+        starImage,
+        left - contentWidth * starBleed,
+        y - panelHeight * starBleed,
+        contentWidth * (1 + starBleed * 2),
+        panelHeight * (1 + starBleed * 2),
+        panel.imageFit ?? "contain"
+      );
+      context.restore();
+      context.textAlign = "center";
+      const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / 900));
+      const presentation = resolveBoardDonorPresentation(program, donor?.id ?? panel.id, {
+        fontFamily: panel.fontFamily ?? font,
+        nameColor: panelTextColor ?? "#201708",
+        accentColor: panelTextColor ?? "#201708"
+      });
+      context.font = `700 ${starFontSize}px ${presentation.fontFamily}, Inter, sans-serif`;
+      drawBoardDonorName(
+        context,
+        name.toUpperCase(),
+        centerX,
+        centerY + starFontSize * .08,
+        contentWidth * .7,
+        starFontSize,
+        Math.max(7, Math.round(starFontSize * .56)),
+        presentation,
+        animationTime,
+        donor?.id ?? panel.id
+      );
+    }
+
     if (panel.type === "footer") {
       context.textAlign = "center";
       context.fillStyle = panelTextColor ?? gold;
@@ -801,7 +842,9 @@ function drawComposableBoard(
 
 function prepareBoardPanelImages(state: LanternState, onReady: () => void) {
   state.boardPrograms.flatMap((program) => program.panels ?? []).forEach((panel) => {
-    const source = panel.type === "image" ? panel.imageUrl : undefined;
+    const source = panel.type === "image" || panel.type === "donor-star"
+      ? panel.imageUrl ?? (panel.type === "donor-star" ? "/assets/donor-icons/star.png" : undefined)
+      : undefined;
     if (!source) return;
     const cached = boardPanelImageCache.get(source);
     if (cached) {
@@ -2228,6 +2271,12 @@ interface ResolvedBoardPalette {
 }
 
 function resolveBoardPalette(palette: LanternState["boardPrograms"][number]["palette"], visualStyle: LanternState["board"]["visualStyle"]): ResolvedBoardPalette {
+  if (palette === "legacy-navy") return {
+    background: "#07579a", gradientStart: "#0a68b1", gradientEnd: "#043b73", text: "#fff6df", accent: "#f2bd22", secondary: "#4da6bf", muted: "#c7e0e7", frame: "rgba(149, 208, 221, .72)", panelTint: "rgba(255, 255, 255, .06)"
+  };
+  if (palette === "legacy-sky") return {
+    background: "#4b8fd0", gradientStart: "#6eaae1", gradientEnd: "#397bb8", text: "#173f61", accent: "#f4bd18", secondary: "#0d5c91", muted: "#dceefa", frame: "rgba(23, 63, 97, .42)", panelTint: "rgba(255, 255, 255, .12)"
+  };
   if (palette === "brigade-blue") return {
     background: "#0c537a", gradientStart: "#1679a6", gradientEnd: "#082f50", text: "#fff6df", accent: "#f4c45d", secondary: "#f06b55", muted: "#d8edf0", frame: "rgba(244, 196, 93, .78)", panelTint: "rgba(255, 246, 223, .10)"
   };

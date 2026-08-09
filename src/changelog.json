@@ -1,5 +1,26 @@
 [
   {
+    "id": "DEV-0174",
+    "title": "Create legacy donor recognition boards",
+    "summary": "Added 42 historical legacy donor records with unknown gift amounts, recreated the portrait and landscape star walls with editable image-backed stars, and added a two-column legacy honor roll.",
+    "author": "Codex",
+    "createdAt": "Aug 8, 2026, 10:31 PM",
+    "areas": [
+      "Donors",
+      "Board Editor",
+      "Displays"
+    ],
+    "files": [
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; browser visual verification of both star walls and the portrait honor roll"
+  },
+  {
     "id": "DEV-0173",
     "title": "Restore full-width week calendar",
     "summary": "Removed the calendar pan indicator from the week grid flow so weekday columns render at their intended full width.",

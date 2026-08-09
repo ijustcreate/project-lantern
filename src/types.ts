@@ -37,6 +37,8 @@ export interface Donor {
   groupId?: string;
   donationType?: "Cash" | "In-kind" | "Sponsorship" | "Legacy" | "Volunteer";
   amount?: number;
+  /** The historical donor's gift amount was not recorded. */
+  amountUnknown?: boolean;
   donations?: DonationRecord[];
   displayIds?: ScreenId[];
   /** Boards whose donor rosters include this donor. Display placement is derived from the board. */
@@ -268,10 +270,10 @@ export interface DonorBoardProgram {
   textShadowDistance?: number;
   givingProgramId?: string;
   templatePurpose?: "roster" | "level" | "story" | "invitation" | "good-deeds";
-  palette?: "classic" | "brigade-blue" | "brigade-red" | "brigade-sunshine" | "brigade-cream";
+  palette?: "classic" | "brigade-blue" | "brigade-red" | "brigade-sunshine" | "brigade-cream" | "legacy-navy" | "legacy-sky";
 }
 
-export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image";
+export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image" | "donor-star";
 
 export interface BoardPanel {
   id: string;
@@ -283,6 +285,8 @@ export interface BoardPanel {
   columns?: 1 | 2 | 3 | 4;
   rows?: number;
   donorIds?: string[];
+  /** One donor positioned on an image-backed recognition star. */
+  donorId?: string;
   /** Dynamically includes matching tiers from the board roster as membership changes. */
   donorTierFilter?: string[];
   footerIconPlacement?: "left" | "both";

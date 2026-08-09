@@ -1,4 +1,4 @@
-import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, initialState, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -9,7 +9,7 @@ import { normalizeEffectStudioState, normalizePhase4LiveEffects, PHASE4_CONTENT_
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
-const DEMO_DATA_VERSION = "7";
+const DEMO_DATA_VERSION = "8";
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
 const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
@@ -876,13 +876,16 @@ export function normalizeState(state: LanternState): LanternState {
   const needsDonorDomainMigration = incomingContentVersion < 5;
   const needsPhase3ContentMigration = incomingContentVersion < PHASE3_CONTENT_VERSION;
   const needsEffectStudioMigration = incomingContentVersion < PHASE4_CONTENT_VERSION;
+  const needsLegacyDonorStarsMigration = incomingContentVersion < LEGACY_DONOR_STARS_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
   const donorMigration = needsLegacyContentMigration
     ? migrateOfficialDonors(incomingDonors, initialState.donors)
     : { donors: incomingDonors, aliases: new Map<string, string>() };
-  const donors = donorMigration.donors;
+  const donors = needsLegacyDonorStarsMigration
+    ? appendMissingById(donorMigration.donors, legacyDonors)
+    : donorMigration.donors;
   const donorAliases = donorMigration.aliases;
 
   const incomingPrograms = state.boardPrograms ?? initialState.boardPrograms;
@@ -905,7 +908,10 @@ export function normalizeState(state: LanternState): LanternState {
   const migratedPrograms = needsLegacyContentMigration
     ? appendMissingById(retainedPrograms, brigadeBoardPrograms)
     : retainedPrograms;
-  const normalizedBoardPrograms = migratedPrograms.map((program) => ({
+  const programsWithLegacyDonorWalls = needsLegacyDonorStarsMigration
+    ? appendMissingById(migratedPrograms, legacyBoardPrograms)
+    : migratedPrograms;
+  const normalizedBoardPrograms = programsWithLegacyDonorWalls.map((program) => ({
     ...program,
     donorIds: remapDonorIds(program.donorIds, donorAliases) ?? [],
     panels: program.panels?.map((panel) => panel.donorIds
@@ -991,8 +997,16 @@ export function normalizeState(state: LanternState): LanternState {
       lastHeartbeat: screen.lastHeartbeat,
       currentRevision: screen.currentRevision
     } : screen;
+    const legacyStarWall = needsLegacyDonorStarsMigration
+      ? id === "display-1"
+        ? { boardProgramId: "board-legacy-stars-photo-1", assignment: "Legacy donor star wall", style: "donor-wall" as const }
+        : id === "display-2"
+          ? { boardProgramId: "board-legacy-stars-photo-2", assignment: "Legacy donor star wall", style: "donor-wall" as const }
+          : undefined
+      : undefined;
     return [id, {
       ...migratedScreen,
+      ...legacyStarWall,
       donorIds: remapDonorIds(migratedScreen.donorIds, donorAliases) ?? [],
       donorSubtextVisibility: Object.fromEntries(Object.entries(migratedScreen.donorSubtextVisibility ?? {}).map(([donorId, visible]) => [donorAliases.get(donorId) ?? donorId, visible]))
     }];
@@ -1085,6 +1099,7 @@ export function normalizeState(state: LanternState): LanternState {
     donors: donors.map((donor) => {
       const hasReceivedGift = Boolean(donor.donations?.length) || Boolean(donor.amount && donor.amount > 0);
       const pledgeOnly = Boolean(donor.givingProgramId) && !hasReceivedGift;
+      const amountUnknown = donor.amountUnknown === true;
       const seededBrigadeDonor = initialState.donors.some((seeded) => seeded.id === donor.id && seeded.givingProgramId === "toy-soldier-brigade");
       const migratedDonor = needsDonorDomainMigration && seededBrigadeDonor
         ? withBrigadeOpeningPayment(donor)
@@ -1103,12 +1118,13 @@ export function normalizeState(state: LanternState): LanternState {
       return {
         ...profile,
         tags: (donor.tags ?? []).filter((tag) => tag.trim().toLocaleLowerCase() !== "unrestricted support"),
-        donationDate: pledgeOnly ? undefined : donor.donationDate ?? donor.since,
+        donationDate: pledgeOnly || amountUnknown ? undefined : donor.donationDate ?? donor.since,
         basicInfo: donor.basicInfo ?? donor.subtext ?? donor.note,
         expandedInfo: donor.expandedInfo ?? "",
-        donations: migratedDonor.donations ?? (!pledgeOnly && donor.amount ? [{ id: `${donor.id}-legacy-gift`, date: donor.donationDate ?? donor.since, amount: donor.amount, type: donor.donationType ?? "Cash", note: donor.note }] : []),
+        donations: migratedDonor.donations ?? (!pledgeOnly && !amountUnknown && donor.amount ? [{ id: `${donor.id}-legacy-gift`, date: donor.donationDate ?? donor.since, amount: donor.amount, type: donor.donationType ?? "Cash", note: donor.note }] : []),
         donationType: pledgeOnly ? undefined : donor.donationType ?? (donor.category === "Legacy" ? "Legacy" : donor.category === "Corporate" ? "Sponsorship" : "Cash"),
-        amount: pledgeOnly ? undefined : donor.amount ?? 0,
+        amount: pledgeOnly || amountUnknown ? undefined : donor.amount ?? 0,
+        amountUnknown: amountUnknown || undefined,
         // Older donor records predate per-display assignment and belonged to every screen.
         // An explicitly empty array now means the donor is intentionally shown nowhere.
         displayIds: donor.displayIds ?? Object.keys(remappedScreens),

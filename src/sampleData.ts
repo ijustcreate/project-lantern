@@ -1,10 +1,12 @@
-import type { Donor, DonorBoardProgram, GivingProgram, LanternState, SavedAnnouncement, SavedBlip } from "./types";
+import type { BoardPanel, Donor, DonorBoardProgram, GivingProgram, LanternState, SavedAnnouncement, SavedBlip } from "./types";
 import { makeBrigadeOpeningPayment } from "./donorDomain";
 import { PHASE4_CONTENT_VERSION, seededCostumes } from "./effectStudio";
 import { createPhase3DemoSchedule, phase3Announcements } from "./phase3Schedule";
 import { seededVisitorMessages } from "./visitorMessages";
 
-export const LANTERN_CONTENT_VERSION = PHASE4_CONTENT_VERSION;
+/** Installs the historical donor walls without altering existing donor records. */
+export const LEGACY_DONOR_STARS_CONTENT_VERSION = 9;
+export const LANTERN_CONTENT_VERSION = LEGACY_DONOR_STARS_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -109,6 +111,181 @@ const officialDonors = [...exploreDonors, ...playDonors];
 const exploreIds = exploreDonors.map((donor) => donor.id);
 const playIds = playDonors.map((donor) => donor.id);
 const brigadeIds = [...exploreIds, ...playIds];
+
+const legacyPhoto1Names = [
+  "San Joaquin Sheriff's Dept. Community",
+  "PFL 2000",
+  "Bank of Agriculture",
+  "Palm and Ben Lema Family",
+  "Thompson-Hysell Engineers",
+  "Mr. Trucker",
+  "Banks Michael (?)",
+  "Roman Marilyn Harvey",
+  "Fritz & Phyllis Grupe",
+  "Bob & Barbara Byington",
+  "Kalia Nalan (?)",
+  "Harvey/Oster (?)",
+  "Human Services Agency",
+  "Blair Family Accent Interiors",
+  "Ed Sprague's Gold Medal Classic",
+  "Dick & Sharon Leland",
+  "Neudeck Family",
+  "Salazar & Crane Families",
+  "Kathleen Penninger (?)",
+  "The Bogetti Family",
+  "Roger Lang",
+  "Karen McKee"
+] as const;
+
+const legacyPhoto2Names = [
+  "D.S.S. (?)",
+  "Stockton Scavenger",
+  "John Quinn Food 4 Less",
+  "Kaiser Permanente",
+  "Dr. Thomas Nguyen / Dr. Anh Le",
+  "Carr Electric",
+  "Bank of Stockton",
+  "John & Merrill Hambright",
+  "Unilever",
+  "… B.J. (?)",
+  "Teresa Marrelo (?)",
+  "City of Stockton",
+  "Kenzie Belcher",
+  "Dean & Kathy Jansen",
+  "PM Cedar Products",
+  "Mackenzie Mell Snyder (?)",
+  "Cortopassi",
+  "U.O.P.",
+  "Kavanaugh Family",
+  "Lester Fleming"
+] as const;
+
+function makeLegacyDonor(name: string, photo: 1 | 2, index: number): Donor {
+  const id = `legacy-photo${photo}-${String(index + 1).padStart(2, "0")}`;
+  return {
+    id,
+    name,
+    tier: "Legacy donor",
+    category: "Legacy",
+    active: true,
+    since: "Legacy",
+    note: "Legacy donor added from a historical recognition star wall. Donation amount unknown.",
+    basicInfo: "Legacy donor · historical recognition wall",
+    expandedInfo: "This donor was transcribed from a historical recognition wall. Donation amount is unknown.",
+    tags: ["Legacy donor", "Historical star wall", `Photo ${photo}`],
+    donationType: "Legacy",
+    amountUnknown: true,
+    donations: [],
+    displayIds: [],
+    boardIds: ["board-legacy-donors-portrait", `board-legacy-stars-photo-${photo}`],
+    recognitionOrder: index + 1
+  };
+}
+
+export const legacyDonors: Donor[] = [
+  ...legacyPhoto1Names.map((name, index) => makeLegacyDonor(name, 1, index)),
+  ...legacyPhoto2Names.map((name, index) => makeLegacyDonor(name, 2, index))
+];
+
+const legacyPhoto1Ids = legacyDonors.filter((donor) => donor.id.startsWith("legacy-photo1-")).map((donor) => donor.id);
+const legacyPhoto2Ids = legacyDonors.filter((donor) => donor.id.startsWith("legacy-photo2-")).map((donor) => donor.id);
+const legacyDonorIds = legacyDonors.map((donor) => donor.id);
+
+function legacyStarPanel(donorId: string, position: [number, number, number, number], fontSize = 12): BoardPanel {
+  const donor = legacyDonors.find((item) => item.id === donorId);
+  return {
+    id: `${donorId}-star`,
+    type: "donor-star",
+    title: donor?.name ?? "Legacy donor",
+    donorId,
+    size: "standard",
+    x: position[0],
+    y: position[1],
+    width: position[2],
+    height: position[3],
+    imageUrl: "/assets/donor-icons/star.png",
+    imageFit: "contain",
+    fontFamily: "DM Sans",
+    fontSize,
+    textColor: "#201708"
+  };
+}
+
+function legacyStarWallBoard(
+  photo: 1 | 2,
+  orientation: "Portrait" | "Landscape",
+  positions: Array<[number, number, number, number]>
+): DonorBoardProgram {
+  const ids = photo === 1 ? legacyPhoto1Ids : legacyPhoto2Ids;
+  return {
+    id: `board-legacy-stars-photo-${photo}`,
+    name: `Legacy Donor Star Wall · ${orientation}`,
+    orientation,
+    heading: "LEGACY DONORS",
+    subtitle: "A WALL OF GRATITUDE",
+    description: "Historical donor recognition stars",
+    footer: "With gratitude to the friends who helped build our museum.",
+    columns: 1,
+    donorIds: ids,
+    active: true,
+    templatePurpose: "roster",
+    palette: photo === 1 ? "legacy-navy" : "legacy-sky",
+    fontFamily: "DM Sans",
+    showFrame: false,
+    showIcons: false,
+    showSubtext: false,
+    donorPresentation: { fontFamily: "DM Sans", nameColor: "#201708", accentColor: "#201708", recognitionIcon: "none" },
+    panels: ids.map((id, index) => legacyStarPanel(id, positions[index], orientation === "Portrait" ? 8 : 10))
+  };
+}
+
+const legacyPhoto1StarPositions: Array<[number, number, number, number]> = [
+  [22, 4, 25, 14], [8, 23, 19, 12], [43, 7, 19, 12], [61, 4, 26, 15], [74, 22, 19, 13],
+  [31, 24, 18, 12], [48, 28, 17, 12], [7, 37, 20, 12], [24, 39, 18, 11], [48, 39, 24, 15],
+  [74, 39, 20, 12], [82, 31, 15, 12], [37, 48, 20, 13], [10, 53, 21, 13], [28, 59, 18, 12],
+  [57, 56, 22, 14], [77, 55, 18, 12], [7, 67, 20, 12], [39, 67, 20, 13], [76, 70, 19, 12],
+  [11, 79, 17, 11], [27, 78, 19, 12]
+];
+
+const legacyPhoto2StarPositions: Array<[number, number, number, number]> = [
+  [3, 5, 16, 22], [19, 7, 17, 22], [35, 5, 17, 22], [53, 6, 17, 22], [75, 8, 17, 24],
+  [10, 24, 17, 22], [27, 25, 17, 22], [47, 26, 17, 23], [75, 30, 17, 23], [2, 40, 15, 22],
+  [22, 39, 16, 21], [39, 43, 17, 23], [60, 44, 17, 24], [7, 57, 16, 22], [24, 56, 17, 23],
+  [42, 63, 17, 24], [58, 57, 17, 23], [76, 57, 17, 23], [84, 43, 16, 22], [43, 75, 17, 24]
+];
+
+function legacyDonorsBoard(): DonorBoardProgram {
+  return {
+    id: "board-legacy-donors-portrait",
+    name: "Legacy Donors · Honor Roll · Portrait",
+    orientation: "Portrait",
+    heading: "LEGACY DONORS",
+    subtitle: "WITH GRATITUDE",
+    description: "Honoring the friends who helped build our museum.",
+    footer: "Donation amounts are not recorded for this historical recognition list.",
+    columns: 2,
+    donorIds: legacyDonorIds,
+    active: true,
+    templatePurpose: "roster",
+    palette: "classic",
+    fontFamily: "Libre Baskerville",
+    showFrame: true,
+    showIcons: false,
+    showSubtext: false,
+    panels: [
+      { id: "legacy-list-heading", type: "heading", title: "LEGACY DONORS", size: "feature", x: 8, y: 5, width: 84, height: 8, fontFamily: "Cinzel", fontSize: 34 },
+      { id: "legacy-list-intro", type: "message", eyebrow: "WITH GRATITUDE", title: "A lasting foundation for play and discovery", body: "We honor the historical supporters whose generosity helped our museum grow.", size: "standard", x: 10, y: 14, width: 80, height: 11, fontFamily: "Libre Baskerville", fontSize: 21 },
+      { id: "legacy-list-donors", type: "donors", title: "", size: "feature", columns: 2, rows: 21, donorIds: legacyDonorIds, x: 8, y: 28, width: 84, height: 61, fontFamily: "Libre Baskerville", fontSize: 16, donorDividerOpacity: 10 },
+      { id: "legacy-list-footer", type: "footer", title: "WITH GRATITUDE TO OUR LEGACY DONORS", size: "compact", x: 10, y: 92, width: 80, height: 4, fontFamily: "DM Sans", fontSize: 10, footerIconPlacement: "both" }
+    ]
+  };
+}
+
+export const legacyBoardPrograms: DonorBoardProgram[] = [
+  legacyStarWallBoard(1, "Portrait", legacyPhoto1StarPositions),
+  legacyStarWallBoard(2, "Landscape", legacyPhoto2StarPositions),
+  legacyDonorsBoard()
+];
 
 function fullRosterBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgram {
   const portrait = orientation === "Portrait";
@@ -447,7 +624,7 @@ export const initialState: LanternState = {
   publishedAt: "Class of 2026 launch",
   nextScheduledEvent: "Toy Soldier Brigade recognition at 9:00 AM",
   lastBackup: "Ready for museum review",
-  donors: officialDonors,
+  donors: [...officialDonors, ...legacyDonors],
   users: localDemoUsers,
   userPreferences: defaultUserPreferences,
   auditHistory: [],
@@ -502,7 +679,7 @@ export const initialState: LanternState = {
     socialValue: "childrensmuseumstockton.org",
     footerVisibility: { portraitHours: true, portraitImpact: true, landscapeTheater: true, landscapeHours: true, landscapeMembership: true, landscapeSocial: true }
   },
-  boardPrograms: brigadeBoardPrograms,
+  boardPrograms: [...brigadeBoardPrograms, ...legacyBoardPrograms],
   schedules: createPhase3DemoSchedule(),
   savedAnnouncements: [...brigadeAnnouncements, ...phase3Announcements],
   announcement: { ...brigadeAnnouncements[0], active: false },
@@ -534,15 +711,15 @@ export const initialState: LanternState = {
   },
   screens: {
     "display-1": {
-      id: "display-1", label: "Welcome Gallery", orientation: "Portrait", resolution: "1080 x 1920", assignment: "Toy Soldier Brigade welcome wall", style: "donor-wall",
+      id: "display-1", label: "Welcome Gallery", orientation: "Portrait", resolution: "1080 x 1920", assignment: "Legacy donor star wall", style: "donor-wall",
       backgroundCrop: { scale: 1, x: 0, y: 0 }, layoutScale: 100, brightness: 78, currentRevision: 19, renderer: "WebGL2", quality: "Balanced", fps: 0, status: "offline", enabled: true,
-      boardProgramId: "board-toy-soldier-portrait", donorIds: [], donorRosterConfigured: false, customHeading: "", customSubheading: "", fontFamily: "Quicksand", nameSize: 30, columns: 2,
+      boardProgramId: "board-legacy-stars-photo-1", donorIds: [], donorRosterConfigured: false, customHeading: "", customSubheading: "", fontFamily: "DM Sans", nameSize: 30, columns: 2,
       donorScrollEnabled: false, donorScrollSpeed: 4, particleAnimationEnabled: false, particleDriftDirection: "natural", particleDriftSpeed: 3, particleGravity: 3, showIcons: false, donorIconStyle: "circle", donorIconPlacement: "left", showSubtext: false, showFrame: true, textFinish: "flat", textShadowEnabled: false
     },
     "display-2": {
-      id: "display-2", label: "Discovery Hall", orientation: "Landscape", resolution: "1920 x 1080", assignment: "Toy Soldier Brigade recognition wall", style: "donor-wall",
+      id: "display-2", label: "Discovery Hall", orientation: "Landscape", resolution: "1920 x 1080", assignment: "Legacy donor star wall", style: "donor-wall",
       backgroundCrop: { scale: 1, x: 0, y: 0 }, layoutScale: 100, brightness: 78, currentRevision: 19, renderer: "WebGL2", quality: "Showcase", fps: 0, status: "offline", enabled: true,
-      boardProgramId: "board-toy-soldier-landscape", donorIds: [], donorRosterConfigured: false, customHeading: "", customSubheading: "", fontFamily: "Quicksand", nameSize: 28, columns: 2,
+      boardProgramId: "board-legacy-stars-photo-2", donorIds: [], donorRosterConfigured: false, customHeading: "", customSubheading: "", fontFamily: "DM Sans", nameSize: 28, columns: 2,
       donorScrollEnabled: false, donorScrollSpeed: 4, particleAnimationEnabled: false, particleDriftDirection: "natural", particleDriftSpeed: 3, particleGravity: 3, showIcons: false, donorIconStyle: "circle", donorIconPlacement: "left", showSubtext: false, showFrame: true, textFinish: "flat", textShadowEnabled: false
     }
   },

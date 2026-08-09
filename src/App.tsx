@@ -2401,7 +2401,7 @@ function DonorsView({
                       return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${board.name} · ${isOn ? "Included" : "Not included"}`} key={board.id}><input type="checkbox" aria-label={board.name} checked={isOn} onChange={() => toggleDonorBoard(donor.id, board.id)} /><LayoutDashboard size={11} /><span>{board.name}</span></label>;
                     })}</div></details></div>
                     <span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span>
-                    <small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small>
+                    <small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small>
                     {!!visibleTags.length && <div className="donor-meta-row">{visibleTags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}{hiddenTagCount > 0 && <span className="tag-chip donor-more-tags" title={(donor.tags ?? []).slice(visibleTags.length).join(", ")}>+{hiddenTagCount} more</span>}</div>}
                   </>
                 )}
@@ -2933,13 +2933,25 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
   );
 }
 
-const boardPanelTypes: BoardPanelType[] = ["heading", "supporters-heading", "donors", "message", "story", "footer", "image"];
+const boardPanelTypes: BoardPanelType[] = ["heading", "supporters-heading", "donors", "message", "story", "footer", "image", "donor-star"];
 
 function boardPanelLabel(type: BoardPanelType) {
-  return ({ heading: "Heading", "supporters-heading": "Subheader", donors: "Donor list", message: "Message", story: "Feature story", footer: "Footer", image: "Image / PNG" })[type];
+  const labels: Record<BoardPanelType, string> = {
+    heading: "Heading",
+    "supporters-heading": "Subheader",
+    donors: "Donor list",
+    message: "Message",
+    story: "Feature story",
+    footer: "Footer",
+    image: "Image / PNG",
+    "donor-star": "Donor star"
+  };
+  return labels[type];
 }
 
 function boardPreviewPalette(palette: DonorBoardProgram["palette"]) {
+  if (palette === "legacy-navy") return { text: "#fff6df", accent: "#f2bd22", secondary: "#4da6bf", muted: "#c7e0e7" };
+  if (palette === "legacy-sky") return { text: "#173f61", accent: "#f4bd18", secondary: "#0d5c91", muted: "#dceefa" };
   if (palette === "brigade-blue") return { text: "#fff6df", accent: "#f4c45d", secondary: "#f06b55", muted: "#d8edf0" };
   if (palette === "brigade-red") return { text: "#fff6df", accent: "#f4c45d", secondary: "#72c6d5", muted: "#f7dcd1" };
   if (palette === "brigade-sunshine") return { text: "#173f61", accent: "#a82f28", secondary: "#146f98", muted: "#3f5669" };
@@ -2965,11 +2977,12 @@ function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): Bo
     message: { id, type, eyebrow: "A NOTE OF GRATITUDE", title: "Your support makes discovery possible", body: "Thank you for investing in our community.", size: "standard" },
     story: { id, type, eyebrow: "FEATURED STORY", title: "A brighter future, built together", body: "Share a short story about the impact your supporters made possible.", size: "standard" },
     footer: { id, type, title: "TOGETHER, WE MAKE A DIFFERENCE.", size: "compact" },
-    image: { id, type, title: "Image", size: "standard", imageFit: "contain" }
+    image: { id, type, title: "Image", size: "standard", imageFit: "contain" },
+    "donor-star": { id, type, title: "Select a donor", size: "standard", imageUrl: "/assets/donor-icons/star.png", imageFit: "contain", fontFamily: "DM Sans", fontSize: 14, textColor: "#201708" }
   };
   const dimensions: Record<BoardPanelType, { width: number; height: number }> = {
     heading: { width: 54, height: 20 }, "supporters-heading": { width: 70, height: 8 }, donors: { width: 70, height: 44 }, message: { width: 48, height: 24 },
-    story: { width: 55, height: 30 }, footer: { width: 70, height: 12 }, image: { width: 34, height: 32 }
+    story: { width: 55, height: 30 }, footer: { width: 70, height: 12 }, image: { width: 34, height: 32 }, "donor-star": { width: 22, height: 18 }
   };
   const { width, height } = dimensions[type];
   return { ...templates[type], x: Math.max(0, Math.min(100 - width, position.x)), y: Math.max(0, Math.min(100 - height, position.y)), width, height };
@@ -3345,6 +3358,7 @@ function ThemeStudio({
                   <label className="field"><span>Body copy <InfoDot text="Keep visitor-facing stories concise enough to read at a glance." /></span><textarea rows={5} value={selectedPanel.body ?? ""} onChange={(event) => patchPanel(selectedPanel.id, { body: event.target.value })} /></label>
                 </>}
                 {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> {selectedPanel.imageUrl ? "Replace image" : "Choose PNG or image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the element." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
+                {selectedPanel.type === "donor-star" && <><LabeledSelect label="Star donor" info="The name layered over this star. You can also click the name on the board to edit it." value={selectedPanel.donorId ?? ""} options={selectedProgram.donorIds} optionLabels={Object.fromEntries(state.donors.filter((donor) => selectedProgram.donorIds.includes(donor.id)).map((donor) => [donor.id, donor.name]))} onChange={(donorId) => patchPanel(selectedPanel.id, { donorId, title: state.donors.find((donor) => donor.id === donorId)?.name ?? selectedPanel.title })} /><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Replace star image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label></>}
                 {selectedPanel.type === "footer" && <div className="field"><span>Footer icons</span><SegmentedControl value={selectedPanel.footerIconPlacement ?? "left"} options={[["left", "Left side"], ["both", "Both sides"]]} onChange={(footerIconPlacement) => patchPanel(selectedPanel.id, { footerIconPlacement: footerIconPlacement as BoardPanel["footerIconPlacement"] })} /></div>}
               </section>
               {selectedPanel.type === "donors" && <>
@@ -3368,13 +3382,13 @@ function ThemeStudio({
                   </div>
                 </details>
               </>}
-              {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><Slider label="Font size" info="Changes text size without changing the element box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div></div></details>}
+              {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><Slider label="Font size" info="Changes text size without changing the element box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : selectedPanel.type === "donor-star" ? 14 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "donor-star" ? "#201708" : selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div></div></details>}
               <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0); patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) }); }} /></label>)}</div><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={() => removePanel(selectedPanel.id)}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
             <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
-              <LabeledSelect label="Board palette" info="A saved visitor-facing color system for this board." value={selectedProgram.palette ?? "classic"} options={["classic", "brigade-blue", "brigade-red", "brigade-sunshine", "brigade-cream"]} optionLabels={{ classic: "Lantern classic", "brigade-blue": "Brigade blue", "brigade-red": "Brigade red", "brigade-sunshine": "Brigade sunshine", "brigade-cream": "Brigade cream" }} onChange={(palette) => patchProgram({ palette: palette as DonorBoardProgram["palette"] })} />
+              <LabeledSelect label="Board palette" info="A saved visitor-facing color system for this board." value={selectedProgram.palette ?? "classic"} options={["classic", "brigade-blue", "brigade-red", "brigade-sunshine", "brigade-cream", "legacy-navy", "legacy-sky"]} optionLabels={{ classic: "Lantern classic", "brigade-blue": "Brigade blue", "brigade-red": "Brigade red", "brigade-sunshine": "Brigade sunshine", "brigade-cream": "Brigade cream", "legacy-navy": "Legacy navy wall", "legacy-sky": "Legacy sky wall" }} onChange={(palette) => patchProgram({ palette: palette as DonorBoardProgram["palette"] })} />
               <LabeledSelect label="Board typeface" info="Default typeface for elements that do not use an override." value={selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchProgram({ fontFamily: fontFamily as DonorBoardProgram["fontFamily"] })} />
             </div></details>
             <details className="inspector-details"><summary>Background & frame</summary><div className="inspector-block">
@@ -3593,6 +3607,7 @@ function DirectBoardCanvas({
         {panel.type === "message" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
         {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><div><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></div></>}
         {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={resolveProjectAssetUrl(panel.imageUrl)} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
+        {panel.type === "donor-star" && <DirectStarDonorName donor={state.donors.find((donor) => donor.id === panel.donorId)} fallbackName={panel.title} imageUrl={panel.imageUrl} fontFamily={panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "DM Sans"} fontSize={panel.fontSize ?? 14} textColor={panel.textColor ?? "#201708"} onRename={onRenameDonor} />}
         {panel.type === "footer" && <div className={`direct-footer-line icons-${panel.footerIconPlacement ?? "left"}`}><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />{panel.footerIconPlacement === "both" && <span className="footer-heart">♡</span>}<span /></div>}
       </section>)}
     </div>
@@ -3642,6 +3657,22 @@ function DirectBoardDonorName({ donor, display, program, palette, onRename }: {
       : <span className="board-donor-preview-icon" aria-hidden="true">{recognitionIconGlyph(presentation.recognitionIcon)}</span>)}
     <EditableBoardText value={donor.name} animation={presentation.animation} multiline onCommit={(value) => onRename(donor.id, value)} />
     {donorSubtextVisibleForDisplay(display, donor.id) && donor.subtext && <small>{donor.subtext}</small>}
+  </div>;
+}
+
+function DirectStarDonorName({ donor, fallbackName, imageUrl, fontFamily, fontSize, textColor, onRename }: {
+  donor?: Donor;
+  fallbackName: string;
+  imageUrl?: string;
+  fontFamily: string;
+  fontSize: number;
+  textColor: string;
+  onRename: (donorId: string, name: string) => void;
+}) {
+  const name = donor?.name ?? fallbackName;
+  return <div className="direct-star-donor" style={{ "--star-donor-font-size": `${fontSize}px`, "--star-donor-color": textColor, fontFamily } as React.CSSProperties}>
+    {imageUrl ? <img src={resolveProjectAssetUrl(imageUrl)} alt="" /> : <span className="direct-star-placeholder">★</span>}
+    <EditableBoardText className="direct-star-donor-name" value={name} multiline onCommit={(value) => donor && onRename(donor.id, value)} />
   </div>;
 }
 
