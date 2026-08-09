@@ -9714,7 +9714,7 @@ textarea:focus-visible,
 .schedule-week .week-scroll::-webkit-scrollbar-thumb { border: 3px solid rgba(8, 13, 39, .78); border-radius: 8px; background: linear-gradient(#6ad4e9, #7659d4); }
 .schedule-week .week-scroll { position: relative; touch-action: none; cursor: grab; }
 .schedule-week .week-scroll:active { cursor: grabbing; }
-.calendar-pan-dots { position: sticky; z-index: 9; top: 50%; left: 5px; display: grid; gap: 4px; width: 8px; margin-top: -16px; pointer-events: none; }
+.calendar-pan-dots { position: absolute; z-index: 9; top: 50%; left: 5px; display: grid; gap: 4px; width: 8px; margin-top: -16px; pointer-events: none; }
 .calendar-pan-dots i { width: 4px; height: 4px; border-radius: 50%; background: #6ad4e9; box-shadow: 0 0 8px rgba(106, 212, 233, .7); }
 .schedule-week .week-header { grid-template-columns: 48px repeat(7, minmax(0, 1fr)); }
 .schedule-week .week-columns { width: 100%; min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); }

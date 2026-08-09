@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0173",
+    "title": "Restore full-width week calendar",
+    "summary": "Removed the calendar pan indicator from the week grid flow so weekday columns render at their intended full width.",
+    "author": "Codex",
+    "createdAt": "Aug 8, 2026, 9:08 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Local browser measurement: 978px week grid with seven 140px day columns; npm run build"
+  },
+  {
     "id": "DEV-0172",
     "title": "Fix readable calendar event lanes",
     "summary": "Week-view events now use stable display lanes so brief announcements and blips no longer squeeze scheduled boards into narrow strips.",
