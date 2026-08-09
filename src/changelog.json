@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0172",
+    "title": "Fix readable calendar event lanes",
+    "summary": "Week-view events now use stable display lanes so brief announcements and blips no longer squeeze scheduled boards into narrow strips.",
+    "author": "Codex",
+    "createdAt": "Aug 8, 2026, 8:13 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; node scripts/phase3-schedule-fixture.mjs; git diff --check"
+  },
+  {
     "id": "DEV-0171",
     "title": "Improve editor, broadcast, and schedule workflows",
     "summary": "Fixed hosted board images and editor clipping, added a supporter spotlight placeholder, improved live effects defaults and tracking performance, simplified schedules, and refined visitor-message, vocabulary, and theme controls.",

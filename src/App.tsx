@@ -7211,10 +7211,14 @@ function ScheduleView({
 }
 
 function scheduleLane(entry: ScheduleEntry, entries: ScheduleEntry[]) {
-  const overlaps = entries
-    .filter((candidate) => timeToMinutes(candidate.startTime) < timeToMinutes(entry.endTime) && timeToMinutes(candidate.endTime) > timeToMinutes(entry.startTime))
-    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime) || a.id.localeCompare(b.id));
-  return { index: Math.max(0, overlaps.findIndex((candidate) => candidate.id === entry.id)), count: Math.max(1, overlaps.length) };
+  // Calendar lanes represent displays, rather than every item that happens to
+  // touch an event's time range. A long board used to inherit a lane for each
+  // short announcement or blip within it, reducing normal all-day schedules
+  // to unreadable slivers. Items for a display deliberately share its lane;
+  // their timing and content treatment still make short overlays identifiable.
+  const targets = [...new Set(entries.map((candidate) => candidate.target))].sort();
+  const index = targets.indexOf(entry.target);
+  return { index: Math.max(0, index), count: Math.max(1, targets.length) };
 }
 
 function timeToMinutes(value: string) { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; }
