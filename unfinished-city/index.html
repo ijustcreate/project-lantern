@@ -1,0 +1,95 @@
+<!doctype html>
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" name="viewport"/>
+<meta content="#171c24" name="theme-color"/>
+<title>The Unfinished City — Mobile Test Build</title>
+
+
+<link href="styles.css" rel="stylesheet"/><script>window.__ucBooted=false;
+window.addEventListener('error',function(e){
+ const b=document.getElementById('boot-error'); if(b){b.hidden=false;b.innerHTML='<h2>The city hit a bug</h2><p>'+String(e.message||e.error||'Unknown error')+'</p><p>Reload once. If it repeats, send a screenshot of this box.</p>'}
+});</script></head>
+<body>
+<div class="error-box" hidden="" id="boot-error"></div>
+<div class="app">
+<header>
+<div class="brand-row"><div aria-hidden="true" class="logo"><i></i><i></i><i></i></div><h1>The Unfinished City</h1><span class="ready" id="ready">STARTING…</span></div>
+<nav aria-label="Main views">
+<button aria-selected="true" data-view="city">▦ CITY</button>
+<button data-view="workshop">✦ WORKSHOP</button>
+<button data-view="history">↶ HISTORY</button>
+<button data-view="staff">⚙ STAFF</button>
+</nav>
+</header>
+<main>
+<section class="view" id="view-city">
+<div class="panel">
+<div class="summary"><p id="summary">Loading the inherited city…</p><button id="hear" type="button">Hear it</button></div>
+<div class="hud"><span class="pill" id="day-pill">DAY 1</span><span class="pill" id="weather-pill">☀ CLEAR</span><span class="pill" id="people-pill">1 CHILD</span><span class="pill" id="promise-pill">0 INTENTIONS</span><span class="pill" id="storage-pill">MEMORY</span></div>
+<div class="map-wrap">
+<div aria-label="Interactive city map" class="map" id="map" role="grid"></div>
+<div class="map-note" id="map-note">◆ Pick a loose part. Valid places will light up.</div>
+</div>
+</div>
+<div aria-label="City systems" class="metrics">
+<div class="metric"><b id="m-water">0</b><span>WATER</span></div><div class="metric"><b id="m-move">0</b><span>MOVEMENT</span></div><div class="metric"><b id="m-shelter">0</b><span>SHELTER</span></div><div class="metric"><b id="m-habitat">0</b><span>HABITAT</span></div>
+</div>
+<div class="actions">
+<button class="action-btn" disabled="" id="undo">UNDO</button><button class="action-btn" disabled="" id="redo">REDO</button>
+<button class="action-btn" id="join">ANOTHER CHILD JOINS</button><button class="action-btn primary" id="respond">LET CITY RESPOND</button><button class="action-btn purple" id="intention">LEAVE AN INTENTION</button>
+</div>
+<div class="panel section">
+<span class="kicker">LOOSE PARTS</span><h3>What will you put into the city?</h3>
+<div class="filters"><button class="filter-btn active" data-filter="all">ALL</button><button class="filter-btn" data-filter="build">BUILD</button><button class="filter-btn" data-filter="restore">RESTORE</button><button class="filter-btn" data-filter="connect">CONNECT</button></div>
+<div class="parts" id="parts"></div>
+<div class="story" id="story">This city was here before you. One western home cannot reach the commons, and the wetland has begun to shrink.</div>
+</div>
+</section>
+<section class="view" hidden="" id="view-workshop">
+<div class="panel section">
+<span class="kicker">SPRITE WORKSHOP</span><h2>Make someone new.</h2><p class="muted">Tap pixels to draw. Your entity stays only in this browser—no account, face, voice, or personal profile.</p>
+<div class="workshop-layout">
+<div>
+<div aria-label="12 by 12 pixel editor" class="pixel-editor" id="pixel-editor"></div>
+<div class="palette" id="palette"></div>
+<div class="tools"><button class="tool-btn active" data-tool="draw">PENCIL</button><button class="tool-btn" data-tool="erase">ERASER</button><button class="tool-btn" id="mirror">MIRROR</button><button class="tool-btn" id="clear-sprite">CLEAR</button></div>
+</div>
+<div>
+<div class="preview"><div class="preview-box" id="sprite-preview"></div><div><strong id="sprite-name">Bright Walker</strong><p class="muted">Live city preview</p></div></div>
+<div class="form-grid" style="margin-top:10px">
+<label>BEHAVIOR<select id="behavior"><option value="wander">Wander</option><option value="garden">Seek gardens</option><option value="water">Follow water</option><option value="repair">Investigate repair</option><option value="gather">Visit gatherings</option></select></label>
+<label>SOCIAL STYLE<select id="social"><option value="curious">Curious</option><option value="helpful">Helpful</option><option value="quiet">Quiet</option><option value="playful">Playful</option></select></label>
+</div>
+<div class="actions" style="grid-template-columns:1fr 1fr;margin-top:12px"><button class="action-btn" id="new-name">NEW NAME</button><button class="action-btn primary" id="save-sprite">SAVE + RELEASE</button></div>
+<div class="log" id="saved-sprites"></div>
+</div>
+</div>
+</div>
+</section>
+<section class="view" hidden="" id="view-history">
+<div class="panel section"><span class="kicker">CITY MEMORY</span><h2>What previous visitors changed.</h2><p class="muted">The city stores anonymous events, not visitor identities.</p><div class="log" id="history"></div></div>
+</section>
+<section class="view" hidden="" id="view-staff">
+<div class="panel section"><span class="kicker">STAFF + ACCESS</span><h2>Keep the city usable.</h2>
+<div class="parts">
+<button class="part-card" id="contrast"><strong>High contrast</strong><small>Patterns and stronger color separation.</small></button>
+<button class="part-card" id="motion"><strong>Reduced motion</strong><small>Stops decorative animation.</small></button>
+<button class="part-card" id="large"><strong>Larger city</strong><small>Enlarges tiles and text.</small></button>
+<button class="part-card" id="export"><strong>Export state</strong><small>Downloads anonymous city JSON.</small></button>
+<button class="part-card" id="reset"><strong>Reset prototype</strong><small>Returns to the seeded city.</small></button>
+</div>
+<div class="story" id="diagnostics" style="margin-top:15px"></div>
+</div>
+</section>
+</main>
+</div>
+<div class="modal-backdrop" hidden="" id="modal-backdrop"><div aria-labelledby="modal-title" aria-modal="true" class="modal" role="dialog"><header><h2 id="modal-title">Choose</h2><button aria-label="Close" id="modal-close">×</button></header><div id="modal-body"></div></div></div>
+<div class="toast" hidden="" id="toast"></div>
+<noscript><div class="error-box"><h2>JavaScript is blocked here.</h2><p>Open the hosted link in Safari or Chrome. The downloadable document preview cannot run the city.</p></div></noscript>
+
+<script defer="True" src="data.js"></script><script defer="True" src="app.js"></script></body>
+</html>
