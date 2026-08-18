@@ -1026,6 +1026,21 @@ function ControlCenter() {
             setAnnouncementTab("messages");
             setView("announcements");
           }}
+          onPutAnnouncementOnScreen={(announcementId) => {
+            const saved = state.savedAnnouncements.find((item) => item.id === announcementId);
+            if (!saved) return;
+            updateState((current) => ({
+              ...current,
+              announcement: {
+                ...saved,
+                target: "all",
+                targets: Object.keys(current.screens),
+                active: true,
+                startedAt: new Date().toISOString()
+              }
+            }));
+            if (saved.startSoundUrl) playSound(saved.startSoundUrl, saved.sfxVolume);
+          }}
           onOpenBlips={() => { setAnnouncementTab("blips"); setView("announcements"); }}
           visitorMessagePanel={<>
             <VisitorMessageManager

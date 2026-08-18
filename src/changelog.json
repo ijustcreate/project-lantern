@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0223",
+    "title": "Send program messages directly to displays",
+    "summary": "Added a dedicated Put on screen action to the Toy Soldier Brigade announcement showcase so selected program messages run immediately on every display without scheduling or using Blips.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:42 PM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Announcements",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/BrigadeView.tsx",
+      "src/components/BrigadeView.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0222",
     "title": "Allow board panel overscan",
     "summary": "Panels can now move and resize beyond the board edge while the board canvas clips off-board content, enabling intentional overlaps.",

@@ -9,6 +9,7 @@ import {
   Maximize2,
   Megaphone,
   MessageSquare,
+  Monitor,
   Pencil,
   RotateCcw,
   Save,
@@ -109,6 +110,7 @@ export function BrigadeView({
   onManageDonors,
   onOpenBoard,
   onUseAnnouncement,
+  onPutAnnouncementOnScreen,
   onOpenBlips,
   visitorMessagePanel
 }: {
@@ -117,6 +119,7 @@ export function BrigadeView({
   onManageDonors: () => void;
   onOpenBoard: (boardId: string) => void;
   onUseAnnouncement: (announcementId: string) => void;
+  onPutAnnouncementOnScreen: (announcementId: string) => void;
   onOpenBlips: () => void;
   visitorMessagePanel?: ReactNode;
 }) {
@@ -433,7 +436,7 @@ export function BrigadeView({
         {sectionEditButton("announcements", "Announcement Kit")}
         <div className="brigade-section-heading">
           <div><p className="brigade-section-kicker">Announcement kit</p><h3>{landing.announcementsTitle ?? "Polished messages, ready when the moment arrives."}</h3></div>
-          <button type="button" className="brigade-secondary-action compact" onClick={onOpenBlips}><Sparkles size={17} /> View pop announcements</button>
+          <button type="button" className="brigade-secondary-action compact" onClick={onOpenBlips}><Sparkles size={17} /> Browse Blips</button>
         </div>
         <div className="brigade-library-layout">
           <div className="brigade-library-selector">
@@ -445,10 +448,9 @@ export function BrigadeView({
               {announcementGroups(announcements).map(([style, items]) => <optgroup key={style} label={style}>{items.map((announcement) => <option key={announcement.id} value={announcement.id}>{announcement.title}</option>)}</optgroup>)}
             </select>
             {selectedAnnouncement && <div className="brigade-library-meta"><span>{selectedAnnouncement.style}</span><span>{selectedAnnouncement.durationMinutes} min</span><span>{selectedAnnouncement.priority}</span></div>}
-            <p>Prepared messages open in the live announcement composer before anything is sent.</p>
-            <button type="button" className="brigade-secondary-action" disabled={!selectedAnnouncement} onClick={() => selectedAnnouncement && onUseAnnouncement(selectedAnnouncement.id)}><Megaphone size={15} /> Use this template</button>
+            <p>Program messages stay here. Put the selected message on screen whenever the moment is right.</p>
           </div>
-          {selectedAnnouncement && <AnnouncementPreview announcement={selectedAnnouncement} art={BOARD_ART[Math.max(0, announcements.findIndex((item) => item.id === selectedAnnouncement.id)) % BOARD_ART.length]} />}
+          {selectedAnnouncement && <AnnouncementPreview announcement={selectedAnnouncement} art={BOARD_ART[Math.max(0, announcements.findIndex((item) => item.id === selectedAnnouncement.id)) % BOARD_ART.length]} onPutOnScreen={() => onPutAnnouncementOnScreen(selectedAnnouncement.id)} />}
         </div>
         {editor("announcements", <div className="brigade-edit-fields">
           <BrigadeField label="Section headline"><input value={landing.announcementsTitle ?? "Polished messages, ready when the moment arrives."} onChange={(event) => patchLanding({ announcementsTitle: event.target.value })} /></BrigadeField>
@@ -498,7 +500,7 @@ function BoardPreview({ template, program, art }: { template: LanternState["boar
   </article>;
 }
 
-function AnnouncementPreview({ announcement, art }: { announcement: SavedAnnouncement; art: string }) {
+function AnnouncementPreview({ announcement, art, onPutOnScreen }: { announcement: SavedAnnouncement; art: string; onPutOnScreen: () => void }) {
   const style = {
     "--brigade-announcement-bg": announcement.backgroundColor ?? "#1675a8",
     "--brigade-announcement-ink": announcement.textColor ?? "#ffffff"
@@ -507,6 +509,7 @@ function AnnouncementPreview({ announcement, art }: { announcement: SavedAnnounc
     <span className="brigade-preview-orientation">Live preview · {announcement.style}</span>
     <img src={assetUrl(art)} alt="" aria-hidden="true" />
     <div><small>Toy Soldier Brigade</small><strong>{announcement.title}</strong><p>{announcement.message}</p>{announcement.details && <em>{announcement.details}</em>}</div>
+    <button type="button" className="brigade-put-on-screen" onClick={onPutOnScreen} title="Show this prepared message on every display now"><Monitor size={16} /><span>Put on screen</span><small>All displays · {announcement.durationMinutes} min</small></button>
   </article>;
 }
 

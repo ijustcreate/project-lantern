@@ -208,6 +208,8 @@
 
 .brigade-floating-preview.announcement { color: var(--brigade-announcement-ink); background: linear-gradient(140deg, var(--brigade-announcement-bg), color-mix(in srgb, var(--brigade-announcement-bg) 58%, #172d4a)); }
 .brigade-floating-preview.announcement > div em { max-width: 36ch; opacity: .7; font-size: 9px; font-style: normal; line-height: 1.4; }
+.brigade-put-on-screen { position: absolute; z-index: 5; right: 18px; bottom: 17px; display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 6px; min-height: 40px; padding: 7px 11px; border: 1px solid rgba(255,255,255,.62); border-radius: 9px; color: #123451; background: #f7cf68; box-shadow: 0 8px 22px rgba(8,25,47,.24); font: 850 10px/1 Inter, sans-serif; cursor: pointer; }
+.brigade-put-on-screen svg { grid-row: 1 / 3; }.brigade-put-on-screen span { white-space: nowrap; }.brigade-put-on-screen small { grid-column: 2; margin-top: 3px; opacity: .67; font-size: 7px; font-weight: 800; }.brigade-put-on-screen:hover { color: #061a29; background: #ffe090; transform: translateY(-1px); }.brigade-put-on-screen:focus-visible { outline: 3px solid #64dbe3; outline-offset: 3px; }
 
 .brigade-inline-editor {
   position: relative;
@@ -325,6 +327,7 @@
   .brigade-contact-art { min-height: 225px; }
   .brigade-roster-grid { grid-template-columns: 1fr; }
   .brigade-good-deed-banner > button:not(.brigade-section-edit) { justify-self: start; }
+  .brigade-put-on-screen { right: 13px; bottom: 13px; }
 }
 
 @media (max-width: 660px) {
