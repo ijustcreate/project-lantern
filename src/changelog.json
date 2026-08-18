@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0215",
+    "title": "Compact Blip controls and reuse images",
+    "summary": "Reclaimed announcements workspace height with tab tooltips, added Blip type filters, and added a reusable image picker with preview and remove controls.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:53 PM",
+    "areas": [
+      "Announcements",
+      "Blips",
+      "Image library"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0214",
     "title": "Add Blip preview timeline",
     "summary": "Blip previews now include a timeline slider and labeled jump points for opening, countdown, and reveal states.",
