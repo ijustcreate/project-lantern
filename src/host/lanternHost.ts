@@ -1,4 +1,4 @@
-import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -914,15 +914,22 @@ export function normalizeState(state: LanternState): LanternState {
   const needsLegacyDonorStarsMigration = incomingContentVersion < LEGACY_DONOR_STARS_CONTENT_VERSION;
   const needsDonorRosterBoardsMigration = incomingContentVersion < DONOR_ROSTER_BOARDS_CONTENT_VERSION;
   const needsLegacyStarRecovery = incomingContentVersion < LEGACY_STAR_RECOVERY_CONTENT_VERSION;
+  const needsLegacyDonorTagsMigration = incomingContentVersion < LEGACY_DONOR_TAGS_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
   const donorMigration = needsLegacyContentMigration
     ? migrateOfficialDonors(incomingDonors, initialState.donors)
     : { donors: incomingDonors, aliases: new Map<string, string>() };
-  const donors = needsLegacyDonorStarsMigration
+  const starWallDonors = needsLegacyDonorStarsMigration
     ? appendMissingById(donorMigration.donors, legacyDonors)
     : donorMigration.donors;
+  const legacyDonorIds = new Set(legacyDonors.map((donor) => donor.id));
+  const donors = needsLegacyDonorTagsMigration
+    ? starWallDonors.map((donor) => legacyDonorIds.has(donor.id)
+      ? { ...donor, tier: "Legacy donor", category: "Legacy", tags: uniqueStrings(donor.tags, ["Legacy"]) }
+      : donor)
+    : starWallDonors;
   const donorAliases = donorMigration.aliases;
 
   const incomingPrograms = state.boardPrograms ?? initialState.boardPrograms;

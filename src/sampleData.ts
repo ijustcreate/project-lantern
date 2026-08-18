@@ -9,7 +9,9 @@ export const LEGACY_DONOR_STARS_CONTENT_VERSION = 9;
 export const DONOR_ROSTER_BOARDS_CONTENT_VERSION = 10;
 /** One-time recovery for a single accidentally removed legacy recognition star. */
 export const LEGACY_STAR_RECOVERY_CONTENT_VERSION = 11;
-export const LANTERN_CONTENT_VERSION = LEGACY_STAR_RECOVERY_CONTENT_VERSION;
+/** Adds the exact Legacy tag to every donor transcribed from a recognition star. */
+export const LEGACY_DONOR_TAGS_CONTENT_VERSION = 12;
+export const LANTERN_CONTENT_VERSION = LEGACY_DONOR_TAGS_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -175,7 +177,7 @@ function makeLegacyDonor(name: string, photo: 1 | 2, index: number): Donor {
     note: "Legacy donor added from a historical recognition star wall. Donation amount unknown.",
     basicInfo: "Legacy donor · historical recognition wall",
     expandedInfo: "This donor was transcribed from a historical recognition wall. Donation amount is unknown.",
-    tags: ["Legacy donor", "Historical star wall", `Photo ${photo}`],
+    tags: ["Legacy", "Legacy donor", "Historical star wall", `Photo ${photo}`],
     donationType: "Legacy",
     amountUnknown: true,
     donations: [],
@@ -671,7 +673,7 @@ export const initialState: LanternState = {
   recognitionSettings: {
     tiers: ["Explore", "Play"],
     categories: ["Giving Society", "Family", "Individual", "Corporate", "Community", "Legacy"],
-    tags: ["Toy Soldier Brigade", "Class of 2026", "Explore Level", "Play Level", "Five-year pledge"],
+    tags: ["Toy Soldier Brigade", "Class of 2026", "Explore Level", "Play Level", "Five-year pledge", "Legacy"],
     appearance: "warm"
   },
   theme: {
