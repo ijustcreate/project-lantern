@@ -1043,12 +1043,10 @@ export function normalizeState(state: LanternState): LanternState {
         : program;
       return {
         ...donorDomainProgram,
-        // The temporary Custom Annual Commitment level is no longer part of
-        // the recognition vocabulary. Remove it once during the v8 migration
-        // rather than leaving a restorable archived record behind.
-        levels: needsPhase3ContentMigration
-          ? donorDomainProgram.levels.filter((level) => level.id !== "custom-annual")
-          : donorDomainProgram.levels,
+        // The temporary Custom Annual Commitment level is not a supported
+        // recognition tier. Filter it on every load so it cannot reappear
+        // from an older saved state after the migration has already run.
+        levels: donorDomainProgram.levels.filter((level) => level.id !== "custom-annual"),
         spotlightDonorId: donorDomainProgram.spotlightDonorId
           ? donorAliases.get(donorDomainProgram.spotlightDonorId) ?? donorDomainProgram.spotlightDonorId
           : undefined

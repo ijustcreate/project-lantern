@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0189",
+    "title": "Remove the custom annual test tier",
+    "summary": "Stops the temporary Custom Annual Commitment level from being injected or restored from saved recognition data.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:06 AM",
+    "areas": [
+      "Giving levels",
+      "Brigade"
+    ],
+    "files": [
+      "src/components/BrigadeView.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit"
+  },
+  {
     "id": "DEV-0188",
     "title": "Preview boards while scheduling events",
     "summary": "Shows the selected board beside the New/Edit event dialog and updates it when the board or target display changes.",

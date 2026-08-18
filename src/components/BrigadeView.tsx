@@ -17,7 +17,7 @@ import {
   Users,
   X
 } from "lucide-react";
-import type { GivingLevel, GivingProgram, LanternState, SavedAnnouncement } from "../types";
+import type { GivingProgram, LanternState, SavedAnnouncement } from "../types";
 import "./BrigadeView.css";
 
 type BrigadeSection = "hero" | "why" | "contact" | "levels" | "roster" | "boards" | "announcements" | "good-deed";
@@ -44,15 +44,6 @@ interface BrigadeLandingPage {
 }
 
 type BrigadeProgram = GivingProgram & { landingPage?: BrigadeLandingPage };
-
-const DEFAULT_CUSTOM_LEVEL: GivingLevel = {
-  id: "custom-annual",
-  name: "Custom Annual Commitment",
-  annualPledge: 10_000,
-  years: 5,
-  description: "Annual support above the configured threshold, with no maximum.",
-  color: "#8b5db5"
-};
 
 const HERO_ART = [
   "soldier-red.svg",
@@ -98,9 +89,7 @@ function cloneProgram(program: BrigadeProgram): BrigadeProgram {
 }
 
 function resolvedLevels(program: BrigadeProgram) {
-  return program.levels.some((level) => level.id === DEFAULT_CUSTOM_LEVEL.id)
-    ? program.levels
-    : [...program.levels, DEFAULT_CUSTOM_LEVEL];
+  return program.levels.filter((level) => level.id !== "custom-annual");
 }
 
 function panelStyle(layout: BrigadePanelLayout): CSSProperties {
