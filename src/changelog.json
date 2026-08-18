@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0221",
+    "title": "Clarify board font-size control",
+    "summary": "Made the board typography number fields visibly bordered and added dedicated decrease and increase buttons so font-size entry is easy to find and adjust.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:31 PM",
+    "areas": [
+      "Board Editor",
+      "Typography"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0220",
     "title": "Make board panel dragging responsive",
     "summary": "Panel movement now previews locally while dragging and saves the final position once released, preventing text editing work from slowing movement.",

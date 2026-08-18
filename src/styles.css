@@ -7663,9 +7663,17 @@ textarea:focus-visible,
 .panel-type-row .color-override-control { grid-template-columns: 38px 32px; justify-content: start; }
 .panel-type-row .color-override-control input:not([type="color"]) { display: none; }
 .typography-number-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.typography-number-field > div { display: flex; align-items: center; min-height: 34px; border: 1px solid var(--border); border-radius: 7px; background: #0d1726; overflow: hidden; }
-.typography-number-field input { width: 100%; min-width: 0; height: 32px; padding: 0 5px 0 9px; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; font-weight: 750; }
-.typography-number-field b { padding: 0 8px 0 3px; color: var(--muted); font-size: 9px; }
+.typography-number-field > div { display: flex; align-items: center; min-height: 34px; border: 1px solid rgba(112, 164, 193, .58); border-radius: 7px; background: #0a1322; box-shadow: inset 0 0 0 1px rgba(7, 13, 27, .68); overflow: hidden; }
+.typography-number-field > div:focus-within { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(103, 219, 215, .16); }
+.typography-number-field input { width: 100%; min-width: 0; height: 32px; padding: 0 5px; border: 0; outline: 0; color: var(--text); background: #121d31; font: inherit; font-weight: 800; text-align: center; }
+.typography-number-field input::-webkit-inner-spin-button, .typography-number-field input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.typography-number-field input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.typography-number-field b { padding: 0 7px; color: #aebbd3; font-size: 9px; font-weight: 800; }
+.typography-stepper { display: grid; width: 29px; height: 32px; flex: 0 0 29px; place-items: center; padding: 0; border: 0; color: #9adfe0; background: rgba(83, 154, 177, .18); cursor: pointer; }
+.typography-stepper + input { border-left: 1px solid rgba(112, 164, 193, .42); }
+.typography-number-field b + .typography-stepper { border-left: 1px solid rgba(112, 164, 193, .42); }
+.typography-stepper:hover:not(:disabled) { color: #07141d; background: var(--teal); }
+.typography-stepper:disabled { color: #526178; background: rgba(83, 154, 177, .08); cursor: not-allowed; }
 .typography-toolbar { display: flex; gap: 5px; }
 .typography-toolbar button { display: grid; width: 32px; height: 30px; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: #121b33; cursor: pointer; }
 .typography-toolbar button.active { border-color: rgba(121, 202, 198, .76); color: #07131d; background: var(--teal); box-shadow: 0 0 0 1px rgba(121, 202, 198, .22); }

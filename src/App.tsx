@@ -37,6 +37,7 @@ import {
   Megaphone,
   Mic,
   Minimize2,
+  Minus,
   Moon,
   Monitor,
   Music2,
@@ -8807,7 +8808,12 @@ function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, no
 }
 
 function TypographyNumberField({ label, info, value, min, max, step = 1, suffix, onChange }: { label: string; info?: string; value: number; min: number; max: number; step?: number; suffix: string; onChange: (value: number) => void }) {
-  return <label className="field typography-number-field"><span>{label}{info && <InfoDot text={info} />}</span><div><input type="number" aria-label={label} min={min} max={max} step={step} value={value} onChange={(event) => { const next = event.currentTarget.valueAsNumber; if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next))); }} /><b>{suffix}</b></div></label>;
+  const adjust = (direction: -1 | 1) => {
+    const precision = step < 1 ? Math.max(0, String(step).split(".")[1]?.length ?? 0) : 0;
+    const next = Math.max(min, Math.min(max, Number((value + direction * step).toFixed(precision))));
+    onChange(next);
+  };
+  return <label className="field typography-number-field"><span>{label}{info && <InfoDot text={info} />}</span><div><button type="button" className="typography-stepper" aria-label={`Decrease ${label}`} title={`Decrease ${label}`} disabled={value <= min} onClick={() => adjust(-1)}><Minus size={12} /></button><input type="number" aria-label={label} min={min} max={max} step={step} value={value} onChange={(event) => { const next = event.currentTarget.valueAsNumber; if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next))); }} /><b>{suffix}</b><button type="button" className="typography-stepper" aria-label={`Increase ${label}`} title={`Increase ${label}`} disabled={value >= max} onClick={() => adjust(1)}><Plus size={12} /></button></div></label>;
 }
 
 function resolveNextScheduledContent(state: LanternState, screenId: ScreenId, now = new Date()) {
