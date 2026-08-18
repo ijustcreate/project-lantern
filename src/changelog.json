@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0222",
+    "title": "Allow board panel overscan",
+    "summary": "Panels can now move and resize beyond the board edge while the board canvas clips off-board content, enabling intentional overlaps.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:36 PM",
+    "areas": [
+      "Board Editor",
+      "Layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0221",
     "title": "Clarify board font-size control",
     "summary": "Made the board typography number fields visibly bordered and added dedicated decrease and increase buttons so font-size entry is easy to find and adjust.",

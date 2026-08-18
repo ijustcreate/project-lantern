@@ -7683,6 +7683,7 @@ textarea:focus-visible,
 .typography-choice-row .segmented-control button { flex: 1 1 0; padding-inline: 6px; font-size: 9px; }
 .panel-position-grid .field { gap: 3px; }
 .panel-position-grid input { width: 100%; min-width: 0; padding: 7px 5px; border: 1px solid var(--border); border-radius: 5px; background: #0d1726; color: var(--text); }
+.panel-position-note { display: block; margin-top: -1px; color: #8db5bc; font-size: 8px; line-height: 1.35; }
 .image-upload-button { position: relative; overflow: hidden; cursor: pointer; }
 .image-upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .direct-image-panel { display: grid; width: 100%; height: 100%; place-items: center; overflow: hidden; color: #79cac6; font-size: 10px; }
