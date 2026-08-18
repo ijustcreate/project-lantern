@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0183",
+    "title": "Use compact display edit controls",
+    "summary": "Replaced dashboard header Edit Display text buttons with accessible gear buttons to preserve space.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:27 AM",
+    "areas": [
+      "Dashboard",
+      "Display controls"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0182",
     "title": "Compact donor cards and focus board details",
     "summary": "Made the donor roster content-sized and single-line on wide screens, limited the board disclosure to assigned boards, centered delete icons, and moved drag feedback outside its handle.",
