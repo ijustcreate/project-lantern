@@ -3162,16 +3162,24 @@ function ThemeStudio({
 
   const patchPanel = (panelId: string, patch: Partial<BoardPanel>) => {
     if (!selectedProgram) return;
-    const nextPanels = panels.map((panel) => panel.id === panelId ? { ...panel, ...patch } : panel);
-    const nextPanel = nextPanels.find((panel) => panel.id === panelId);
-    const legacyPatch = nextPanel?.type === "heading"
-      ? { heading: "", subtitle: nextPanel.title, description: "" }
-      : nextPanel?.type === "footer"
-        ? { footer: nextPanel.title }
-        : nextPanel?.type === "donors"
-          ? { columns: nextPanel.columns && nextPanel.columns <= 2 ? nextPanel.columns as 1 | 2 : selectedProgram.columns }
-          : {};
-    patchProgram({ panels: nextPanels, ...legacyPatch });
+    const programId = selectedProgram.id;
+    updateState((current) => {
+      const currentProgram = current.boardPrograms.find((program) => program.id === programId);
+      if (!currentProgram) return current;
+      const nextPanels = (currentProgram.panels ?? []).map((panel) => panel.id === panelId ? { ...panel, ...patch } : panel);
+      const nextPanel = nextPanels.find((panel) => panel.id === panelId);
+      const legacyPatch = nextPanel?.type === "heading"
+        ? { heading: "", subtitle: nextPanel.title, description: "" }
+        : nextPanel?.type === "footer"
+          ? { footer: nextPanel.title }
+          : nextPanel?.type === "donors"
+            ? { columns: nextPanel.columns && nextPanel.columns <= 2 ? nextPanel.columns as 1 | 2 : currentProgram.columns }
+            : {};
+      return {
+        ...current,
+        boardPrograms: current.boardPrograms.map((program) => program.id === programId ? { ...program, panels: nextPanels, ...legacyPatch } : program)
+      };
+    });
   };
 
   const addPanel = (type = newPanelType, position?: { x: number; y: number }) => {
@@ -3663,7 +3671,7 @@ function DirectBoardCanvas({
   widgets?: BoardWidget[]; onAddWidget?: (widget: BoardWidget) => void; onSaveWidget?: (name: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const manipulationRef = useRef<{ pointerId: number; moved: boolean } | null>(null);
+  const manipulationRef = useRef<{ pointerId: number; moved: boolean; pending: Map<string, Partial<BoardPanel>> } | null>(null);
   const suppressPanelClickRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
@@ -3701,7 +3709,7 @@ function DirectBoardCanvas({
     const startY = event.clientY;
     const dragTarget = event.currentTarget as HTMLElement;
     dragTarget.setPointerCapture(event.pointerId);
-    manipulationRef.current = { pointerId: event.pointerId, moved: false };
+    manipulationRef.current = { pointerId: event.pointerId, moved: false, pending: new Map() };
     const initial = { x: panel.x ?? 0, y: panel.y ?? 0, width: panel.width ?? 30, height: panel.height ?? 20 };
     const groupedPanels = mode === "move" && panel.groupId ? panels.filter((item) => item.groupId === panel.groupId) : [panel];
     const groupedInitial = new Map(groupedPanels.map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0, width: item.width ?? 30, height: item.height ?? 20 }]));
@@ -3710,10 +3718,19 @@ function DirectBoardCanvas({
       const dx = (pointer.clientX - startX) / rect.width * 100;
       const dy = (pointer.clientY - startY) / rect.height * 100;
       if (Math.abs(pointer.clientX - startX) > 2 || Math.abs(pointer.clientY - startY) > 2) manipulationRef.current.moved = true;
+      const previewPatch = (item: BoardPanel, patch: Partial<BoardPanel>) => {
+        manipulationRef.current?.pending.set(item.id, patch);
+        const element = canvasRef.current?.querySelector<HTMLElement>(`[data-panel-id="${item.id}"]`);
+        if (!element) return;
+        if (patch.x !== undefined) element.style.left = `${patch.x}%`;
+        if (patch.y !== undefined) element.style.top = `${patch.y}%`;
+        if (patch.width !== undefined) element.style.width = `${patch.width}%`;
+        if (patch.height !== undefined) element.style.height = `${patch.height}%`;
+      };
       if (mode === "move") {
         groupedPanels.forEach((item) => {
           const origin = groupedInitial.get(item.id)!;
-          onPatch(item.id, { x: Math.max(0, Math.min(100 - origin.width, origin.x + dx)), y: Math.max(0, Math.min(100 - origin.height, origin.y + dy)) });
+          previewPatch(item, { x: Math.max(0, Math.min(100 - origin.width, origin.x + dx)), y: Math.max(0, Math.min(100 - origin.height, origin.y + dy)) });
         });
         return;
       }
@@ -3722,17 +3739,18 @@ function DirectBoardCanvas({
       if (edge.includes("s")) height = Math.max(4, Math.min(100 - y, initial.height + dy));
       if (edge.includes("w")) { const nextX = Math.max(0, Math.min(initial.x + initial.width - 4, initial.x + dx)); width = initial.width + initial.x - nextX; x = nextX; }
       if (edge.includes("n")) { const nextY = Math.max(0, Math.min(initial.y + initial.height - 4, initial.y + dy)); height = initial.height + initial.y - nextY; y = nextY; }
-      onPatch(panel.id, { x, y, width, height });
+      previewPatch(panel, { x, y, width, height });
     };
     const stop = (pointer: PointerEvent) => {
       if (manipulationRef.current?.pointerId !== pointer.pointerId) return;
-      const moved = manipulationRef.current.moved;
+      const { moved, pending } = manipulationRef.current;
       manipulationRef.current = null;
       if (dragTarget.hasPointerCapture(pointer.pointerId)) dragTarget.releasePointerCapture(pointer.pointerId);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
       window.removeEventListener("pointercancel", stop);
       if (moved) {
+        pending.forEach((patch, panelId) => onPatch(panelId, patch));
         suppressPanelClickRef.current = true;
         window.setTimeout(() => { suppressPanelClickRef.current = false; }, 0);
       }

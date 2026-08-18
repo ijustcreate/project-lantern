@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0220",
+    "title": "Make board panel dragging responsive",
+    "summary": "Panel movement now previews locally while dragging and saves the final position once released, preventing text editing work from slowing movement.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:21 PM",
+    "areas": [
+      "Board Editor",
+      "Performance"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0218",
     "title": "Wrap board text inside panel bounds",
     "summary": "Text panels now wrap within their own bounds by default and include left, center, and right alignment controls in the board editor.",
