@@ -338,11 +338,19 @@ export function createHostChannel(listener: Listener) {
 }
 
 export function publishState(state: LanternState) {
-  saveLanternState(state);
+  const savedLocally = saveLanternState(state);
   queueSharedStateSave(state);
-  const channel = new BroadcastChannel(LANTERN_CHANNEL);
-  channel.postMessage({ type: "state-update", state } satisfies HostMessage);
-  channel.close();
+  const message = { type: "state-update", state } satisfies HostMessage;
+  try {
+    const channel = new BroadcastChannel(LANTERN_CHANNEL);
+    channel.postMessage(message);
+    channel.close();
+  } catch (error) {
+    // Browser privacy settings can block cross-window messaging. The local save
+    // remains valid, and the next open display will read that persisted state.
+    console.warn("Project Lantern could not notify another window of the update.", error);
+  }
+  return savedLocally;
 }
 
 export function targetIncludes(target: TargetScreen, screenId: ScreenId) {

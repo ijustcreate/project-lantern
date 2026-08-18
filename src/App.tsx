@@ -3127,7 +3127,7 @@ function ThemeStudio({
   const [boardSearch, setBoardSearch] = useState("");
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const [boardEditorPan, setBoardEditorPan] = useState({ x: 0, y: 0 });
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "local" | "error">("idle");
   const [pendingProgramDeleteId, setPendingProgramDeleteId] = useState<string | null>(null);
   const [pendingPanelDelete, setPendingPanelDelete] = useState<{ programId: string; ids: string[]; removed: Array<{ panel: BoardPanel; index: number }>; x: number; y: number } | null>(null);
   const [lastDeletedPanels, setLastDeletedPanels] = useState<{ programId: string; removed: Array<{ panel: BoardPanel; index: number }> } | null>(null);
@@ -3422,14 +3422,26 @@ function ThemeStudio({
 
   const saveBoard = async () => {
     setSaveStatus("saving");
-    try {
-      publishState(state);
-      if (canWriteSharedLanternState()) await saveSharedLanternState(state);
-      setSaveStatus("saved");
-      window.setTimeout(() => setSaveStatus("idle"), 2600);
-    } catch {
+    const savedLocally = publishState(state);
+    if (!savedLocally) {
       setSaveStatus("error");
+      return;
     }
+    if (!canWriteSharedLanternState()) {
+      setSaveStatus("local");
+      window.setTimeout(() => setSaveStatus("idle"), 2600);
+      return;
+    }
+    try {
+      await saveSharedLanternState(state);
+      setSaveStatus("saved");
+    } catch (error) {
+      // The local save already succeeded, so keep the operator's edit safe and
+      // accurately report that only the optional shared sync needs a retry.
+      console.warn("Project Lantern saved this board locally but could not sync it.", error);
+      setSaveStatus("local");
+    }
+    window.setTimeout(() => setSaveStatus("idle"), 2600);
   };
 
   const groupedBoardPrograms = [
@@ -3485,7 +3497,7 @@ function ThemeStudio({
         </div>
         <div className="board-save-cluster">
           <button type="button" className="command-button primary compact" disabled={saveStatus === "saving"} onClick={() => void saveBoard()}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : "Save board"}</button>
-          <span className={`board-save-status ${saveStatus}`} role="status">{saveStatus === "saved" ? "Saved for everyone" : saveStatus === "error" ? "Could not save — try again" : ""}</span>
+          <span className={`board-save-status ${saveStatus}`} role="status">{saveStatus === "saved" ? "Saved for everyone" : saveStatus === "local" ? "Saved on this device" : saveStatus === "error" ? "Could not save locally — check browser storage" : ""}</span>
         </div>
       </div>
 

@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0232",
+    "title": "Make Board Editor saves fault tolerant",
+    "summary": "Board edits now persist locally and report their saved state even if optional display synchronization or shared storage is temporarily unavailable.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 4:35 PM",
+    "areas": [
+      "Board Editor",
+      "Data persistence",
+      "Display sync"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build; Board Editor save smoke test"
+  },
+  {
     "id": "DEV-0231",
     "title": "Fit independent legacy star labels",
     "summary": "Legacy donor stars now use independent image and fitted text layers, preserving existing star positions while keeping donor names inside the star-safe area.",
