@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0210",
+    "title": "Refresh open displays after schedule edits",
+    "summary": "Already-open display windows now receive schedule changes immediately, without needing to close and reopen them.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:19 PM",
+    "areas": [
+      "Dashboard",
+      "Display windows",
+      "Scheduling"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0209",
     "title": "Clarify schedule end-date control",
     "summary": "New calendar events now default their end date to today, and the end-date calendar control has a clearly visible button treatment.",

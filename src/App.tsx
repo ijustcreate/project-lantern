@@ -8001,6 +8001,8 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const scheduledSoundRef = useRef<ResolvedScheduledAnnouncement | null>(null);
   const blipSoundKeyRef = useRef("");
   const identifyTimerRef = useRef<number | null>(null);
+  const receivedStateUpdateRef = useRef(false);
+  const heartbeatStateRef = useRef({ fps, liveActive: state.live.active, liveTarget: state.live.target });
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
   const showIdentity = useCallback(() => {
     if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
@@ -8019,7 +8021,9 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         const local = loadLanternState();
         return hydrateLanternMedia(shared ? mergeSharedLanternState(local, shared) : local);
       })
-      .then((hydrated) => mounted && setState(hydrated));
+      // A display can receive a live update before its shared-state bootstrap
+      // finishes. Never let that older bootstrap result roll the display back.
+      .then((hydrated) => mounted && !receivedStateUpdateRef.current && setState(hydrated));
     return () => {
       mounted = false;
       if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
@@ -8040,19 +8044,27 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   }, []);
 
   useEffect(() => {
+    heartbeatStateRef.current = { fps, liveActive: state.live.active, liveTarget: state.live.target };
+  }, [fps, state.live.active, state.live.target]);
+
+  useEffect(() => {
     const channel = createHostChannel((message) => {
-      if (message.type === "state-update") setState(message.state);
+      if (message.type === "state-update") {
+        receivedStateUpdateRef.current = true;
+        setState(message.state);
+      }
       if (message.type === "identify-screen" && message.screenId === screenId) {
         showIdentity();
       }
     });
 
     const heartbeat = () => {
+      const latest = heartbeatStateRef.current;
       channel.post({
         type: "display-heartbeat",
         screenId,
-        fps,
-        status: state.live.active && targetIncludes(state.live.target, screenId) ? "live" : "ready",
+        fps: latest.fps,
+        status: latest.liveActive && targetIncludes(latest.liveTarget, screenId) ? "live" : "ready",
         timestamp: new Date().toISOString()
       });
     };
@@ -8063,7 +8075,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       window.clearInterval(timer);
       channel.close();
     };
-  }, [fps, screenId, showIdentity, state.live.active, state.live.target]);
+  }, [screenId, showIdentity]);
 
   const showLive = state.live.active && targetIncludes(state.live.target, screenId);
   const liveComposition = normalizeBroadcastComposition(liveCompositionForDisplay(state.live, screenId));
