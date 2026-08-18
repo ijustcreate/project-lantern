@@ -112,11 +112,13 @@ import {
   enableSharedStatePersistence,
   fitWarnings,
   hydrateLanternMedia,
+  loadIndexedDbLanternState,
   loadLanternState,
   loadSharedLanternState,
   mergeSharedLanternState,
   openDisplayWindows,
   publishState,
+  saveLanternStateDurably,
   saveSharedLanternState,
   shareLanternImages,
   storeLanternMedia,
@@ -260,6 +262,7 @@ export function App() {
 
 function ControlCenter() {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
+  const [statePersistenceReady, setStatePersistenceReady] = useState(false);
   const [view, setView] = useHashView();
   const [query, setQuery] = useState("");
   const [selectedDisplayId, setSelectedDisplayId] = useState<ScreenId>(() => firstDisplayId(loadLanternState()));
@@ -345,7 +348,7 @@ function ControlCenter() {
   useEffect(() => {
     let mounted = true;
     void (async () => {
-      let loaded = loadLanternState();
+      let loaded = await loadIndexedDbLanternState() ?? loadLanternState();
       try {
         const shared = await loadSharedLanternState();
         loaded = shared ? mergeSharedLanternState(loaded, shared) : loaded;
@@ -356,6 +359,7 @@ function ControlCenter() {
       const sharedImages = canWriteSharedLanternState() ? await shareLanternImages(hydrated) : hydrated;
       if (!mounted) return;
       setState(sharedImages);
+      setStatePersistenceReady(true);
       if (canWriteSharedLanternState()) enableSharedStatePersistence();
       publishState(sharedImages);
     })();
@@ -363,6 +367,7 @@ function ControlCenter() {
   }, []);
 
   useEffect(() => {
+    if (!statePersistenceReady) return;
     publishState(state);
     videoBridge.current = new DirectorVideoBridge((_status, detail) => {
       setVideoStatus(detail ?? "Ready");
@@ -397,7 +402,7 @@ function ControlCenter() {
       channel.close();
       videoBridge.current?.close();
     };
-  }, []);
+  }, [statePersistenceReady]);
 
   useEffect(() => {
     if (!state.screens[selectedDisplayId]) {
@@ -3422,8 +3427,9 @@ function ThemeStudio({
 
   const saveBoard = async () => {
     setSaveStatus("saving");
-    const savedLocally = publishState(state);
-    if (!savedLocally) {
+    const persistence = await saveLanternStateDurably(state);
+    publishState(state, { persist: false });
+    if (persistence === "failed") {
       setSaveStatus("error");
       return;
     }

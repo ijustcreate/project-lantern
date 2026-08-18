@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0233",
+    "title": "Preserve large board saves locally",
+    "summary": "Board Editor saves now fall back to IndexedDB when browser local storage is full, so image-rich boards and detailed layouts remain recoverable after reload.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 4:53 PM",
+    "areas": [
+      "Board Editor",
+      "Data persistence"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "git diff --check; npm run build; forced localStorage-quota save and reload smoke test"
+  },
+  {
     "id": "DEV-0232",
     "title": "Make Board Editor saves fault tolerant",
     "summary": "Board edits now persist locally and report their saved state even if optional display synchronization or shared storage is temporarily unavailable.",

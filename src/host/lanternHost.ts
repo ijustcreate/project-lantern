@@ -15,6 +15,8 @@ const LANTERN_DATA_PROTECTION_REPORT_KEY = "project-lantern-data-protection-repo
 const MAX_PROTECTED_SNAPSHOTS = 8;
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
+const LANTERN_STATE_STORE = "state";
+const LANTERN_STATE_RECORD_KEY = "active";
 const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
   || (import.meta.env.VITE_LANTERN_BUG_ENDPOINT as string | undefined)?.trim()
   || "";
@@ -108,21 +110,87 @@ function deleteAllLanternMedia() {
 }
 
 export function saveLanternState(state: LanternState) {
+  const serializable = serializableLocalState(state);
   try {
-    const serializable = {
-      ...state,
-      boardPrograms: state.boardPrograms.map((program) => program.backgroundMediaId && program.backgroundImage?.startsWith("blob:") ? { ...program, backgroundImage: undefined } : program),
-      screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
-        id,
-        screen.backgroundMediaId && screen.backgroundImage?.startsWith("blob:") ? { ...screen, backgroundImage: undefined } : screen
-      ]))
-    };
     window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
+    void deleteIndexedDbLanternState();
     return true;
   } catch (error) {
-    console.warn("Project Lantern could not persist the current media asset locally.", error);
+    // Keep automatic updates safe too. Explicit Save awaits this same IndexedDB
+    // fallback and can tell the operator whether it completed.
+    void saveIndexedDbLanternState(serializable).catch(() => undefined);
+    console.warn("Project Lantern could not persist the current state in local storage.", error);
     return false;
   }
+}
+
+function serializableLocalState(state: LanternState): LanternState {
+  return {
+    ...state,
+    boardPrograms: state.boardPrograms.map((program) => program.backgroundMediaId && program.backgroundImage?.startsWith("blob:") ? { ...program, backgroundImage: undefined } : program),
+    screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
+      id,
+      screen.backgroundMediaId && screen.backgroundImage?.startsWith("blob:") ? { ...screen, backgroundImage: undefined } : screen
+    ])) as LanternState["screens"]
+  };
+}
+
+/** Save large browser-only boards without relying on the small localStorage quota. */
+export async function saveLanternStateDurably(state: LanternState): Promise<"local-storage" | "indexed-db" | "failed"> {
+  const serializable = serializableLocalState(state);
+  try {
+    window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
+    void deleteIndexedDbLanternState();
+    return "local-storage";
+  } catch (error) {
+    console.warn("Project Lantern is using IndexedDB because local storage is full.", error);
+    try {
+      await saveIndexedDbLanternState(serializable);
+      return "indexed-db";
+    } catch (fallbackError) {
+      console.warn("Project Lantern could not persist the current state in IndexedDB.", fallbackError);
+      return "failed";
+    }
+  }
+}
+
+/** Returns the durable fallback only when an oversized local board was saved there. */
+export async function loadIndexedDbLanternState(): Promise<LanternState | null> {
+  try {
+    const database = await openMediaDatabase();
+    const stored = await new Promise<Partial<LanternState> | undefined>((resolve, reject) => {
+      const transaction = database.transaction(LANTERN_STATE_STORE, "readonly");
+      const request = transaction.objectStore(LANTERN_STATE_STORE).get(LANTERN_STATE_RECORD_KEY);
+      request.onsuccess = () => resolve(request.result as Partial<LanternState> | undefined);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return stored ? normalizeState({ ...initialState, ...stored, contentVersion: stored.contentVersion ?? 0 } as LanternState) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveIndexedDbLanternState(state: LanternState) {
+  const database = await openMediaDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(LANTERN_STATE_STORE, "readwrite");
+    transaction.objectStore(LANTERN_STATE_STORE).put(state, LANTERN_STATE_RECORD_KEY);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+}
+
+async function deleteIndexedDbLanternState() {
+  const database = await openMediaDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(LANTERN_STATE_STORE, "readwrite");
+    transaction.objectStore(LANTERN_STATE_STORE).delete(LANTERN_STATE_RECORD_KEY);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
 }
 
 function serializableSharedState(state: LanternState): LanternState {
@@ -312,9 +380,10 @@ export async function hydrateLanternMedia(state: LanternState): Promise<LanternS
 
 function openMediaDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(LANTERN_MEDIA_DB, 1);
+    const request = indexedDB.open(LANTERN_MEDIA_DB, 2);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(LANTERN_MEDIA_STORE)) request.result.createObjectStore(LANTERN_MEDIA_STORE);
+      if (!request.result.objectStoreNames.contains(LANTERN_STATE_STORE)) request.result.createObjectStore(LANTERN_STATE_STORE);
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -337,8 +406,8 @@ export function createHostChannel(listener: Listener) {
   };
 }
 
-export function publishState(state: LanternState) {
-  const savedLocally = saveLanternState(state);
+export function publishState(state: LanternState, options: { persist?: boolean } = {}) {
+  const savedLocally = options.persist === false || saveLanternState(state);
   queueSharedStateSave(state);
   const message = { type: "state-update", state } satisfies HostMessage;
   try {
