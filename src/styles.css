@@ -6118,10 +6118,31 @@ textarea:focus-visible,
   outline: 0;
   color: var(--ink);
   background: transparent;
+  color-scheme: dark;
   font: inherit;
   font-size: 10px;
   font-weight: 750;
 }
+
+/* Native option popups do not inherit a transparent select's surface. Give the
+   operator picker an explicit palette so it remains legible in every theme. */
+.header-user-control select option {
+  color: #f6ead3;
+  background: #151832;
+}
+
+.theme-light .header-user-control select,
+.theme-warm .header-user-control select,
+.theme-sparkle .header-user-control select,
+.theme-children .header-user-control select { color-scheme: light; }
+
+.theme-light .header-user-control select option { color: #172033; background: #fff; }
+.theme-ocean .header-user-control select option { color: #effcff; background: #071a26; }
+.theme-warm .header-user-control select option { color: #342821; background: #fff9f2; }
+.theme-sparkle .header-user-control select option { color: #30124f; background: #fff8ff; }
+.theme-children .header-user-control select option { color: #173f61; background: #fffdf5; }
+.theme-contrast .header-user-control select,
+.theme-contrast .header-user-control select option { color-scheme: dark; color: #fff; background: #000; }
 
 .sidebar-user-control {
   position: relative;

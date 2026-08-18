@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0179",
+    "title": "Match the user menu to every site theme",
+    "summary": "The user selector's option list now uses the active theme's color palette, keeping the menu readable instead of opening as a bright unthemed surface.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:02 AM",
+    "areas": [
+      "Navigation",
+      "Themes",
+      "User controls"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; computed dark-theme option colors verified in browser"
+  },
+  {
     "id": "DEV-0178",
     "title": "Show a calm idle display between scheduled programs",
     "summary": "Displays with no active calendar item now stay blank and subtly show the next scheduled board or pop-up, instead of rendering an inactive assigned board.",
