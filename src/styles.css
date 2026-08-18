@@ -10087,6 +10087,10 @@ textarea:focus-visible,
 .schedule-event-editor-body { display: grid; min-height: 0; align-content: start; gap: 8px; padding: 10px; overflow-y: auto; }
 .schedule-event-editor-body .field input,
 .schedule-event-editor-body .field select { min-height: 34px; font-size: 10px; }
+.schedule-board-picker { position: relative; z-index: 20; }
+.schedule-board-picker .board-picker > summary { min-height: 39px; padding: 5px 9px; }
+.schedule-board-picker .board-picker-popover { width: min(410px, calc(100vw - 34px)); }
+.schedule-board-picker .board-picker-groups { max-height: min(390px, calc(100vh - 260px)); }
 .schedule-event-editor-body > .schedule-quick-actions { justify-content: flex-start; padding-bottom: 4px; border-bottom: 1px solid rgba(148, 158, 220, .1); }
 .scheduled-live-nav { animation: scheduled-live-sparkle 1.2s ease-in-out infinite alternate; }
 @keyframes scheduled-live-sparkle { from { filter: drop-shadow(0 0 0 transparent); } to { filter: drop-shadow(0 0 8px var(--teal)); } }

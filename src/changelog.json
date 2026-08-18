@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0187",
+    "title": "Use grouped board picker for schedule events",
+    "summary": "Made New event use the Board Editor-style nested board picker with category headers, search, and orientation labels.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:55 AM",
+    "areas": [
+      "Schedule",
+      "Board selection"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; grouped picker source-path inspection"
+  },
+  {
     "id": "DEV-0186",
     "title": "Simplify board panels and group related content",
     "summary": "Replaced editor panel choices with Text, Donor list, and Image/PNG; migrated existing board copy and donor stars, added panel groups, and fixed cramped overlapping selection controls.",
