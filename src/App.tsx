@@ -276,6 +276,7 @@ function ControlCenter() {
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const [displayEditorOpen, setDisplayEditorOpen] = useState(false);
+  const [openAssignedRoomCamera, setOpenAssignedRoomCamera] = useState(false);
   const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<{ entry: ScheduleEntry; occurrenceKey: string } | null>(null);
   const [displayOpenNotice, setDisplayOpenNotice] = useState<string | null>(null);
   const [announcementTab, setAnnouncementTab] = useState<"messages" | "blips">("messages");
@@ -744,9 +745,10 @@ function ControlCenter() {
     channel.close();
   };
 
-  const openDisplayEditor = (screenId: ScreenId, tab: "setup" | "room" | "names" = "setup") => {
+  const openDisplayEditor = (screenId: ScreenId, tab: "setup" | "room" | "names" = "setup", openAssignedCamera = false) => {
     setSelectedDisplayId(screenId);
     setDisplayEditorTab(tab);
+    setOpenAssignedRoomCamera(openAssignedCamera);
     setDisplayEditorOpen(true);
     setView("dashboard");
   };
@@ -940,7 +942,7 @@ function ControlCenter() {
               setView("theme");
               window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0);
             }}
-            editRoomCamera={(screenId) => openDisplayEditor(screenId, "room")}
+            editRoomCamera={(screenId) => openDisplayEditor(screenId, "room", Boolean(state.screens[screenId]?.roomVideoDeviceId))}
             scheduleBoardNow={scheduleBoardNow}
           />
           <VisitorMessageFooter
@@ -1039,7 +1041,7 @@ function ControlCenter() {
             />
           </>}
         />}
-        {view === "dashboard" && displayEditorOpen && <ScreensView state={state} activeUserId={activeUser?.id} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} editorOnly onClose={() => setDisplayEditorOpen(false)} />}
+        {view === "dashboard" && displayEditorOpen && <ScreensView state={state} activeUserId={activeUser?.id} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} initialOpenRoomCamera={openAssignedRoomCamera} editorOnly onClose={() => { setOpenAssignedRoomCamera(false); setDisplayEditorOpen(false); }} />}
         {view === "revisions" && <RevisionsView state={state} />}
         {view === "bugs" && <BugsView onNewBug={() => void openBugReport()} launcherVisible={bugLauncherVisible} onLauncherVisibleChange={(visible) => {
           setBugLauncherVisible(visible);
@@ -6248,6 +6250,7 @@ function ScreensView({
   updateState,
   initialEditingId,
   initialEditorTab,
+  initialOpenRoomCamera = false,
   editorOnly = false,
   onClose
 }: {
@@ -6259,6 +6262,7 @@ function ScreensView({
   updateState: (updater: (current: LanternState) => LanternState) => void;
   initialEditingId?: ScreenId;
   initialEditorTab?: "setup" | "room" | "names";
+  initialOpenRoomCamera?: boolean;
   editorOnly?: boolean;
   onClose?: () => void;
 }) {
@@ -6290,6 +6294,7 @@ function ScreensView({
   const roomViewLayoutRef = useRef(roomViewLayout);
   const roomStreamRef = useRef<MediaStream | null>(null);
   const roomVideoRef = useRef<HTMLVideoElement | null>(null);
+  const openedInitialRoomCameraRef = useRef(false);
   const roomLeaseRef = useRef<MediaDeviceLease | null>(null);
   const roomPopoutWindowRef = useRef<Window | null>(null);
   const editingScreen = editingId ? state.screens[editingId] : null;
@@ -6499,6 +6504,7 @@ function ScreensView({
     setRoomPopoutWindow(null);
     if (popup && !popup.closed) popup.close();
     releaseRoomView();
+    if (editorOnly && initialOpenRoomCamera) onClose?.();
   };
 
   const popOutRoomView = (screen: DisplayProfile) => {
@@ -6561,6 +6567,15 @@ function ScreensView({
       setDeviceError(formatMediaDeviceError(error, { kind: "video", deviceId: screen.roomVideoDeviceId }));
     }
   };
+
+  useEffect(() => {
+    if (!initialOpenRoomCamera || openedInitialRoomCameraRef.current) return;
+    const screen = state.screens[initialEditingId ?? selectedDisplayId];
+    if (!screen?.roomVideoDeviceId) return;
+    openedInitialRoomCameraRef.current = true;
+    setEditingId(null);
+    void openRoomView(screen, { popOut: false });
+  }, [initialEditingId, initialOpenRoomCamera, openRoomView, selectedDisplayId, state.screens]);
 
   const addDisplay = () => {
     updateState((current) => {
