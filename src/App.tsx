@@ -141,6 +141,7 @@ import type {
   LanternUser,
   LanternState,
   LanternTheme,
+  SavedBlip,
   ScreenId,
   TargetScreen,
   ScheduleEntry
@@ -1055,7 +1056,32 @@ function ControlCenter() {
             }));
             if (saved.startSoundUrl) playSound(saved.startSoundUrl, saved.sfxVolume);
           }}
-          onOpenBlips={() => { setAnnouncementTab("blips"); setView("announcements"); }}
+          onSaveJoke={({ setup, punchline }) => {
+            const id = `brigade-joke-${Date.now()}`;
+            updateState((current) => {
+              const savedJoke: SavedBlip = {
+                id,
+                name: `Brigade joke · ${setup.slice(0, 44)}${setup.length > 44 ? "…" : ""}`,
+                kind: "joke",
+                headline: "READY FOR A GIGGLE?",
+                prompt: setup,
+                answer: punchline,
+                subtext: "A Toy Soldier Brigade joke",
+                target: "all",
+                durationMinutes: 2,
+                countdownSeconds: 10,
+                showCountdown: true,
+                ticking: false,
+                startSfx: "bell",
+                revealSfx: "ba-dum-tss",
+                sfxVolume: 70,
+                backgroundColor: "#10243f",
+                accentColor: "#f4c45d",
+                motion: "pop"
+              };
+              return { ...current, savedBlips: [...current.savedBlips, savedJoke] };
+            });
+          }}
         />}
         {view === "dashboard" && displayEditorOpen && <ScreensView state={state} activeUserId={activeUser?.id} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} initialOpenRoomCamera={openAssignedRoomCamera} editorOnly onClose={() => { setOpenAssignedRoomCamera(false); setDisplayEditorOpen(false); }} />}
         {view === "revisions" && <RevisionsView state={state} />}

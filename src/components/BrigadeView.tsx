@@ -21,7 +21,7 @@ import {
 import type { GivingLevel, GivingProgram, LanternState, SavedAnnouncement } from "../types";
 import "./BrigadeView.css";
 
-type BrigadeSection = "hero" | "why" | "contact" | "levels" | "roster" | "boards" | "announcements" | "good-deed";
+type BrigadeSection = "hero" | "why" | "contact" | "levels" | "roster" | "boards" | "announcements";
 
 interface BrigadePanelLayout {
   split?: number;
@@ -69,8 +69,7 @@ const DEFAULT_LAYOUTS: Record<BrigadeSection, BrigadePanelLayout> = {
   levels: { columns: 3, compact: true },
   roster: { columns: 2, compact: true },
   boards: { split: 35, reversed: false, compact: true },
-  announcements: { split: 35, reversed: false, compact: true },
-  "good-deed": { split: 70, reversed: false, compact: true }
+  announcements: { split: 35, reversed: false, compact: true }
 };
 
 const purposeLabels = {
@@ -111,7 +110,7 @@ export function BrigadeView({
   onOpenBoard,
   onUseAnnouncement,
   onPutAnnouncementOnScreen,
-  onOpenBlips
+  onSaveJoke
 }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
@@ -119,7 +118,7 @@ export function BrigadeView({
   onOpenBoard: (boardId: string) => void;
   onUseAnnouncement: (announcementId: string) => void;
   onPutAnnouncementOnScreen: (announcementId: string) => void;
-  onOpenBlips: () => void;
+  onSaveJoke: (joke: { setup: string; punchline: string }) => void;
 }) {
   const sourceProgram = state.givingPrograms.find((item) => item.id === "toy-soldier-brigade") as BrigadeProgram | undefined
     ?? state.givingPrograms[0] as BrigadeProgram | undefined;
@@ -128,6 +127,9 @@ export function BrigadeView({
   const [heroArtwork, setHeroArtwork] = useState(0);
   const [selectedBoardId, setSelectedBoardId] = useState("");
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState("");
+  const [jokeSetup, setJokeSetup] = useState("");
+  const [jokePunchline, setJokePunchline] = useState("");
+  const [jokeSaved, setJokeSaved] = useState(false);
 
   const program = useMemo(() => sourceProgram
     ? { ...sourceProgram, levels: resolvedLevels(sourceProgram) }
@@ -434,7 +436,7 @@ export function BrigadeView({
         {sectionEditButton("announcements", "Announcement Kit")}
         <div className="brigade-section-heading">
           <div><p className="brigade-section-kicker">Announcement kit</p><h3>{landing.announcementsTitle ?? "Polished messages, ready when the moment arrives."}</h3></div>
-          <button type="button" className="brigade-secondary-action compact" onClick={onOpenBlips}><Sparkles size={17} /> Browse Blips</button>
+          <p>Prepared messages remain separate from quick visitor moments and Blips.</p>
         </div>
         <div className="brigade-library-layout">
           <div className="brigade-library-selector">
@@ -456,16 +458,40 @@ export function BrigadeView({
         </div>)}
       </section>
 
-      <footer
-        className={`brigade-good-deed-banner brigade-editable-section${editing === "good-deed" ? " is-editing" : ""}${layoutFor("good-deed").compact ? " is-compact" : ""}`}
-        data-reversed={layoutFor("good-deed").reversed || undefined}
-        style={panelStyle(layoutFor("good-deed"))}
-      >
-        {sectionEditButton("good-deed", "campaign message")}
-        <div><span><Sparkles size={20} /></span><p className="brigade-section-kicker">A campaign message for young visitors</p><h3>{pageProgram.goodDeedPrompt}</h3></div>
-        <button type="button" onClick={() => onUseAnnouncement("brigade-good-deed")}><Megaphone size={17} /> Put this message on screen</button>
-        {editor("good-deed", <div className="brigade-edit-fields"><BrigadeField label="Campaign message"><textarea value={pageProgram.goodDeedPrompt} onChange={(event) => patchDraft({ goodDeedPrompt: event.target.value })} /></BrigadeField></div>)}
-      </footer>
+      <section className="brigade-joke-creator" aria-labelledby="brigade-joke-heading">
+        <div className="brigade-joke-heading">
+          <span><Sparkles size={20} /></span>
+          <div>
+            <p className="brigade-section-kicker">Toy Soldier Brigade · Blip library</p>
+            <h3 id="brigade-joke-heading">Add a joke</h3>
+            <p>Create a quick, kid-friendly joke without opening the full Blip editor. It is saved to the shared Blip library and ready to use there.</p>
+          </div>
+        </div>
+        <form className="brigade-joke-form" onSubmit={(event) => {
+          event.preventDefault();
+          const setup = jokeSetup.trim();
+          const punchline = jokePunchline.trim();
+          if (!setup || !punchline) return;
+          onSaveJoke({ setup, punchline });
+          setJokeSetup("");
+          setJokePunchline("");
+          setJokeSaved(true);
+          window.setTimeout(() => setJokeSaved(false), 2600);
+        }}>
+          <label>
+            <span>Joke setup</span>
+            <textarea value={jokeSetup} onChange={(event) => setJokeSetup(event.target.value)} placeholder="What do you call a toy soldier who tells jokes?" rows={3} />
+          </label>
+          <label>
+            <span>Punchline</span>
+            <textarea value={jokePunchline} onChange={(event) => setJokePunchline(event.target.value)} placeholder="A stand-up guard!" rows={3} />
+          </label>
+          <div className="brigade-joke-actions">
+            <button type="submit" disabled={!jokeSetup.trim() || !jokePunchline.trim()}><Save size={16} /> Save joke Blip</button>
+            <span role="status" aria-live="polite">{jokeSaved ? "Saved to Blip library" : "Defaults are ready to run"}</span>
+          </div>
+        </form>
+      </section>
     </section>
   );
 }
@@ -475,7 +501,7 @@ function BrigadeField({ label, wide, children }: { label: string; wide?: boolean
 }
 
 function LayoutEditor({ section, layout, onChange }: { section: BrigadeSection; layout: BrigadePanelLayout; onChange: (patch: Partial<BrigadePanelLayout>) => void }) {
-  const splitSections: BrigadeSection[] = ["hero", "contact", "boards", "announcements", "good-deed"];
+  const splitSections: BrigadeSection[] = ["hero", "contact", "boards", "announcements"];
   const columnSections: BrigadeSection[] = ["why", "levels", "roster"];
   return <div className="brigade-layout-editor" aria-label="Section layout controls">
     <strong><Maximize2 size={14} /> Layout</strong>

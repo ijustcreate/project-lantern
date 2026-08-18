@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0225",
+    "title": "Add Brigade joke Blip creator",
+    "summary": "Replaced the Brigade page’s redundant Blip entry points with a focused joke form that saves a new joke directly to the shared Blip library.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:58 PM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/BrigadeView.tsx",
+      "src/components/BrigadeView.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0224",
     "title": "Manage visitor messages from dashboard",
     "summary": "Moved the Visitor Message Pool out of the Toy Soldier Brigade hub and made the dashboard message bar open it as an inline drawer from Manage.",
