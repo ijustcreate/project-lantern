@@ -10085,6 +10085,13 @@ textarea:focus-visible,
 .schedule-event-editor-header .eyebrow { margin: 0; }
 .schedule-event-editor-header h2 { margin: 2px 0 0; font-size: 16px; }
 .schedule-event-editor-body { display: grid; min-height: 0; align-content: start; gap: 8px; padding: 10px; overflow-y: auto; }
+.schedule-event-board-preview { position: fixed; z-index: 149; display: grid; grid-template-rows: auto minmax(0, 1fr); width: 330px; max-height: calc(100vh - 82px); overflow: hidden; border: 1px solid rgba(121, 202, 198, .4); border-radius: 12px; background: #10162f; box-shadow: 0 24px 68px rgba(0, 0, 0, .5); }
+.schedule-event-board-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(148, 158, 220, .15); color: var(--teal); background: linear-gradient(135deg, rgba(67, 51, 126, .58), rgba(16, 25, 49, .94)); }
+.schedule-event-board-preview .eyebrow { margin: 0; }
+.schedule-event-board-preview strong { display: block; margin-top: 2px; color: var(--text); font-size: 12px; }
+.schedule-event-board-preview header span { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; }
+.schedule-event-board-preview .schedule-preview-surface { height: min(62vh, 500px); min-height: 260px; border: 0; border-radius: 0; }
+.schedule-event-board-preview .schedule-preview-surface.portrait { width: min(100%, 270px); }
 .schedule-event-editor-body .field input,
 .schedule-event-editor-body .field select { min-height: 34px; font-size: 10px; }
 .schedule-board-picker { position: relative; z-index: 20; }
@@ -10195,6 +10202,7 @@ textarea:focus-visible,
   .agenda-event > .schedule-quick-actions { grid-column: 1 / -1; justify-content: flex-start; padding-left: 53px; }
   .agenda-event-copy > span { white-space: normal; }
   .schedule-event-editor { right: 8px; bottom: 8px; left: 8px; width: auto; max-height: min(74vh, 610px); border-radius: 14px; }
+  .schedule-event-board-preview { display: none; }
   .schedule-event-editor-header { cursor: default; }
   .schedule-event-editor-header .eyebrow { font-size: 7px; }
   .board-builder {

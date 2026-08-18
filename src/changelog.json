@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0188",
+    "title": "Preview boards while scheduling events",
+    "summary": "Shows the selected board beside the New/Edit event dialog and updates it when the board or target display changes.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:01 AM",
+    "areas": [
+      "Schedule",
+      "Board preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0187",
     "title": "Use grouped board picker for schedule events",
     "summary": "Made New event use the Board Editor-style nested board picker with category headers, search, and orientation labels.",
