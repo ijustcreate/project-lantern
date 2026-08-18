@@ -284,6 +284,7 @@ function ControlCenter() {
   const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<{ entry: ScheduleEntry; occurrenceKey: string } | null>(null);
   const [displayOpenNotice, setDisplayOpenNotice] = useState<string | null>(null);
   const [announcementTab, setAnnouncementTab] = useState<"messages" | "blips">("messages");
+  const [visitorMessageManagerOpen, setVisitorMessageManagerOpen] = useState(false);
   const visitorPageEntryRef = useRef<View | null>(null);
   const videoBridge = useRef<DirectorVideoBridge | null>(null);
   const showIdeas = false;
@@ -532,7 +533,7 @@ function ControlCenter() {
   }, [setView, updateState]);
 
   useEffect(() => {
-    if (view !== "dashboard" && view !== "brigade") {
+    if (view !== "dashboard") {
       visitorPageEntryRef.current = null;
       return;
     }
@@ -951,12 +952,25 @@ function ControlCenter() {
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room", Boolean(state.screens[screenId]?.roomVideoDeviceId))}
             scheduleBoardNow={scheduleBoardNow}
           />
+          {visitorMessageManagerOpen && <div className="dashboard-visitor-message-drawer">
+            <VisitorMessageManager
+              messages={state.visitorMessages}
+              currentId={state.visitorMessageRotation.currentId}
+              displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
+              onChange={(messages) => changeVisitorMessages(messages)}
+              onUse={chooseVisitorMessage}
+              onNext={advanceVisitorMessage}
+              onSend={sendVisitorMessage}
+              onSchedule={scheduleVisitorMessage}
+            />
+          </div>}
           <VisitorMessageFooter
             message={activeVisitorMessage}
             displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
             onNext={advanceVisitorMessage}
-            onManage={() => { setView("brigade"); window.setTimeout(() => document.getElementById("visitor-message-pool")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0); }}
+            onManage={() => setVisitorMessageManagerOpen((open) => !open)}
             onSend={(target) => activeVisitorMessage && sendVisitorMessage(activeVisitorMessage.id, target)}
+            manageOpen={visitorMessageManagerOpen}
           />
         </>)}
         {view === "donors" && (
@@ -1042,25 +1056,6 @@ function ControlCenter() {
             if (saved.startSoundUrl) playSound(saved.startSoundUrl, saved.sfxVolume);
           }}
           onOpenBlips={() => { setAnnouncementTab("blips"); setView("announcements"); }}
-          visitorMessagePanel={<>
-            <VisitorMessageManager
-              messages={state.visitorMessages}
-              currentId={state.visitorMessageRotation.currentId}
-              displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
-              onChange={(messages) => changeVisitorMessages(messages)}
-              onUse={chooseVisitorMessage}
-              onNext={advanceVisitorMessage}
-              onSend={sendVisitorMessage}
-              onSchedule={scheduleVisitorMessage}
-            />
-            <VisitorMessageFooter
-              message={activeVisitorMessage}
-              displays={Object.values(state.screens).map((screen) => ({ id: screen.id, name: screen.label, orientation: screen.orientation }))}
-              onNext={advanceVisitorMessage}
-              onManage={() => document.getElementById("visitor-message-pool")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-              onSend={(target) => activeVisitorMessage && sendVisitorMessage(activeVisitorMessage.id, target)}
-            />
-          </>}
         />}
         {view === "dashboard" && displayEditorOpen && <ScreensView state={state} activeUserId={activeUser?.id} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} initialOpenRoomCamera={openAssignedRoomCamera} editorOnly onClose={() => { setOpenAssignedRoomCamera(false); setDisplayEditorOpen(false); }} />}
         {view === "revisions" && <RevisionsView state={state} />}

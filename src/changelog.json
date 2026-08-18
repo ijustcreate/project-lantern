@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0224",
+    "title": "Manage visitor messages from dashboard",
+    "summary": "Moved the Visitor Message Pool out of the Toy Soldier Brigade hub and made the dashboard message bar open it as an inline drawer from Manage.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:48 PM",
+    "areas": [
+      "Dashboard",
+      "Visitor Messages",
+      "Toy Soldier Brigade"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/BrigadeView.tsx",
+      "src/components/VisitorMessageFooter.tsx",
+      "src/components/VisitorMessageFooter.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0223",
     "title": "Send program messages directly to displays",
     "summary": "Added a dedicated Put on screen action to the Toy Soldier Brigade announcement showcase so selected program messages run immediately on every display without scheduling or using Blips.",

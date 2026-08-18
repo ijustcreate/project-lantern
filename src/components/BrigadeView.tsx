@@ -111,8 +111,7 @@ export function BrigadeView({
   onOpenBoard,
   onUseAnnouncement,
   onPutAnnouncementOnScreen,
-  onOpenBlips,
-  visitorMessagePanel
+  onOpenBlips
 }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
@@ -121,7 +120,6 @@ export function BrigadeView({
   onUseAnnouncement: (announcementId: string) => void;
   onPutAnnouncementOnScreen: (announcementId: string) => void;
   onOpenBlips: () => void;
-  visitorMessagePanel?: ReactNode;
 }) {
   const sourceProgram = state.givingPrograms.find((item) => item.id === "toy-soldier-brigade") as BrigadeProgram | undefined
     ?? state.givingPrograms[0] as BrigadeProgram | undefined;
@@ -457,8 +455,6 @@ export function BrigadeView({
           <div className="brigade-linked-record-note"><Megaphone size={17} /><span><strong>Message text and styling stay connected to the announcement composer.</strong><small>The selected announcement becomes the landing-page default when you save.</small></span><button type="button" disabled={!selectedAnnouncement} onClick={() => selectedAnnouncement && onUseAnnouncement(selectedAnnouncement.id)}>Edit selected message</button></div>
         </div>)}
       </section>
-
-      {visitorMessagePanel}
 
       <footer
         className={`brigade-good-deed-banner brigade-editable-section${editing === "good-deed" ? " is-editing" : ""}${layoutFor("good-deed").compact ? " is-compact" : ""}`}

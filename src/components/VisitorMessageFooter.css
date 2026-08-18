@@ -14,6 +14,26 @@
   box-shadow: 0 18px 46px rgb(2 12 20 / 18%);
 }
 
+.dashboard-visitor-message-drawer {
+  position: absolute;
+  z-index: 44;
+  right: 18px;
+  bottom: clamp(108px, 13vh, 148px);
+  left: 18px;
+  max-height: min(680px, calc(100vh - 168px));
+  overflow: auto;
+  filter: drop-shadow(0 24px 56px rgb(0 0 0 / 36%));
+}
+
+.dashboard-visitor-message-drawer .visitor-message-manager {
+  border-color: rgba(105, 210, 223, .42);
+  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  background: #101b36;
+}
+
+.visitor-message-footer { position: relative; z-index: 45; }
+
 .visitor-message-footer-icon {
   display: grid;
   place-items: center;
@@ -77,11 +97,13 @@
 }
 
 @media (max-width: 920px) {
+  .dashboard-visitor-message-drawer { right: 14px; bottom: 146px; left: 14px; max-height: calc(100vh - 210px); }
   .visitor-message-footer { grid-template-columns: auto minmax(0, 1fr); }
   .visitor-message-footer-actions { grid-column: 1 / -1; justify-content: flex-start; }
 }
 
 @media (max-width: 560px) {
+  .dashboard-visitor-message-drawer { right: 10px; bottom: 228px; left: 10px; max-height: calc(100vh - 260px); }
   .visitor-message-footer { grid-template-columns: 1fr; }
   .visitor-message-footer-icon { display: none; }
   .visitor-message-footer-actions label,
