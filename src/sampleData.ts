@@ -11,7 +11,9 @@ export const DONOR_ROSTER_BOARDS_CONTENT_VERSION = 10;
 export const LEGACY_STAR_RECOVERY_CONTENT_VERSION = 11;
 /** Adds the exact Legacy tag to every donor transcribed from a recognition star. */
 export const LEGACY_DONOR_TAGS_CONTENT_VERSION = 12;
-export const LANTERN_CONTENT_VERSION = LEGACY_DONOR_TAGS_CONTENT_VERSION;
+/** Replaces the legacy brass outline treatment with clear, flat board text. */
+export const BOARD_TEXT_CONTRAST_CONTENT_VERSION = 13;
+export const LANTERN_CONTENT_VERSION = BOARD_TEXT_CONTRAST_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -521,7 +523,6 @@ function partnershipSpotlightBoard(orientation: "Portrait" | "Landscape"): Donor
     palette: "classic",
     fontFamily: "Lora",
     showFrame: true,
-    textFinish: "cut-brass",
     panels: portrait ? [
       { id: `${short}-heading`, type: "heading", title: "A PARTNERSHIP FOR PLAY", size: "feature", x: 9, y: 6, width: 82, height: 9, fontFamily: "Cinzel", fontSize: 30 },
       { id: `${short}-portrait`, type: "image", title: "Supporter photo", imageUrl: "/assets/donor-icons/supporter-spotlight-placeholder.png", imageFit: "cover", size: "feature", x: 22, y: 18, width: 56, height: 27 },

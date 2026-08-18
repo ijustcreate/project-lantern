@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0211",
+    "title": "Improve board text contrast",
+    "summary": "Replaced the dark outlined brass treatment on current boards with clean flat text and removed it from shipped board defaults.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:25 PM",
+    "areas": [
+      "Board rendering",
+      "Board templates",
+      "Display settings"
+    ],
+    "files": [
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0210",
     "title": "Refresh open displays after schedule edits",
     "summary": "Already-open display windows now receive schedule changes immediately, without needing to close and reopen them.",

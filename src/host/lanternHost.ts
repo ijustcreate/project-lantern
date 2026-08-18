@@ -1,4 +1,4 @@
-import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -1002,6 +1002,7 @@ export function normalizeState(state: LanternState): LanternState {
   const needsDonorRosterBoardsMigration = incomingContentVersion < DONOR_ROSTER_BOARDS_CONTENT_VERSION;
   const needsLegacyStarRecovery = incomingContentVersion < LEGACY_STAR_RECOVERY_CONTENT_VERSION;
   const needsLegacyDonorTagsMigration = incomingContentVersion < LEGACY_DONOR_TAGS_CONTENT_VERSION;
+  const needsBoardTextContrastMigration = incomingContentVersion < BOARD_TEXT_CONTRAST_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -1092,9 +1093,17 @@ export function normalizeState(state: LanternState): LanternState {
         })
     };
   });
-  const boardPrograms = migrateUnifiedBoardPanels(needsDonorDomainMigration
+  const boardProgramsBeforeTextContrastMigration = migrateUnifiedBoardPanels(needsDonorDomainMigration
     ? migrateLegacyDonorPresentation(normalizedBoardPrograms, donors)
     : normalizedBoardPrograms, donors);
+  // The dark brass outline was previously applied to a shipped board treatment.
+  // Replace it once for all current saved boards, without touching their content,
+  // panel layout, or donor/schedule assignments.
+  const boardPrograms = needsBoardTextContrastMigration
+    ? boardProgramsBeforeTextContrastMigration.map((program) => program.textFinish === "cut-brass"
+      ? { ...program, textFinish: "flat" as const }
+      : program)
+    : boardProgramsBeforeTextContrastMigration;
 
   const incomingAnnouncements = state.savedAnnouncements ?? initialState.savedAnnouncements;
   const retiredAnnouncements = needsLegacyContentMigration
@@ -1176,12 +1185,15 @@ export function normalizeState(state: LanternState): LanternState {
           ? { boardProgramId: "board-legacy-stars-photo-2", assignment: "Legacy donor star wall", style: "donor-wall" as const }
           : undefined
       : undefined;
-    return [id, {
+    const normalizedScreen = {
       ...migratedScreen,
       ...legacyStarWall,
       donorIds: remapDonorIds(migratedScreen.donorIds, donorAliases) ?? [],
       donorSubtextVisibility: Object.fromEntries(Object.entries(migratedScreen.donorSubtextVisibility ?? {}).map(([donorId, visible]) => [donorAliases.get(donorId) ?? donorId, visible]))
-    }];
+    };
+    return [id, needsBoardTextContrastMigration && normalizedScreen.textFinish === "cut-brass"
+      ? { ...normalizedScreen, textFinish: "flat" as const }
+      : normalizedScreen];
   })) as LanternState["screens"];
 
   const retiredAnnouncementIds = new Set(retiredAnnouncements.map((announcement) => announcement.id));
