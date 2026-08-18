@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="816" height="1056" viewBox="0 0 816 1056">
+  <rect width="816" height="1056" fill="#fffdf7"/>
+  <rect x="28" y="28" width="760" height="1000" rx="18" fill="none" stroke="#24364d" stroke-width="3"/>
+  <text x="56" y="76" fill="#24364d" font-family="Arial, sans-serif" font-size="28" font-weight="700">Make a puppet character</text>
+  <text x="56" y="106" fill="#52647a" font-family="Arial, sans-serif" font-size="15">Draw one body part in each box. Keep each part inside the dotted line. We can scan and rig it!</text>
+  <text x="56" y="132" fill="#52647a" font-family="Arial, sans-serif" font-size="13">Character name: ____________________________   Artist: ____________________________</text>
+  <g fill="none" stroke="#66809d" stroke-width="2" stroke-dasharray="7 6">
+    <rect x="56" y="160" width="220" height="170" rx="12"/><rect x="300" y="160" width="220" height="170" rx="12"/><rect x="544" y="160" width="216" height="170" rx="12"/>
+    <rect x="56" y="360" width="168" height="150" rx="12"/><rect x="240" y="360" width="168" height="150" rx="12"/><rect x="424" y="360" width="168" height="150" rx="12"/><rect x="608" y="360" width="152" height="150" rx="12"/>
+    <rect x="56" y="540" width="168" height="150" rx="12"/><rect x="240" y="540" width="168" height="150" rx="12"/><rect x="424" y="540" width="168" height="150" rx="12"/><rect x="608" y="540" width="152" height="150" rx="12"/>
+    <rect x="56" y="720" width="168" height="150" rx="12"/><rect x="240" y="720" width="168" height="150" rx="12"/><rect x="424" y="720" width="168" height="150" rx="12"/><rect x="608" y="720" width="152" height="150" rx="12"/>
+  </g>
+  <g fill="#24364d" font-family="Arial, sans-serif" font-size="14" font-weight="700">
+    <text x="68" y="184">HEAD (FRONT)</text><text x="312" y="184">HEAD (BACK / HAIR)</text><text x="556" y="184">TORSO / SHIRT</text>
+    <text x="68" y="384">LEFT UPPER ARM</text><text x="252" y="384">RIGHT UPPER ARM</text><text x="436" y="384">LEFT FOREARM</text><text x="620" y="384">RIGHT FOREARM</text>
+    <text x="68" y="564">LEFT OPEN HAND</text><text x="252" y="564">RIGHT OPEN HAND</text><text x="436" y="564">LEFT FIST</text><text x="620" y="564">RIGHT FIST</text>
+    <text x="68" y="744">LEFT UPPER + LOWER LEG</text><text x="252" y="744">RIGHT UPPER + LOWER LEG</text><text x="436" y="744">LEFT SHOE / FOOT</text><text x="620" y="744">RIGHT SHOE / FOOT</text>
+  </g>
+  <g fill="#8b9caf" font-family="Arial, sans-serif" font-size="11"><text x="56" y="916">Tip: Draw the character facing forward. Leave a little space around each body part.</text><text x="56" y="940">For scanning: use a dark marker, photograph flat in good light, and do not overlap the parts.</text><text x="56" y="976">Rig ID slots: head, torso, arms, hands, legs, feet. The production team will attach them at the joints.</text></g>
+</svg>

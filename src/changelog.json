@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0208",
+    "title": "Add Friendly Zombie production art kit",
+    "summary": "Organized the zombie concept, full-body preview, parts atlas, matching scene, rig manifest, and printable child-puppet template under a versioned character-kit convention.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:05 PM",
+    "areas": [
+      "Effect studio",
+      "Character assets"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/effectStudio.ts",
+      "public/assets/characters/friendly-zombie"
+    ],
+    "tests": "Validated manifest JSON and alpha art output; npx tsc --noEmit --pretty false; npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0207",
     "title": "Make board move handle retain drag ownership",
     "summary": "The Board Editor move handle now keeps the selected panel active throughout a drag, even while crossing overlapping panels.",

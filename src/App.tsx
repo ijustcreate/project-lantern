@@ -5820,7 +5820,7 @@ function LivePreviewPanel({
           </div>
           {state.live.effects.background === "image" && <div className="background-image-status">
             {state.live.effects.backgroundImage && <img src={state.live.effects.backgroundImage} alt="Current screenless-removal background" />}
-            <button type="button" className="command-button secondary compact" onClick={() => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: "image", backgroundImage: `${import.meta.env.BASE_URL}assets/effects/friendly-halloween-background.png` } })}><Sparkles size={14} /> Friendly Halloween scene</button>
+            <button type="button" className="command-button secondary compact" onClick={() => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: "image", backgroundImage: `${import.meta.env.BASE_URL}assets/characters/friendly-zombie/03-backgrounds/friendly-zombie__background__halloween-garden__v01.png` } })}><Sparkles size={14} /> Friendly Halloween scene</button>
             <label className="image-upload"><ImagePlus size={17} /><span>{state.live.effects.backgroundImage ? "Replace background image" : "Choose background image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ effects: { ...state.live.effects, backgroundImage } }))} /></label>
             {state.live.effects.backgroundImage && <button type="button" className="command-button secondary compact" onClick={() => patchLive({ effects: { ...state.live.effects, backgroundImage: undefined } })}>Clear image</button>}
           </div>}

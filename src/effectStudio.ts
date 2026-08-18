@@ -84,7 +84,7 @@ export const seededCostumes: CostumeDefinition[] = [
     name: "Friendly Zombie",
     description: "A cheerful kid-safe Halloween zombie with a simple head, hoodie, arms, and hands that follow the performer.",
     starter: "zombie",
-    conceptArt: "assets/effects/friendly-zombie-rig.png",
+    conceptArt: "assets/characters/friendly-zombie/02-rig/friendly-zombie__rig__full-body-alpha__v01.png",
     createdAt: EFFECT_STUDIO_SEED_TIMESTAMP,
     updatedAt: EFFECT_STUDIO_SEED_TIMESTAMP,
     bones: [

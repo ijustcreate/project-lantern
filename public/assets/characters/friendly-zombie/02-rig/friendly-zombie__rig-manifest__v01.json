@@ -1,0 +1,28 @@
+{
+  "characterId": "friendly-zombie",
+  "version": 1,
+  "status": "reference-atlas-ready-for-cropping",
+  "coordinateSystem": "normalized, origin at top left",
+  "source": "friendly-zombie__rig__parts-sheet-alpha__v01.png",
+  "preview": "friendly-zombie__rig__full-body-alpha__v01.png",
+  "renderOrder": ["head-back", "hair", "torso", "upper-arm-left", "upper-arm-right", "forearm-left", "forearm-right", "hand-left", "hand-right", "pelvis", "upper-leg-left", "upper-leg-right", "lower-leg-left", "lower-leg-right", "foot-left", "foot-right", "head-front"],
+  "anchors": {
+    "head": "face.nose",
+    "shoulderLeft": "pose.leftShoulder",
+    "shoulderRight": "pose.rightShoulder",
+    "elbowLeft": "pose.leftElbow",
+    "elbowRight": "pose.rightElbow",
+    "wristLeft": "hand.leftWrist",
+    "wristRight": "hand.rightWrist",
+    "hipLeft": "pose.leftHip",
+    "hipRight": "pose.rightHip",
+    "kneeLeft": "pose.leftKnee",
+    "kneeRight": "pose.rightKnee",
+    "ankleLeft": "pose.leftAnkle",
+    "ankleRight": "pose.rightAnkle"
+  },
+  "requiredSlots": [
+    "head-front", "head-back", "hair", "torso", "upper-arm-left", "upper-arm-right", "forearm-left", "forearm-right", "hand-open-left", "hand-open-right", "hand-fist-left", "hand-fist-right", "pelvis", "upper-leg-left", "upper-leg-right", "lower-leg-left", "lower-leg-right", "foot-left", "foot-right"
+  ],
+  "notes": "The supplied v01 sheet is an art-direction atlas and full-body preview. The manifest defines the complete production slot set so a crop pass or a child-drawing scan uses stable part IDs."
+}
