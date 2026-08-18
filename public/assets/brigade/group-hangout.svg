@@ -1,8 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 300" role="img" aria-labelledby="title">
   <title id="title">Three child-drawn toy soldiers hanging out together</title>
-  <path d="M34 252c113 9 210-5 318 4 52 4 99-6 152 3" fill="none" stroke="#173f61" stroke-width="7" stroke-linecap="round" opacity=".35"/>
-  <g transform="translate(45 42) rotate(-4 70 100)"><path d="M31 36c9-25 80-28 91 3l-3 35H34z" fill="#c74b3d" stroke="#173f61" stroke-width="7"/><path d="M35 70c28-5 54-4 84 2" stroke="#f3c64f" stroke-width="8" fill="none"/><circle cx="60" cy="92" r="5"/><circle cx="94" cy="92" r="5"/><path d="M49 116h59l10 74H37z" fill="#c74b3d" stroke="#173f61" stroke-width="7"/><path d="M48 190l-8 59m65-59 10 58M39 249l28 1m27-2 29 1" stroke="#173f61" stroke-width="9" stroke-linecap="round"/></g>
-  <g transform="translate(197 24) rotate(2 70 100)"><path d="M31 36c9-25 80-28 91 3l-3 35H34z" fill="#2485b5" stroke="#173f61" stroke-width="7"/><path d="M35 70c28-5 54-4 84 2" stroke="#f3c64f" stroke-width="8" fill="none"/><circle cx="60" cy="92" r="5"/><circle cx="94" cy="92" r="5"/><path d="M49 116h59l10 74H37z" fill="#2485b5" stroke="#173f61" stroke-width="7"/><path d="M48 190l-8 59m65-59 10 58M39 249l28 1m27-2 29 1" stroke="#173f61" stroke-width="9" stroke-linecap="round"/><path d="M40 132L7 166m105-31 37 23" stroke="#173f61" stroke-width="8" stroke-linecap="round"/></g>
-  <g transform="translate(358 45) rotate(5 70 100)"><path d="M31 36c9-25 80-28 91 3l-3 35H34z" fill="#f3c64f" stroke="#173f61" stroke-width="7"/><path d="M35 70c28-5 54-4 84 2" stroke="#c74b3d" stroke-width="8" fill="none"/><circle cx="60" cy="92" r="5"/><circle cx="94" cy="92" r="5"/><path d="M49 116h59l10 74H37z" fill="#f3c64f" stroke="#173f61" stroke-width="7"/><path d="M48 190l-8 59m65-59 10 58M39 249l28 1m27-2 29 1" stroke="#173f61" stroke-width="9" stroke-linecap="round"/></g>
-  <path d="M163 72c20-17 35-19 52-2M329 65c18-15 31-14 47 0" fill="none" stroke="#c74b3d" stroke-width="5" stroke-linecap="round" stroke-dasharray="5 8"/>
+  <path d="M22 268c132 9 329-7 496 3" fill="none" stroke="#173f61" stroke-width="7" stroke-linecap="round" opacity=".35"/>
+  <defs>
+    <g id="toy-soldier">
+      <path d="M48 48c8-24 69-32 83 2l-3 37H52z" fill="var(--uniform)" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M46 75c30-6 60-5 89 2" fill="none" stroke="var(--trim)" stroke-width="8" stroke-linecap="round"/>
+      <path d="M62 83c-1 36 11 50 30 51 22 0 32-18 29-51" fill="#efb58b" stroke="#173f61" stroke-width="7"/>
+      <circle cx="77" cy="102" r="4" fill="#173f61"/><circle cx="105" cy="102" r="4" fill="#173f61"/><path d="M80 120c8 5 16 5 24 0" fill="none" stroke="#173f61" stroke-width="5" stroke-linecap="round"/>
+      <path d="M48 144l-25 51 17 8 29-45M124 145l28 49-17 10-29-46" fill="var(--arms)" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M59 137l62-1 15 73-91 1z" fill="var(--uniform)" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M90 139l1 68M65 158l52 1M69 178l43 2" fill="none" stroke="var(--trim)" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="91" cy="151" r="4" fill="#173f61"/><circle cx="91" cy="171" r="4" fill="#173f61"/>
+      <path d="M63 211l-9 67 23 1 14-57 12 57 24-1-10-68" fill="var(--legs)" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M48 279l30 1M102 279l28-1" fill="none" stroke="#173f61" stroke-width="9" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <g transform="translate(28 42) rotate(-5 65 105) scale(.72)" style="--uniform:#c74b3d;--trim:#f4c45d;--arms:#267da7;--legs:#267da7"><use href="#toy-soldier"/></g>
+  <g transform="translate(190 20) rotate(2 65 105) scale(.79)" style="--uniform:#2485b5;--trim:#f4c45d;--arms:#c74b3d;--legs:#c74b3d"><use href="#toy-soldier"/></g>
+  <g transform="translate(371 41) rotate(5 65 105) scale(.72)" style="--uniform:#f3c64f;--trim:#c74b3d;--arms:#267da7;--legs:#267da7"><use href="#toy-soldier"/></g>
+  <path d="M161 89c18-13 30-15 43-2M348 81c16-12 29-12 41 1" fill="none" stroke="#c74b3d" stroke-width="5" stroke-linecap="round" stroke-dasharray="5 8"/>
 </svg>

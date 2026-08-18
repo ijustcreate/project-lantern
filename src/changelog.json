@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0185",
+    "title": "Unify Toy Soldier Brigade artwork",
+    "summary": "Placed soldier arms behind their uniforms and rebuilt both three-soldier illustrations with the shared full-body toy-soldier style.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:39 AM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Artwork"
+    ],
+    "files": [
+      "public/assets/brigade/soldier-red.svg",
+      "public/assets/brigade/soldier-blue.svg",
+      "public/assets/brigade/soldier-yellow.svg",
+      "public/assets/brigade/group-hangout.svg",
+      "public/assets/brigade/group-guard.svg"
+    ],
+    "tests": "npm run build; SVG layer-order inspection"
+  },
+  {
     "id": "DEV-0184",
     "title": "Open each display in its own preview window",
     "summary": "Replaced the combined display wall with one reusable preview per display, and recenter active previews over the control app when reopened.",
