@@ -17,7 +17,7 @@ import {
   Users,
   X
 } from "lucide-react";
-import type { GivingProgram, LanternState, SavedAnnouncement } from "../types";
+import type { GivingLevel, GivingProgram, LanternState, SavedAnnouncement } from "../types";
 import "./BrigadeView.css";
 
 type BrigadeSection = "hero" | "why" | "contact" | "levels" | "roster" | "boards" | "announcements" | "good-deed";
