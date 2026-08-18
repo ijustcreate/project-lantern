@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0182",
+    "title": "Compact donor cards and focus board details",
+    "summary": "Made the donor roster content-sized and single-line on wide screens, limited the board disclosure to assigned boards, centered delete icons, and moved drag feedback outside its handle.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:23 AM",
+    "areas": [
+      "Donors",
+      "Board assignments",
+      "Interaction polish"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; local browser donor roster geometry and board disclosure checks"
+  },
+  {
     "id": "DEV-0181",
     "title": "Fit donor labels inside stars and add board view controls",
     "summary": "Legacy donor labels now stay inside star centers, and Board Editor includes bottom-right zoom, pan, and reset controls for close positioning work.",

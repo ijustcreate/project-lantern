@@ -8341,9 +8341,46 @@ textarea:focus-visible,
 .themed-tooltip:hover::after,
 .themed-tooltip:focus-visible::after,
 .themed-tooltip:focus-within::after { opacity: 1; transform: translate(-50%, 0); }
-.donor-card .drag-button.themed-tooltip::after { left: 0; transform: translate(0, 4px); }
+.donor-card .drag-button.themed-tooltip { overflow: visible; }
+.donor-card .drag-button.themed-tooltip::after { bottom: auto; top: calc(100% + 7px); left: 50%; transform: translate(-50%, -4px); }
 .donor-card .drag-button.themed-tooltip:hover::after,
-.donor-card .drag-button.themed-tooltip:focus-visible::after { transform: translate(0, 0); }
+.donor-card .drag-button.themed-tooltip:focus-visible::after { transform: translate(-50%, 0); }
+
+/* Keep donor details dense at desktop widths, while preserving the compact stacked card on phone. */
+.compact-donors .donor-card-list {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+}
+
+.donor-actions .danger-icon {
+  display: grid;
+  padding: 0;
+  place-items: center;
+  line-height: 1;
+}
+
+.donor-actions .danger-icon svg { display: block; margin: 0; }
+
+@media (min-width: 900px) {
+  .compact-donors .donor-card {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    min-height: 58px;
+  }
+
+  .compact-donors .donor-main {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 11px;
+  }
+
+  .compact-donors .donor-title-row { flex: 1 1 230px; }
+  .compact-donors .donor-recognition-summary { flex: 0 1 225px; }
+  .compact-donors .donor-giving-summary { flex: 0 1 220px; }
+  .compact-donors .donor-meta-row { flex: 0 1 260px; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+  .compact-donors .donor-actions { flex: 0 0 auto; }
+}
 
 .editor-form-grid textarea.expanded-copy { min-height: 112px; }
 

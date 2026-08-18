@@ -2400,7 +2400,7 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong><details className="donor-board-disclosure themed-tooltip" data-tooltip={assignedBoards.length ? `Used on: ${assignedBoards.map((board) => board.name).join(", ")}` : "This donor is not currently used on a board."} onClick={(event) => event.stopPropagation()}><summary aria-label={`${donor.name} board assignments`}><LayoutDashboard size={12} />{assignedBoards.length} board{assignedBoards.length === 1 ? "" : "s"}</summary><div className="donor-display-toggles">{state.boardPrograms.map((board) => {
+                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong><details className="donor-board-disclosure themed-tooltip" data-tooltip={assignedBoards.length ? `Used on: ${assignedBoards.map((board) => board.name).join(", ")}` : "This donor is not currently used on a board."} onClick={(event) => event.stopPropagation()}><summary aria-label={`${donor.name} board assignments`}><LayoutDashboard size={12} />{assignedBoards.length} board{assignedBoards.length === 1 ? "" : "s"}</summary><div className="donor-display-toggles">{assignedBoards.map((board) => {
                       const isOn = donorIsOnBoard(donor, board);
                       return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${board.name} · ${isOn ? "Included" : "Not included"}`} key={board.id}><input type="checkbox" aria-label={board.name} checked={isOn} onChange={() => toggleDonorBoard(donor.id, board.id)} /><LayoutDashboard size={11} /><span>{board.name}</span></label>;
                     })}</div></details></div>
