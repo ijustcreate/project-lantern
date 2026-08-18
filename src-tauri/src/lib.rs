@@ -20,6 +20,7 @@ struct OpenDisplayInput {
     id: String,
     label: String,
     orientation: String,
+    default_monitor_id: Option<usize>,
 }
 
 #[derive(Serialize)]
@@ -95,14 +96,20 @@ fn open_test_displays(app: AppHandle, displays: Vec<OpenDisplayInput>) -> Result
     let control_window = app.get_webview_window("control");
     let control_position = control_window.as_ref().and_then(|window| window.outer_position().ok());
     let control_size = control_window.as_ref().and_then(|window| window.outer_size().ok());
+    let monitors = app.available_monitors().map_err(|error| error.to_string())?;
     for (index, display) in displays.iter().enumerate() {
         let portrait = display.orientation == "Portrait";
         let window_label = format!("lantern-display-{}", slug(&display.id));
         let width = if portrait { 540.0 } else { 1280.0 };
         let height = if portrait { 920.0 } else { 760.0 };
         let cascade = index as f64 * 28.0;
-        let x = control_position.map(|position| position.x as f64 + control_size.map(|size| (size.width as f64 - width) / 2.0).unwrap_or(60.0) + cascade).unwrap_or(60.0 + cascade);
-        let y = control_position.map(|position| position.y as f64 + control_size.map(|size| (size.height as f64 - height) / 2.0).unwrap_or(40.0) + cascade).unwrap_or(40.0 + cascade);
+        let target_monitor = display.default_monitor_id.and_then(|id| monitors.get(id));
+        let x = target_monitor
+            .map(|monitor| monitor.position().x as f64 + (monitor.size().width as f64 - width) / 2.0 + cascade)
+            .unwrap_or_else(|| control_position.map(|position| position.x as f64 + control_size.map(|size| (size.width as f64 - width) / 2.0).unwrap_or(60.0) + cascade).unwrap_or(60.0 + cascade));
+        let y = target_monitor
+            .map(|monitor| monitor.position().y as f64 + (monitor.size().height as f64 - height) / 2.0 + cascade)
+            .unwrap_or_else(|| control_position.map(|position| position.y as f64 + control_size.map(|size| (size.height as f64 - height) / 2.0).unwrap_or(40.0) + cascade).unwrap_or(40.0 + cascade));
         open_display(
             &app,
             &window_label,

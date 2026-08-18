@@ -703,6 +703,8 @@ export interface DisplayProfile {
   fps: number;
   status: DisplayStatus;
   lastHeartbeat?: string;
+  /** Native monitor preferred when this display preview is opened from the desktop app. */
+  defaultMonitorId?: number;
   enabled?: boolean;
   boardProgramId?: string;
   donorIds?: string[];

@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0193",
+    "title": "Fix display focus ring and add default monitor",
+    "summary": "Display settings focus highlights now render fully, and desktop display previews can be assigned a preferred monitor.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:33 AM",
+    "areas": [
+      "Display settings",
+      "Desktop windows"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/host/lanternHost.ts",
+      "src-tauri/src/lib.rs"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build; cargo check blocked by missing msvcrt.lib"
+  },
+  {
     "id": "DEV-0192",
     "title": "Place scheduling action in the display empty state",
     "summary": "The dashboard now shows Add schedule directly under Nothing scheduled instead of in the display header.",

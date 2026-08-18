@@ -407,7 +407,8 @@ export async function openDisplayWindows(screens = Object.values(loadLanternStat
       displays: screens.map((screen) => ({
         id: screen.id,
         label: screen.label,
-        orientation: screen.orientation
+        orientation: screen.orientation,
+        defaultMonitorId: screen.defaultMonitorId
       }))
     });
     return { opened: screens.map((screen) => screen.id), blocked: [] };

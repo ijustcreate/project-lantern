@@ -6216,7 +6216,13 @@ textarea:focus-visible,
   gap: 9px 12px;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 4px 8px 8px;
+}
+
+.screen-editor-drawer input:focus-visible,
+.screen-editor-drawer select:focus-visible,
+.screen-editor-drawer textarea:focus-visible {
+  outline-offset: -1px;
 }
 
 .display-scroll-controls,

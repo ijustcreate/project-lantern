@@ -6212,6 +6212,7 @@ function ScreensView({
   const [rosterAddId, setRosterAddId] = useState("");
   const [draggedRosterDonorId, setDraggedRosterDonorId] = useState<string | null>(null);
   const [mediaDevices, setMediaDevices] = useState<MediaDeviceInfo[]>([]);
+  const [availableMonitors, setAvailableMonitors] = useState<Array<{ id: number; name?: string; positionX: number; positionY: number; width: number; height: number }>>([]);
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const [displayNotice, setDisplayNotice] = useState<string | null>(null);
   const [roomScreenId, setRoomScreenId] = useState<ScreenId | null>(null);
@@ -6248,9 +6249,15 @@ function ScreensView({
   const roomMics = mediaDevices.filter((device) => device.kind === "audioinput");
   const roomCameraOptions = deviceOptionList(roomCameras, "Default camera", "Camera");
   const roomMicOptions = deviceOptionList(roomMics, "Default mic", "Mic");
+  const monitorOptions = ["", ...availableMonitors.map((monitor) => String(monitor.id))];
+  const monitorLabels = Object.fromEntries([["", availableMonitors.length ? "Use current monitor" : "Current monitor (browser preview)"], ...availableMonitors.map((monitor) => [String(monitor.id), monitor.name?.trim() || `Monitor ${monitor.id + 1} · ${monitor.width}×${monitor.height}`])]);
   const patchDisplay = (id: ScreenId, patch: Partial<DisplayProfile>) => {
     updateState((current) => ({ ...current, screens: { ...current.screens, [id]: { ...current.screens[id], ...patch } } }));
   };
+  useEffect(() => {
+    if (!(window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return;
+    void import("@tauri-apps/api/core").then(({ invoke }) => invoke<Array<{ id: number; name?: string; positionX: number; positionY: number; width: number; height: number }>>("available_displays")).then(setAvailableMonitors).catch(() => setAvailableMonitors([]));
+  }, []);
   const applyRoomViewLayout = (layout: typeof roomViewLayout) => {
     const bounded = {
       x: clamp(layout.x, 8, Math.max(8, window.innerWidth - layout.width - 8)),
@@ -6559,6 +6566,7 @@ function ScreensView({
         <div className="screen-editor-grid">
           <LabeledInput label="Display name" info="User-facing name for this physical display, such as Entrance Display - Portrait." value={editingScreen.label} onChange={(value) => patchDisplay(editingScreen.id, { label: value })} />
           <LabeledSelect label="Orientation" info="Physical screen orientation." value={editingScreen.orientation} options={["Portrait", "Landscape"]} onChange={(value) => patchDisplay(editingScreen.id, { orientation: value as DisplayProfile["orientation"], resolution: value === "Portrait" ? "1080 x 1920" : "1920 x 1080" })} />
+          <LabeledSelect label="Default monitor" info="Desktop app: opens this display preview centered on the chosen monitor. Browser previews use their current window." value={String(editingScreen.defaultMonitorId ?? "")} options={monitorOptions} optionLabels={monitorLabels} onChange={(value) => patchDisplay(editingScreen.id, { defaultMonitorId: value === "" ? undefined : Number(value) })} />
           <div className="display-particle-controls">
             <label className="switch-row"><input type="checkbox" checked={editingScreen.particleAnimationEnabled ?? false} onChange={(event) => patchDisplay(editingScreen.id, { particleAnimationEnabled: event.target.checked })} /><span>Particle animation</span></label>
             {editingScreen.particleAnimationEnabled && <>
