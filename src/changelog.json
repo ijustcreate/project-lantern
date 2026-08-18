@@ -1,5 +1,57 @@
 [
   {
+    "id": "DEV-0177",
+    "title": "Restore donor rosters and improve legacy stars",
+    "summary": "Added dedicated Our Generous Donors portrait boards for the Toy Soldier Brigade and Legacy Donors, repaired older empty rosters, made deleted honor-roll text stay deleted, and replaced shaded legacy stars with a flat high-contrast design.",
+    "author": "Codex",
+    "createdAt": "Aug 11, 2026, 11:21 AM",
+    "areas": [
+      "Board Editor",
+      "Donor Displays",
+      "Content Migration"
+    ],
+    "files": [
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "public/assets/donor-icons/legacy-star-flat.svg"
+    ],
+    "tests": "npm run build; git diff --check; Playwright visual and DOM verification of both roster boards, the legacy honor roll, and the flat star wall"
+  },
+  {
+    "id": "DEV-0176",
+    "title": "Package the museum-local Windows app",
+    "summary": "Added native Windows icon configuration and produced a portable app plus NSIS/MSI installers so the museum mini computer can run Project Lantern locally from a double-click launcher.",
+    "author": "Codex",
+    "createdAt": "Aug 11, 2026, 11:17 AM",
+    "areas": [
+      "Desktop host",
+      "Museum deployment"
+    ],
+    "files": [
+      "src-tauri/tauri.conf.json",
+      "src-tauri/icons/icon.ico"
+    ],
+    "tests": "npm run build; Visual Studio 2022 npm run tauri:build compiled the release executable; npx tauri bundle --bundles msi nsis produced both installers; transfer-folder SHA-256 hashes matched; START PROJECT LANTERN.cmd opened a responsive Project Lantern Control Center from the separate folder and the window closed cleanly"
+  },
+  {
+    "id": "DEV-0175",
+    "title": "Group boards in a searchable picker",
+    "summary": "Replaced the long native Board Editor dropdown with a folder-style picker grouped by board purpose, with search, board counts, format badges, active highlighting, and responsive theme-aware styling.",
+    "author": "Codex",
+    "createdAt": "Aug 11, 2026, 11:12 AM",
+    "areas": [
+      "Board Editor",
+      "Navigation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright opened the picker, searched for gallery, selected the Landscape result, and captured visual QA screenshots"
+  },
+  {
     "id": "DEV-0174",
     "title": "Create legacy donor recognition boards",
     "summary": "Added 42 historical legacy donor records with unknown gift amounts, recreated the portrait and landscape star walls with editable image-backed stars, and added a two-column legacy honor roll.",

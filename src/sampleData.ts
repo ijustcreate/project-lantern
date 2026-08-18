@@ -6,7 +6,8 @@ import { seededVisitorMessages } from "./visitorMessages";
 
 /** Installs the historical donor walls without altering existing donor records. */
 export const LEGACY_DONOR_STARS_CONTENT_VERSION = 9;
-export const LANTERN_CONTENT_VERSION = LEGACY_DONOR_STARS_CONTENT_VERSION;
+export const DONOR_ROSTER_BOARDS_CONTENT_VERSION = 10;
+export const LANTERN_CONTENT_VERSION = DONOR_ROSTER_BOARDS_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -203,7 +204,7 @@ function legacyStarPanel(donorId: string, position: [number, number, number, num
     y: position[1],
     width: position[2],
     height: position[3],
-    imageUrl: "/assets/donor-icons/star.png",
+    imageUrl: "/assets/donor-icons/legacy-star-flat.svg",
     imageFit: "contain",
     fontFamily: "DM Sans",
     fontSize,
@@ -285,6 +286,46 @@ export const legacyBoardPrograms: DonorBoardProgram[] = [
   legacyStarWallBoard(1, "Portrait", legacyPhoto1StarPositions),
   legacyStarWallBoard(2, "Landscape", legacyPhoto2StarPositions),
   legacyDonorsBoard()
+];
+
+function generousDonorRosterBoard(audience: "brigade" | "legacy"): DonorBoardProgram {
+  const brigade = audience === "brigade";
+  const id = brigade ? "board-generous-toy-soldier-portrait" : "board-generous-legacy-portrait";
+  const donorIds = brigade ? brigadeIds : legacyDonorIds;
+  const heading = brigade ? "TOY SOLDIER BRIGADE" : "LEGACY DONORS";
+  return {
+    id,
+    name: `Our Generous Donors · ${brigade ? "Toy Soldier Brigade" : "Legacy Donors"} · Portrait`,
+    orientation: "Portrait",
+    heading,
+    subtitle: "OUR GENEROUS DONORS",
+    description: brigade
+      ? "Recognizing the Toy Soldier Brigade members investing in the power of play."
+      : "Recognizing the legacy donors whose generosity helped our museum grow.",
+    footer: brigade ? "WITH GRATITUDE TO OUR TOY SOLDIER BRIGADE" : "WITH GRATITUDE TO OUR LEGACY DONORS",
+    columns: 2,
+    donorIds,
+    active: true,
+    givingProgramId: brigade ? toySoldierProgram.id : undefined,
+    templatePurpose: "roster",
+    palette: "classic",
+    fontFamily: "Libre Baskerville",
+    showFrame: true,
+    showIcons: false,
+    showSubtext: false,
+    donorScrollEnabled: false,
+    panels: [
+      { id: `${id}-heading`, type: "heading", title: heading, size: "feature", x: 8, y: 5, width: 84, height: 7, fontFamily: "Cinzel", fontSize: 32 },
+      { id: `${id}-intro`, type: "message", eyebrow: "OUR GENEROUS DONORS", title: "WITH GRATITUDE", body: brigade ? "Honoring the Toy Soldier Brigade." : "Honoring our legacy donors.", size: "standard", x: 10, y: 13, width: 80, height: 9, fontFamily: "Libre Baskerville", fontSize: 18 },
+      { id: `${id}-donors`, type: "donors", title: "", size: "feature", columns: 2, rows: brigade ? 13 : 21, donorIds, x: 8, y: 25, width: 84, height: 64, fontFamily: "Libre Baskerville", fontSize: brigade ? 18 : 16, donorDividerOpacity: 10 },
+      { id: `${id}-footer`, type: "footer", title: brigade ? "WITH GRATITUDE TO OUR TOY SOLDIER BRIGADE" : "WITH GRATITUDE TO OUR LEGACY DONORS", size: "compact", x: 10, y: 92, width: 80, height: 4, fontFamily: "DM Sans", fontSize: 10, footerIconPlacement: "both" }
+    ]
+  };
+}
+
+export const generousDonorBoardPrograms: DonorBoardProgram[] = [
+  generousDonorRosterBoard("brigade"),
+  generousDonorRosterBoard("legacy")
 ];
 
 function fullRosterBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgram {
@@ -679,7 +720,7 @@ export const initialState: LanternState = {
     socialValue: "childrensmuseumstockton.org",
     footerVisibility: { portraitHours: true, portraitImpact: true, landscapeTheater: true, landscapeHours: true, landscapeMembership: true, landscapeSocial: true }
   },
-  boardPrograms: [...brigadeBoardPrograms, ...legacyBoardPrograms],
+  boardPrograms: [...brigadeBoardPrograms, ...legacyBoardPrograms, ...generousDonorBoardPrograms],
   schedules: createPhase3DemoSchedule(),
   savedAnnouncements: [...brigadeAnnouncements, ...phase3Announcements],
   announcement: { ...brigadeAnnouncements[0], active: false },

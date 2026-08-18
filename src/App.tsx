@@ -17,6 +17,7 @@ import {
   Clock3,
   Eye,
   ExternalLink,
+  Folder,
   GripVertical,
   Move,
   Move3d,
@@ -2978,7 +2979,7 @@ function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): Bo
     story: { id, type, eyebrow: "FEATURED STORY", title: "A brighter future, built together", body: "Share a short story about the impact your supporters made possible.", size: "standard" },
     footer: { id, type, title: "TOGETHER, WE MAKE A DIFFERENCE.", size: "compact" },
     image: { id, type, title: "Image", size: "standard", imageFit: "contain" },
-    "donor-star": { id, type, title: "Select a donor", size: "standard", imageUrl: "/assets/donor-icons/star.png", imageFit: "contain", fontFamily: "DM Sans", fontSize: 14, textColor: "#201708" }
+    "donor-star": { id, type, title: "Select a donor", size: "standard", imageUrl: "/assets/donor-icons/legacy-star-flat.svg", imageFit: "contain", fontFamily: "DM Sans", fontSize: 14, textColor: "#201708" }
   };
   const dimensions: Record<BoardPanelType, { width: number; height: number }> = {
     heading: { width: 54, height: 20 }, "supporters-heading": { width: 70, height: 8 }, donors: { width: 70, height: 44 }, message: { width: 48, height: 24 },
@@ -3012,9 +3013,11 @@ function ThemeStudio({
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
   const [donorSearch, setDonorSearch] = useState("");
+  const [boardSearch, setBoardSearch] = useState("");
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [pendingProgramDeleteId, setPendingProgramDeleteId] = useState<string | null>(null);
+  const boardPickerRef = useRef<HTMLDetailsElement>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const pendingProgramDelete = state.boardPrograms.find((program) => program.id === pendingProgramDeleteId);
   const boardDisplay = selectedProgram ? { ...display, orientation: selectedProgram.orientation } : display;
@@ -3038,22 +3041,6 @@ function ThemeStudio({
     });
     patchProgram({ panels: migrated });
   }, [selectedProgram?.id, selectedProgram?.panels]);
-
-  useEffect(() => {
-    if (!selectedProgram?.panels?.length || selectedProgram.panels.some((panel) => panel.type === "supporters-heading")) return;
-    const donorPanel = selectedProgram.panels.find((panel) => panel.type === "donors");
-    if (!donorPanel) return;
-    const headingHeight = Math.min(8, Math.max(5, (donorPanel.height ?? 45) * .16));
-    const heading: BoardPanel = {
-      id: `${donorPanel.id}-heading`, type: "supporters-heading", title: donorPanel.title || "Our supporters", size: "compact",
-      fontFamily: donorPanel.fontFamily, fontSize: donorPanel.donorHeadingSize ?? Math.round((donorPanel.fontSize ?? display.nameSize ?? 28) * .62),
-      x: donorPanel.x, y: donorPanel.y, width: donorPanel.width, height: headingHeight
-    };
-    const migrated = selectedProgram.panels.flatMap((panel) => panel.id === donorPanel.id
-      ? [{ ...panel, title: "", fontSize: panel.donorNameSize ?? panel.fontSize ?? display.nameSize ?? 28, y: (panel.y ?? 0) + headingHeight, height: Math.max(4, (panel.height ?? 45) - headingHeight) }, heading]
-      : [panel]);
-    patchProgram({ panels: migrated });
-  }, [selectedProgram?.id, selectedProgram?.panels, display.nameSize]);
 
   useEffect(() => {
     setSelectedPanelId("");
@@ -3281,6 +3268,16 @@ function ThemeStudio({
     { label: "Good deeds", programs: state.boardPrograms.filter((program) => program.templatePurpose === "good-deeds") },
     { label: "Custom boards", programs: state.boardPrograms.filter((program) => !program.templatePurpose) }
   ].filter((group) => group.programs.length);
+  const selectedBoardGroup = groupedBoardPrograms.find((group) => group.programs.some((program) => program.id === selectedProgram?.id));
+  const boardPickerName = (program: DonorBoardProgram) => program.name.replace(/\s*(?:·|-)\s*(?:portrait|landscape)\s*$/i, "").trim();
+  const normalizedBoardSearch = boardSearch.trim().toLowerCase();
+  const filteredBoardGroups = groupedBoardPrograms.map((group) => ({
+    ...group,
+    programs: group.programs.filter((program) => !normalizedBoardSearch
+      || program.name.toLowerCase().includes(normalizedBoardSearch)
+      || program.orientation.toLowerCase().includes(normalizedBoardSearch)
+      || group.label.toLowerCase().includes(normalizedBoardSearch))
+  })).filter((group) => group.programs.length);
   const selectedBackgroundCrop = selectedProgram?.backgroundCrop ?? { scale: 1, x: 0, y: 0, rotation: 0 };
 
   if (!selectedProgram) return <div className="empty-inspector"><strong>No boards available</strong></div>;
@@ -3289,7 +3286,23 @@ function ThemeStudio({
     <section className="board-builder">
       <div className="board-builder-toolbar">
         <div className="board-select-cluster">
-          <label className="builder-select"><span>Board template</span><select value={selectedProgram.id} onChange={(event) => setSelectedProgramId(event.target.value)}>{groupedBoardPrograms.map((group) => <optgroup label={group.label} key={group.label}>{group.programs.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</optgroup>)}</select></label>
+          <details className="board-picker" ref={boardPickerRef} onToggle={(event) => { if (!(event.currentTarget as HTMLDetailsElement).open) setBoardSearch(""); }}>
+            <summary aria-label={`Choose board. Current board: ${selectedProgram.name}`}>
+              <span className="board-picker-label">Board</span>
+              <span className="board-picker-current"><Folder size={16} /><span><strong>{boardPickerName(selectedProgram)}</strong><small>{selectedBoardGroup?.label ?? "Custom boards"} · {selectedProgram.orientation}</small></span></span>
+              <ChevronDown size={16} />
+            </summary>
+            <div className="board-picker-popover">
+              <label className="board-picker-search"><Search size={15} /><span className="sr-only">Search boards</span><input autoFocus value={boardSearch} onChange={(event) => setBoardSearch(event.target.value)} placeholder="Search boards or folders" /></label>
+              <div className="board-picker-groups">
+                {filteredBoardGroups.map((group) => <section className="board-picker-group" key={group.label}>
+                  <header><Folder size={14} /><strong>{group.label}</strong><span>{group.programs.length}</span></header>
+                  {group.programs.map((program) => <button type="button" className={program.id === selectedProgram.id ? "selected" : ""} aria-current={program.id === selectedProgram.id ? "true" : undefined} key={program.id} onClick={() => { setSelectedProgramId(program.id); boardPickerRef.current?.removeAttribute("open"); }}><span>{boardPickerName(program)}</span><small>{program.orientation}</small></button>)}
+                </section>)}
+                {!filteredBoardGroups.length && <div className="board-picker-empty"><Search size={18} /><span>No boards match “{boardSearch}”.</span></div>}
+              </div>
+            </div>
+          </details>
           <details className="board-toolbar-menu">
             <summary className="command-button secondary compact"><SlidersHorizontal size={15} /> Board actions <ChevronDown size={14} /></summary>
             <div className="board-toolbar-popover">

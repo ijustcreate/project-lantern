@@ -790,7 +790,7 @@ function drawComposableBoard(
     if (panel.type === "donor-star") {
       const donor = panel.donorId ? donors.find((candidate) => candidate.id === panel.donorId) : undefined;
       const name = donor?.name ?? panel.title;
-      const starImage = panel.imageUrl ?? "/assets/donor-icons/star.png";
+      const starImage = panel.imageUrl ?? "/assets/donor-icons/legacy-star-flat.svg";
       context.save();
       context.shadowColor = "rgba(7, 27, 53, .55)";
       context.shadowBlur = Math.max(5, Math.min(contentWidth, panelHeight) * .08);
@@ -843,7 +843,7 @@ function drawComposableBoard(
 function prepareBoardPanelImages(state: LanternState, onReady: () => void) {
   state.boardPrograms.flatMap((program) => program.panels ?? []).forEach((panel) => {
     const source = panel.type === "image" || panel.type === "donor-star"
-      ? panel.imageUrl ?? (panel.type === "donor-star" ? "/assets/donor-icons/star.png" : undefined)
+      ? panel.imageUrl ?? (panel.type === "donor-star" ? "/assets/donor-icons/legacy-star-flat.svg" : undefined)
       : undefined;
     if (!source) return;
     const cached = boardPanelImageCache.get(source);

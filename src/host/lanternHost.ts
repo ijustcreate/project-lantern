@@ -1,4 +1,4 @@
-import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -877,6 +877,7 @@ export function normalizeState(state: LanternState): LanternState {
   const needsPhase3ContentMigration = incomingContentVersion < PHASE3_CONTENT_VERSION;
   const needsEffectStudioMigration = incomingContentVersion < PHASE4_CONTENT_VERSION;
   const needsLegacyDonorStarsMigration = incomingContentVersion < LEGACY_DONOR_STARS_CONTENT_VERSION;
+  const needsDonorRosterBoardsMigration = incomingContentVersion < DONOR_ROSTER_BOARDS_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -911,13 +912,50 @@ export function normalizeState(state: LanternState): LanternState {
   const programsWithLegacyDonorWalls = needsLegacyDonorStarsMigration
     ? appendMissingById(migratedPrograms, legacyBoardPrograms)
     : migratedPrograms;
-  const normalizedBoardPrograms = programsWithLegacyDonorWalls.map((program) => ({
-    ...program,
-    donorIds: remapDonorIds(program.donorIds, donorAliases) ?? [],
-    panels: program.panels?.map((panel) => panel.donorIds
-      ? { ...panel, donorIds: remapDonorIds(panel.donorIds, donorAliases) }
-      : panel)
-  }));
+  const programsWithDonorRosterBoards = needsDonorRosterBoardsMigration
+    ? appendMissingById(programsWithLegacyDonorWalls, generousDonorBoardPrograms)
+    : programsWithLegacyDonorWalls;
+  const normalizedBoardPrograms = programsWithDonorRosterBoards.map((incomingProgram) => {
+    const hasVisibleDonors = incomingProgram.donorIds.some((donorId) => donors.some((donor) => donor.id === donorId && donor.active));
+    const isGenerousDonorBoard = /generous donors/i.test(incomingProgram.name);
+    const generousDefault = /legacy/i.test(incomingProgram.name)
+      ? generousDonorBoardPrograms.find((program) => program.id === "board-generous-legacy-portrait")
+      : generousDonorBoardPrograms.find((program) => program.id === "board-generous-toy-soldier-portrait");
+    const repairEmptyGenerousBoard = needsDonorRosterBoardsMigration && isGenerousDonorBoard && !hasVisibleDonors && generousDefault;
+    const program = repairEmptyGenerousBoard ? {
+      ...incomingProgram,
+      heading: generousDefault.heading,
+      subtitle: generousDefault.subtitle,
+      description: generousDefault.description,
+      footer: generousDefault.footer,
+      donorIds: generousDefault.donorIds,
+      panels: incomingProgram.panels?.map((panel) => panel.type === "donors"
+        ? { ...panel, donorIds: generousDefault.donorIds }
+        : panel.type === "heading"
+          ? { ...panel, title: generousDefault.heading }
+          : panel.type === "footer"
+            ? { ...panel, title: generousDefault.footer }
+            : panel)
+    } : incomingProgram;
+    return {
+      ...program,
+      donorIds: remapDonorIds(program.donorIds, donorAliases) ?? [],
+      panels: program.panels
+        ?.filter((panel) => !(needsDonorRosterBoardsMigration
+          && program.id === "board-legacy-donors-portrait"
+          && panel.id === "legacy-list-donors-heading"
+          && panel.type === "supporters-heading"))
+        .map((panel) => {
+          const donorIds = panel.donorIds ? remapDonorIds(panel.donorIds, donorAliases) : undefined;
+          const flatStarImage = needsDonorRosterBoardsMigration
+            && panel.type === "donor-star"
+            && (!panel.imageUrl || panel.imageUrl === "/assets/donor-icons/star.png")
+            ? "/assets/donor-icons/legacy-star-flat.svg"
+            : panel.imageUrl;
+          return { ...panel, ...(donorIds ? { donorIds } : {}), imageUrl: flatStarImage };
+        })
+    };
+  });
   const boardPrograms = needsDonorDomainMigration
     ? migrateLegacyDonorPresentation(normalizedBoardPrograms, donors)
     : normalizedBoardPrograms;
