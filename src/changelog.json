@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0186",
+    "title": "Simplify board panels and group related content",
+    "summary": "Replaced editor panel choices with Text, Donor list, and Image/PNG; migrated existing board copy and donor stars, added panel groups, and fixed cramped overlapping selection controls.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:50 AM",
+    "areas": [
+      "Board editor",
+      "Board templates",
+      "Interaction"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/sampleData.ts",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; migration and interaction source-path inspection"
+  },
+  {
     "id": "DEV-0185",
     "title": "Unify Toy Soldier Brigade artwork",
     "summary": "Placed soldier arms behind their uniforms and rebuilt both three-soldier illustrations with the shared full-body toy-soldier style.",

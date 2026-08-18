@@ -7157,7 +7157,7 @@ textarea:focus-visible,
   border: 1px solid transparent;
   border-radius: 4px;
   text-align: center;
-  overflow: hidden;
+  overflow: visible;
   cursor: default;
   transition: border-color 140ms ease, background 140ms ease;
 }
@@ -7171,12 +7171,12 @@ textarea:focus-visible,
 .panel-move-handle {
   position: absolute;
   z-index: 8;
-  bottom: 4px;
-  left: 4px;
+  bottom: calc(100% + 4px);
+  left: 0;
   display: grid;
   place-items: center;
-  width: 29px;
-  height: 27px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid rgba(121, 202, 198, .75);
   border-radius: 5px;
@@ -7191,12 +7191,13 @@ textarea:focus-visible,
 .panel-remove-handle {
   position: absolute;
   z-index: 10;
-  right: 4px;
-  bottom: 4px;
+  bottom: calc(100% + 4px);
+  right: auto;
+  left: 26px;
   display: grid;
   place-items: center;
-  width: 29px;
-  height: 27px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid rgba(242, 126, 96, .72);
   border-radius: 5px;
@@ -7209,6 +7210,8 @@ textarea:focus-visible,
 .direct-board-panel:hover .panel-remove-handle,
 .direct-board-panel.selected .panel-remove-handle { opacity: 1; }
 .panel-remove-handle:disabled { opacity: .22; cursor: default; }
+.direct-board-panel.panel-tools-below .panel-move-handle,
+.direct-board-panel.panel-tools-below .panel-remove-handle { top: calc(100% + 4px); bottom: auto; }
 .direct-board-panel:hover .panel-move-handle,
 .direct-board-panel.selected .panel-move-handle { opacity: 1; }
 .editable-board-text:focus ~ .panel-move-handle { opacity: 0; pointer-events: none; }
@@ -7268,12 +7271,18 @@ textarea:focus-visible,
 .board-eyebrow { color: #d9a657; font-size: calc(var(--panel-font-size) * .55); letter-spacing: .22em; }
 .board-title { margin-top: clamp(3px, .9vh, 10px); font-size: min(var(--panel-font-size), 4.4cqw, 58cqh); line-height: 1.08; letter-spacing: .14em; white-space: nowrap; }
 .board-copy { margin-top: clamp(3px, .65vh, 8px); color: #c5cdcd; font-size: calc(var(--panel-font-size) * .44); line-height: 1.35; }
+.board-text { display: grid; width: 100%; height: 100%; place-items: center; overflow: auto; font-size: min(var(--panel-font-size), 7.2cqw, 72cqh); font-weight: 700; line-height: 1.18; letter-spacing: .04em; white-space: pre-wrap; }
 .board-section-title, .board-message-title { color: #d9a657; font-size: calc(var(--panel-font-size) * .62); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .direct-board-panel .board-title,
 .direct-board-panel .board-section-title,
 .direct-board-panel .board-message-title,
 .direct-board-panel .board-copy,
+.direct-board-panel .board-text,
 .direct-board-panel .direct-footer-line { color: var(--panel-text-color); }
+
+.panel-group-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid rgba(121, 202, 198, .2); border-radius: 8px; color: var(--muted); background: rgba(121, 202, 198, .045); font-size: 9px; }
+.panel-group-actions button { flex: 0 0 auto; min-height: 26px; padding: 0 8px; border: 1px solid rgba(121, 202, 198, .34); border-radius: 6px; color: #c8f2f1; background: rgba(18, 62, 72, .48); font: inherit; font-weight: 750; cursor: pointer; }
+.panel-group-actions button:disabled { opacity: .42; cursor: not-allowed; }
 .direct-board-canvas.text-shadow-enabled .editable-board-text,
 .direct-board-canvas.text-shadow-enabled .direct-donor-name {
   text-shadow: var(--board-text-shadow-x) var(--board-text-shadow-y) var(--board-text-shadow-blur) rgb(0 0 0 / var(--board-text-shadow-alpha));

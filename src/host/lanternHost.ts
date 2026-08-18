@@ -1,7 +1,7 @@
 import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
-import type { Announcement, BoardDonorPresentation, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
+import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
 import { normalizeVisitorMessageRotation, normalizeVisitorMessages } from "../visitorMessages";
 import { normalizeBroadcastComposition } from "../broadcastComposition";
 import { normalizeEffectStudioState, normalizePhase4LiveEffects, PHASE4_CONTENT_VERSION } from "../effectStudio";
@@ -502,6 +502,24 @@ function migrateLegacyDonorPresentation(
   });
 }
 
+function migrateUnifiedBoardPanels(programs: LanternState["boardPrograms"], donors: Donor[]): LanternState["boardPrograms"] {
+  return programs.map((program) => ({
+    ...program,
+    panels: program.panels?.flatMap((panel): BoardPanel[] => {
+      if (["text", "donors", "image"].includes(panel.type)) return [panel];
+      if (panel.type === "donor-star") {
+        const groupId = panel.groupId ?? `group-${panel.id}`;
+        const donorName = donors.find((donor) => donor.id === panel.donorId)?.name ?? panel.title;
+        return [
+          { ...panel, id: `${panel.id}-image`, type: "image", title: "Recognition star", groupId, donorId: undefined, eyebrow: undefined, body: undefined },
+          { ...panel, type: "text", title: donorName, groupId, imageUrl: undefined, imageFit: undefined, donorId: undefined, eyebrow: undefined, body: undefined }
+        ];
+      }
+      return [{ ...panel, type: "text", title: [panel.eyebrow, panel.title, panel.body].filter(Boolean).join("\n"), eyebrow: undefined, body: undefined, donorId: undefined }];
+    })
+  }));
+}
+
 function donorIdentityKey(value: string) {
   return value
     .trim()
@@ -972,9 +990,9 @@ export function normalizeState(state: LanternState): LanternState {
         })
     };
   });
-  const boardPrograms = needsDonorDomainMigration
+  const boardPrograms = migrateUnifiedBoardPanels(needsDonorDomainMigration
     ? migrateLegacyDonorPresentation(normalizedBoardPrograms, donors)
-    : normalizedBoardPrograms;
+    : normalizedBoardPrograms, donors);
 
   const incomingAnnouncements = state.savedAnnouncements ?? initialState.savedAnnouncements;
   const retiredAnnouncements = needsLegacyContentMigration

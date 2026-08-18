@@ -2938,10 +2938,11 @@ function DonorSetupWizard({ state, onClose, onCreate }: { state: LanternState; o
   );
 }
 
-const boardPanelTypes: BoardPanelType[] = ["heading", "supporters-heading", "donors", "message", "story", "footer", "image", "donor-star"];
+const boardPanelTypes: BoardPanelType[] = ["text", "donors", "image"];
 
 function boardPanelLabel(type: BoardPanelType) {
   const labels: Record<BoardPanelType, string> = {
+    text: "Text",
     heading: "Heading",
     "supporters-heading": "Subheader",
     donors: "Donor list",
@@ -2966,16 +2967,17 @@ function boardPreviewPalette(palette: DonorBoardProgram["palette"]) {
 
 function defaultBoardPanels(program: LanternState["boardPrograms"][number]): BoardPanel[] {
   return [
-    { id: `${program.id}-heading`, type: "heading", title: [program.heading, program.subtitle].filter(Boolean).join(" "), size: "standard", x: 4, y: 4, width: 92, height: 22 },
-    { id: `${program.id}-supporters-heading`, type: "supporters-heading", title: "Our supporters", size: "compact", x: 5, y: 29, width: 90, height: 7 },
+    { id: `${program.id}-heading`, type: "text", title: [program.heading, program.subtitle].filter(Boolean).join("\n"), size: "standard", x: 4, y: 4, width: 92, height: 22 },
+    { id: `${program.id}-supporters-heading`, type: "text", title: "Our supporters", size: "compact", x: 5, y: 29, width: 90, height: 7 },
     { id: `${program.id}-donors`, type: "donors", title: "", size: "feature", columns: program.columns, x: 5, y: 36, width: 90, height: 45 },
-    { id: `${program.id}-footer`, type: "footer", title: program.footer, size: "compact", x: 5, y: 84, width: 90, height: 11 }
+    { id: `${program.id}-footer`, type: "text", title: program.footer, size: "compact", x: 5, y: 84, width: 90, height: 11 }
   ];
 }
 
 function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): BoardPanel {
   const id = `${type}-${Date.now()}`;
   const templates: Record<BoardPanelType, BoardPanel> = {
+    text: { id, type, title: "Add your text here", size: "standard" },
     heading: { id, type, title: "OUR GENEROUS DONORS", size: "standard" },
     "supporters-heading": { id, type, title: "Our supporters", size: "compact" },
     donors: { id, type, title: "", size: "feature", columns: 2 },
@@ -2986,6 +2988,7 @@ function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): Bo
     "donor-star": { id, type, title: "Select a donor", size: "standard", imageUrl: "/assets/donor-icons/legacy-star-flat.svg", imageFit: "contain", fontFamily: "DM Sans", fontSize: 14, textColor: "#201708" }
   };
   const dimensions: Record<BoardPanelType, { width: number; height: number }> = {
+    text: { width: 48, height: 18 },
     heading: { width: 54, height: 20 }, "supporters-heading": { width: 70, height: 8 }, donors: { width: 70, height: 44 }, message: { width: 48, height: 24 },
     story: { width: 55, height: 30 }, footer: { width: 70, height: 12 }, image: { width: 34, height: 32 }, "donor-star": { width: 22, height: 18 }
   };
@@ -3054,13 +3057,20 @@ function ThemeStudio({
   }, [selectedProgramId]);
 
   useEffect(() => {
-    if (!selectedProgram?.panels?.some((panel) => panel.type === "heading" && (panel.eyebrow || panel.body))) return;
-    patchProgram({
-      panels: selectedProgram.panels.map((panel) => panel.type === "heading"
-        ? { ...panel, title: [panel.eyebrow, panel.title].filter(Boolean).join(" "), eyebrow: undefined, body: undefined }
-        : panel)
+    if (!selectedProgram?.panels?.some((panel) => !["text", "donors", "image"].includes(panel.type))) return;
+    const migrated = selectedProgram.panels.flatMap((panel) => {
+      if (["text", "donors", "image"].includes(panel.type)) return [panel];
+      if (panel.type === "donor-star") {
+        const groupId = panel.groupId ?? `group-${panel.id}`;
+        return [
+          { ...panel, id: `${panel.id}-image`, type: "image" as const, title: "Recognition star", groupId, donorId: undefined, eyebrow: undefined, body: undefined },
+          { ...panel, type: "text" as const, title: state.donors.find((donor) => donor.id === panel.donorId)?.name ?? panel.title, groupId, imageUrl: undefined, imageFit: undefined, donorId: undefined, eyebrow: undefined, body: undefined }
+        ];
+      }
+      return [{ ...panel, type: "text" as const, title: [panel.eyebrow, panel.title, panel.body].filter(Boolean).join("\n"), eyebrow: undefined, body: undefined, donorId: undefined }];
     });
-  }, [selectedProgram?.id, selectedProgram?.panels]);
+    patchProgram({ panels: migrated });
+  }, [selectedProgram?.id, selectedProgram?.panels, state.donors]);
 
   useEffect(() => {
     const displayedProgramId = resolveDisplayedBoardProgramId(state, display.id);
@@ -3116,6 +3126,16 @@ function ThemeStudio({
     const nextPanels = panels.filter((panel) => !ids.includes(panel.id));
     patchProgram({ panels: nextPanels });
     setSelectedPanelId(""); setSelectedPanelIds([]);
+  };
+  const groupSelectedPanels = () => {
+    const ids = selectedPanelIds.length > 1 ? selectedPanelIds : selectedPanelId ? [selectedPanelId] : [];
+    if (ids.length < 2) return;
+    const groupId = `group-${Date.now()}`;
+    patchProgram({ panels: panels.map((panel) => ids.includes(panel.id) ? { ...panel, groupId } : panel) });
+  };
+  const ungroupPanel = (panel: BoardPanel) => {
+    if (!panel.groupId) return;
+    patchProgram({ panels: panels.map((item) => item.groupId === panel.groupId ? { ...item, groupId: undefined } : item) });
   };
 
   const duplicateProgram = () => {
@@ -3376,15 +3396,8 @@ function ThemeStudio({
             {selectedPanel ? <div className="inspector-block">
               <section className="inspector-primary-section">
                 <header><strong>Content</strong><small>Edit here or click text directly on the board.</small></header>
-                {(selectedPanel.type === "heading" || selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer") && <LabeledInput label={selectedPanel.type === "footer" ? "Footer text" : selectedPanel.type === "supporters-heading" ? "Subheader text" : "Heading text"} info="Visitor-facing copy for this element." value={selectedPanel.title} onChange={(title) => patchPanel(selectedPanel.id, { title })} />}
-                {(selectedPanel.type === "message" || selectedPanel.type === "story") && <>
-                  <LabeledInput label="Intro" info="Small introductory label above the headline." value={selectedPanel.eyebrow ?? ""} onChange={(eyebrow) => patchPanel(selectedPanel.id, { eyebrow })} />
-                  <LabeledInput label="Headline" info="Main headline for this element." value={selectedPanel.title} onChange={(title) => patchPanel(selectedPanel.id, { title })} />
-                  <label className="field"><span>Body copy <InfoDot text="Keep visitor-facing stories concise enough to read at a glance." /></span><textarea rows={5} value={selectedPanel.body ?? ""} onChange={(event) => patchPanel(selectedPanel.id, { body: event.target.value })} /></label>
-                </>}
+                {selectedPanel.type === "text" && <label className="field"><span>Text <InfoDot text="Use line breaks to arrange all copy inside this one text panel." /></span><textarea rows={7} value={selectedPanel.title} onChange={(event) => patchPanel(selectedPanel.id, { title: event.target.value })} /></label>}
                 {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> {selectedPanel.imageUrl ? "Replace image" : "Choose PNG or image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the element." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
-                {selectedPanel.type === "donor-star" && <><LabeledSelect label="Star donor" info="The name layered over this star. You can also click the name on the board to edit it." value={selectedPanel.donorId ?? ""} options={selectedProgram.donorIds} optionLabels={Object.fromEntries(state.donors.filter((donor) => selectedProgram.donorIds.includes(donor.id)).map((donor) => [donor.id, donor.name]))} onChange={(donorId) => patchPanel(selectedPanel.id, { donorId, title: state.donors.find((donor) => donor.id === donorId)?.name ?? selectedPanel.title })} /><label className="command-button secondary compact image-upload-button"><Upload size={15} /> Replace star image<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label></>}
-                {selectedPanel.type === "footer" && <div className="field"><span>Footer icons</span><SegmentedControl value={selectedPanel.footerIconPlacement ?? "left"} options={[["left", "Left side"], ["both", "Both sides"]]} onChange={(footerIconPlacement) => patchPanel(selectedPanel.id, { footerIconPlacement: footerIconPlacement as BoardPanel["footerIconPlacement"] })} /></div>}
               </section>
               {selectedPanel.type === "donors" && <>
                 <div className="field"><span>Names in each row</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as BoardPanel["columns"] })} /></div>
@@ -3407,7 +3420,8 @@ function ThemeStudio({
                   </div>
                 </details>
               </>}
-              {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><Slider label="Font size" info="Changes text size without changing the element box." value={selectedPanel.fontSize ?? (selectedPanel.type === "heading" ? 32 : selectedPanel.type === "donors" ? display.nameSize ?? 28 : selectedPanel.type === "donor-star" ? 14 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback={selectedPanel.type === "donor-star" ? "#201708" : selectedPanel.type === "supporters-heading" || selectedPanel.type === "footer" ? "#D9A657" : "#F5F2EB"} onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div></div></details>}
+              {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><Slider label="Font size" info="Changes text size without changing the element box." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={8} max={72} onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div></div></details>}
+              <div className="panel-group-actions"><span>{selectedPanel.groupId ? "Grouped panels move together." : "Select two panels with Shift to group them."}</span>{selectedPanel.groupId ? <button type="button" onClick={() => ungroupPanel(selectedPanel)}>Ungroup</button> : <button type="button" disabled={selectedPanelIds.length < 2} onClick={groupSelectedPanels}>Group selected</button>}</div>
               <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0); patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) }); }} /></label>)}</div><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={() => removePanel(selectedPanel.id)}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
             <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
@@ -3541,11 +3555,16 @@ function DirectBoardCanvas({
     const startX = event.clientX;
     const startY = event.clientY;
     const initial = { x: panel.x ?? 0, y: panel.y ?? 0, width: panel.width ?? 30, height: panel.height ?? 20 };
+    const groupedPanels = mode === "move" && panel.groupId ? panels.filter((item) => item.groupId === panel.groupId) : [panel];
+    const groupedInitial = new Map(groupedPanels.map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0, width: item.width ?? 30, height: item.height ?? 20 }]));
     const move = (pointer: PointerEvent) => {
       const dx = (pointer.clientX - startX) / rect.width * 100;
       const dy = (pointer.clientY - startY) / rect.height * 100;
       if (mode === "move") {
-        onPatch(panel.id, { x: Math.max(0, Math.min(100 - initial.width, initial.x + dx)), y: Math.max(0, Math.min(100 - initial.height, initial.y + dy)) });
+        groupedPanels.forEach((item) => {
+          const origin = groupedInitial.get(item.id)!;
+          onPatch(item.id, { x: Math.max(0, Math.min(100 - origin.width, origin.x + dx)), y: Math.max(0, Math.min(100 - origin.height, origin.y + dy)) });
+        });
         return;
       }
       let { x, y, width, height } = initial;
@@ -3573,10 +3592,12 @@ function DirectBoardCanvas({
   const prioritizeMoveHandle = (event: React.PointerEvent<HTMLDivElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const candidate = panels.find((panel) => {
-      const left = rect.left + ((panel.x ?? 5) / 100) * rect.width + 4;
-      const bottom = rect.top + (((panel.y ?? 5) + (panel.height ?? 18)) / 100) * rect.height - 4;
-      return event.clientX >= left && event.clientX <= left + 29 && event.clientY >= bottom - 27 && event.clientY <= bottom;
+    const candidate = [...panels].reverse().find((panel) => {
+      const left = rect.left + ((panel.x ?? 5) / 100) * rect.width;
+      const top = rect.top + ((panel.y ?? 5) / 100) * rect.height;
+      const bottom = rect.top + (((panel.y ?? 5) + (panel.height ?? 18)) / 100) * rect.height;
+      const handleTop = (panel.y ?? 5) < 8 ? bottom + 4 : top - 26;
+      return event.clientX >= left && event.clientX <= left + 22 && event.clientY >= handleTop && event.clientY <= handleTop + 22;
     });
     if (candidate && !(event.target as Element).closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
@@ -3613,12 +3634,12 @@ function DirectBoardCanvas({
       } as React.CSSProperties} />;
     })}</div>}
     <div className="direct-board-inner">
-      {panels.map((panel, index) => <section key={panel.id} data-panel-id={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}`} style={{
+      {panels.map((panel, index) => <section key={panel.id} data-panel-id={panel.id} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}${(panel.y ?? index * 20 + 5) < 8 ? " panel-tools-below" : ""}`} style={{
         left: `${panel.x ?? 5}%`,
         top: `${panel.y ?? index * 20 + 5}%`,
         width: `${panel.width ?? 90}%`,
         height: `${panel.height ?? 18}%`,
-        zIndex: index + 2,
+        zIndex: panel.id === selectedPanelId ? panels.length + 20 : index + 2,
         fontFamily: panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat",
         "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? palette.accent : panel.type === "message" || panel.type === "story" ? palette.text : palette.text),
         "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
@@ -3630,6 +3651,7 @@ function DirectBoardCanvas({
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
+        {panel.type === "text" && <EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "heading" && <EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "supporters-heading" && <EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
@@ -3707,7 +3729,7 @@ function DirectStarDonorName({ donor, fallbackName, imageUrl, fontFamily, fontSi
 
 function EditableBoardText({ value, onCommit, className = "", animation, multiline = false }: { value: string; onCommit: (value: string) => void; className?: string; animation?: BoardDonorPresentation["animation"]; multiline?: boolean }) {
   const lines = multiline ? splitDonorNameLines(value) : [value];
-  return <div className={`editable-board-text${multiline ? " multiline-donor-name" : ""} ${className}`} contentEditable suppressContentEditableWarning role="textbox" tabIndex={0} onFocus={(event) => { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(event.currentTarget); selection?.removeAllRanges(); selection?.addRange(range); }} onBlur={(event) => onCommit(event.currentTarget.innerText.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}>{lines.map((line, index) => <Fragment key={`${line}-${index}`}><span className="donor-name-line">{animation ? <AnimatedDonorName name={line} animation={animation} /> : line}</span>{index < lines.length - 1 && <br />}</Fragment>)}</div>;
+  return <div className={`editable-board-text${multiline ? " multiline-donor-name" : ""} ${className}`} contentEditable suppressContentEditableWarning role="textbox" tabIndex={0} onFocus={(event) => { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(event.currentTarget); selection?.removeAllRanges(); selection?.addRange(range); }} onBlur={(event) => { const text = event.currentTarget.innerText.replace(/\u00a0/g, " "); onCommit(multiline ? text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n") : text.replace(/\s+/g, " ").trim()); }} onKeyDown={(event) => { if (event.key === "Enter" && !multiline) { event.preventDefault(); event.currentTarget.blur(); } }}>{lines.map((line, index) => <Fragment key={`${line}-${index}`}><span className="donor-name-line">{animation ? <AnimatedDonorName name={line} animation={animation} /> : line}</span>{index < lines.length - 1 && <br />}</Fragment>)}</div>;
 }
 
 function LegacyThemeStudio({

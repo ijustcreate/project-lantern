@@ -273,7 +273,8 @@ export interface DonorBoardProgram {
   palette?: "classic" | "brigade-blue" | "brigade-red" | "brigade-sunshine" | "brigade-cream" | "legacy-navy" | "legacy-sky";
 }
 
-export type BoardPanelType = "heading" | "supporters-heading" | "donors" | "message" | "story" | "footer" | "image" | "donor-star";
+/** Text, donor lists, and images are the only board content types exposed in the editor. Legacy values remain readable so saved boards can migrate in place. */
+export type BoardPanelType = "text" | "donors" | "image" | "heading" | "supporters-heading" | "message" | "story" | "footer" | "donor-star";
 
 export interface BoardPanel {
   id: string;
@@ -296,6 +297,8 @@ export interface BoardPanel {
   height?: number;
   imageUrl?: string;
   imageFit?: "cover" | "contain";
+  /** Panels with the same group move together in the board editor. */
+  groupId?: string;
   fontFamily?: DisplayProfile["fontFamily"];
   fontSize?: number;
   textColor?: string;

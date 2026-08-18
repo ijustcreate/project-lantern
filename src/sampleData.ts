@@ -192,24 +192,13 @@ const legacyPhoto1Ids = legacyDonors.filter((donor) => donor.id.startsWith("lega
 const legacyPhoto2Ids = legacyDonors.filter((donor) => donor.id.startsWith("legacy-photo2-")).map((donor) => donor.id);
 const legacyDonorIds = legacyDonors.map((donor) => donor.id);
 
-function legacyStarPanel(donorId: string, position: [number, number, number, number], fontSize = 12): BoardPanel {
+function legacyStarPanels(donorId: string, position: [number, number, number, number], fontSize = 12): BoardPanel[] {
   const donor = legacyDonors.find((item) => item.id === donorId);
-  return {
-    id: `${donorId}-star`,
-    type: "donor-star",
-    title: donor?.name ?? "Legacy donor",
-    donorId,
-    size: "standard",
-    x: position[0],
-    y: position[1],
-    width: position[2],
-    height: position[3],
-    imageUrl: "/assets/donor-icons/legacy-star-flat.svg",
-    imageFit: "contain",
-    fontFamily: "DM Sans",
-    fontSize,
-    textColor: "#201708"
-  };
+  const groupId = `group-${donorId}-star`;
+  return [
+    { id: `${donorId}-star-image`, type: "image", title: "Recognition star", size: "standard", groupId, x: position[0], y: position[1], width: position[2], height: position[3], imageUrl: "/assets/donor-icons/legacy-star-flat.svg", imageFit: "contain" },
+    { id: `${donorId}-star-text`, type: "text", title: donor?.name ?? "Legacy donor", size: "standard", groupId, x: position[0], y: position[1], width: position[2], height: position[3], fontFamily: "DM Sans", fontSize, textColor: "#201708" }
+  ];
 }
 
 function legacyStarWallBoard(
@@ -236,7 +225,7 @@ function legacyStarWallBoard(
     showIcons: false,
     showSubtext: false,
     donorPresentation: { fontFamily: "DM Sans", nameColor: "#201708", accentColor: "#201708", recognitionIcon: "none" },
-    panels: ids.map((id, index) => legacyStarPanel(id, positions[index], orientation === "Portrait" ? 8 : 10))
+    panels: ids.flatMap((id, index) => legacyStarPanels(id, positions[index], orientation === "Portrait" ? 8 : 10))
   };
 }
 
