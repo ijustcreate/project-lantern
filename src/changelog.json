@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0200",
+    "title": "Make broadcast frame dragging responsive",
+    "summary": "Broadcast frame manipulation now stays local while dragging and saves once on release.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:08 PM",
+    "areas": [
+      "Broadcast studio",
+      "Direct manipulation",
+      "Performance"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0199",
     "title": "Remove inactive board assignment action",
     "summary": "Removed the non-functional Use on Display action from Board Editor.",

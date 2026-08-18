@@ -4561,10 +4561,12 @@ function DirectLiveStage({
   onLowerThirdPositionChange: (position: { x: number; y: number }) => void;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const [frameDraft, setFrameDraft] = useState<LanternState["live"]["frame"] | null>(null);
+  const frameDraftRef = useRef<LanternState["live"]["frame"] | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [confirmPolygonReset, setConfirmPolygonReset] = useState(false);
   const [controlHeld, setControlHeld] = useState(false);
-  const composedLive = normalizeBroadcastComposition(live);
+  const composedLive = normalizeBroadcastComposition(frameDraft ? { ...live, frame: frameDraft } : live);
   const activeCostume = state.effectStudio.costumes.find((costume) => costume.id === composedLive.effects.costumeId);
   const activeCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === composedLive.effects.calibrationProfileId);
   const trackedCostumeRenderer = useMemo(() => composedLive.effects.costumeEnabled && activeCostume
@@ -4588,6 +4590,10 @@ function DirectLiveStage({
     y: number;
     position: { x: number; y: number };
   } | null>(null);
+  const updateFrameDraft = (frame: LanternState["live"]["frame"]) => {
+    frameDraftRef.current = frame;
+    setFrameDraft(frame);
+  };
 
   useEffect(() => {
     if (!interactive) return;
@@ -4608,8 +4614,8 @@ function DirectLiveStage({
     };
   }, [interactive]);
 
-  const polygonPoints = live.frame.polygonPoints?.length
-    ? live.frame.polygonPoints
+  const polygonPoints = composedLive.frame.polygonPoints?.length
+    ? composedLive.frame.polygonPoints
     : [{ x: 12, y: 4 }, { x: 88, y: 4 }, { x: 100, y: 50 }, { x: 86, y: 96 }, { x: 14, y: 96 }, { x: 0, y: 50 }];
   const polygonClip = `polygon(${polygonPoints.map((point) => `${point.x}% ${point.y}%`).join(", ")})`;
 
@@ -4631,7 +4637,7 @@ function DirectLiveStage({
       const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
       if (!frameBounds || drag.pointIndex === undefined) return;
       const points = drag.frame.polygonPoints?.length ? drag.frame.polygonPoints : polygonPoints;
-      onFrameChange({
+      updateFrameDraft({
         ...drag.frame,
         polygonPoints: points.map((point, index) => index === drag.pointIndex ? {
           x: clamp(((event.clientX - frameBounds.left) / frameBounds.width) * 100, 0, 100),
@@ -4639,7 +4645,7 @@ function DirectLiveStage({
         } : point)
       });
     } else if (drag.kind === "move") {
-      onFrameChange({ ...drag.frame, x: clamp(drag.frame.x + dx, 0, 100 - drag.frame.width), y: clamp(drag.frame.y + dy, 0, 100 - drag.frame.height) });
+      updateFrameDraft({ ...drag.frame, x: clamp(drag.frame.x + dx, 0, 100 - drag.frame.width), y: clamp(drag.frame.y + dy, 0, 100 - drag.frame.height) });
     } else if (drag.kind === "resize") {
       let { x, y, width, height } = drag.frame;
       const edge = drag.edge ?? "se";
@@ -4666,7 +4672,7 @@ function DirectLiveStage({
         }
       }
       const maskShape = drag.frame.maskShape === "square" && !isCorner ? "rectangle" : drag.frame.maskShape;
-      onFrameChange({ ...drag.frame, x, y, width, height, maskShape });
+      updateFrameDraft({ ...drag.frame, x, y, width, height, maskShape });
     } else if (drag.kind === "crop-edge") {
       const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
       if (!frameBounds) return;
@@ -4678,13 +4684,13 @@ function DirectLiveStage({
       if (edge.includes("e")) next.right = clamp(next.right - horizontal, 0, 90 - next.left);
       if (edge.includes("n")) next.top = clamp(next.top + vertical, 0, 90 - next.bottom);
       if (edge.includes("s")) next.bottom = clamp(next.bottom - vertical, 0, 90 - next.top);
-      onFrameChange({ ...drag.frame, cropEdges: next });
+      updateFrameDraft({ ...drag.frame, cropEdges: next });
     } else {
       const frameBounds = (event.currentTarget.closest(".direct-live-frame") as HTMLElement | null)?.getBoundingClientRect();
       if (!frameBounds) return;
       const cropDx = ((event.clientX - drag.x) / Math.max(frameBounds.width, 1)) * 100;
       const cropDy = ((event.clientY - drag.y) / Math.max(frameBounds.height, 1)) * 100;
-      onFrameChange({
+      updateFrameDraft({
         ...drag.frame,
         crop: {
           ...drag.frame.crop,
@@ -4717,7 +4723,11 @@ function DirectLiveStage({
 
   const finishDrag = (event: React.PointerEvent<HTMLElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
+    const finalFrame = frameDraftRef.current;
     dragRef.current = null;
+    frameDraftRef.current = null;
+    setFrameDraft(null);
+    if (finalFrame) onFrameChange(finalFrame);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
