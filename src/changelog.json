@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0228",
+    "title": "Show all schedule hours",
+    "summary": "Made the weekly schedule a complete 24-hour scrollable timeline while keeping its initial view near 7 AM.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 3:50 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build; local Chrome schedule visual smoke test"
+  },
+  {
     "id": "DEV-0227",
     "title": "Prevent board text clipping",
     "summary": "Added adaptive fitting and balanced wrapping to the Board Editor so existing portrait and landscape board text stays inside its panels without replacing saved layouts or content.",

@@ -7155,8 +7155,10 @@ function ScheduleCalendarView({
     if (archivedLegacySeed) return false;
     return displayFilter === "all" || entry.target === "all" || entry.target === displayFilter;
   });
-  const scheduleStartHour = Math.min(7, ...filtered.map((entry) => Math.floor(timeToMinutes(entry.startTime) / 60)));
-  const scheduleEndHour = Math.max(19, ...filtered.map((entry) => Math.ceil(timeToMinutes(entry.endTime) / 60)));
+  // Keep a complete day canvas. The schedule can still open near 7 AM, but users
+  // can scroll to early-morning and late-night slots even when nothing is booked there.
+  const scheduleStartHour = 0;
+  const scheduleEndHour = 24;
   const scheduleHourCount = Math.max(1, scheduleEndHour - scheduleStartHour);
   const scheduleStartMinutes = scheduleStartHour * 60;
   const scheduleEndMinutes = scheduleEndHour * 60;
@@ -7193,7 +7195,7 @@ function ScheduleCalendarView({
 
   useEffect(() => {
     if (visibleMode !== "week") return;
-    const frame = window.requestAnimationFrame(() => { if (weekScrollRef.current) weekScrollRef.current.scrollTop = 0; });
+    const frame = window.requestAnimationFrame(() => { if (weekScrollRef.current) weekScrollRef.current.scrollTop = 7 * hourHeight; });
     return () => window.cancelAnimationFrame(frame);
   }, [visibleMode]);
 
