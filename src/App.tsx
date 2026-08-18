@@ -3585,6 +3585,8 @@ function DirectBoardCanvas({
   widgets?: BoardWidget[]; onAddWidget?: (widget: BoardWidget) => void; onSaveWidget?: (name: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const manipulationRef = useRef<{ pointerId: number; moved: boolean } | null>(null);
+  const suppressPanelClickRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -3611,6 +3613,7 @@ function DirectBoardCanvas({
   );
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     onSelect(panel.id);
@@ -3618,12 +3621,17 @@ function DirectBoardCanvas({
     if (!rect) return;
     const startX = event.clientX;
     const startY = event.clientY;
+    const dragTarget = event.currentTarget as HTMLElement;
+    dragTarget.setPointerCapture(event.pointerId);
+    manipulationRef.current = { pointerId: event.pointerId, moved: false };
     const initial = { x: panel.x ?? 0, y: panel.y ?? 0, width: panel.width ?? 30, height: panel.height ?? 20 };
     const groupedPanels = mode === "move" && panel.groupId ? panels.filter((item) => item.groupId === panel.groupId) : [panel];
     const groupedInitial = new Map(groupedPanels.map((item) => [item.id, { x: item.x ?? 0, y: item.y ?? 0, width: item.width ?? 30, height: item.height ?? 20 }]));
     const move = (pointer: PointerEvent) => {
+      if (manipulationRef.current?.pointerId !== pointer.pointerId) return;
       const dx = (pointer.clientX - startX) / rect.width * 100;
       const dy = (pointer.clientY - startY) / rect.height * 100;
+      if (Math.abs(pointer.clientX - startX) > 2 || Math.abs(pointer.clientY - startY) > 2) manipulationRef.current.moved = true;
       if (mode === "move") {
         groupedPanels.forEach((item) => {
           const origin = groupedInitial.get(item.id)!;
@@ -3638,9 +3646,22 @@ function DirectBoardCanvas({
       if (edge.includes("n")) { const nextY = Math.max(0, Math.min(initial.y + initial.height - 4, initial.y + dy)); height = initial.height + initial.y - nextY; y = nextY; }
       onPatch(panel.id, { x, y, width, height });
     };
-    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); };
+    const stop = (pointer: PointerEvent) => {
+      if (manipulationRef.current?.pointerId !== pointer.pointerId) return;
+      const moved = manipulationRef.current.moved;
+      manipulationRef.current = null;
+      if (dragTarget.hasPointerCapture(pointer.pointerId)) dragTarget.releasePointerCapture(pointer.pointerId);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      if (moved) {
+        suppressPanelClickRef.current = true;
+        window.setTimeout(() => { suppressPanelClickRef.current = false; }, 0);
+      }
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   };
   const placePanel = (event: React.PointerEvent) => {
     if (!placingPanelType || !canvasRef.current || (event.target as Element).closest(".direct-board-panel, .board-context-menu")) return;
@@ -3654,6 +3675,7 @@ function DirectBoardCanvas({
   const shadowRadians = (program.textShadowAngle ?? display.textShadowAngle ?? 135) * Math.PI / 180;
   const shadowDistance = program.textShadowDistance ?? display.textShadowDistance ?? 5;
   const prioritizeMoveHandle = (event: React.PointerEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest(".panel-move-handle")) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const candidate = [...panels].reverse().find((panel) => {
@@ -3716,7 +3738,7 @@ function DirectBoardCanvas({
         "--donor-divider-color": panel.donorDividerColor ?? palette.accent,
         "--donor-divider-thickness": `${panel.donorDividerThickness ?? 1}px`,
         "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
-      } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
+      } as React.CSSProperties} onClick={(event) => { if (suppressPanelClickRef.current) { event.preventDefault(); event.stopPropagation(); suppressPanelClickRef.current = false; return; } event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
