@@ -2,6 +2,7 @@ import type { TrackingPoint, TrackingRenderFrame } from "./trackingRuntime";
 
 export type GlassesStyle = "classic" | "playful";
 export type HatStyle = "party" | "wizard";
+export type HandPropStyle = "wand" | "dagger";
 
 export interface WizardHatRig {
   points: Array<{ x: number; y: number }>;
@@ -122,6 +123,47 @@ export function drawTrackedHat(
     return;
   }
   drawPartyHat(context, base, angle, headWidth);
+}
+
+/** A small hand-held item drawn with a single stable grip instead of competing fingertip overlays. */
+export function drawTrackedHandProp(context: CanvasRenderingContext2D, frame: TrackingRenderFrame, style: HandPropStyle, side: "left" | "right") {
+  const hand = frame.hands.find((candidate) => candidate.side === side);
+  if (!hand) return;
+  const palm = pixelPoint(hand.palm, frame);
+  const indexTip = pixelPoint(hand.landmarks[8], frame);
+  const pinkyTip = pixelPoint(hand.landmarks[20], frame);
+  if (!palm) return;
+  const guide = indexTip ?? pinkyTip;
+  const angle = guide ? Math.atan2(guide.y - palm.y, guide.x - palm.x) : (side === "left" ? -2.2 : -0.94);
+  const handSize = Math.max(24, hand.fingertips.reduce((total, tip) => total + Math.hypot(tip.x * frame.width - palm.x, tip.y * frame.height - palm.y), 0) / Math.max(1, hand.fingertips.length));
+  const reach = handSize * (style === "wand" ? 2.5 : 2.15);
+  const tip = { x: palm.x + Math.cos(angle) * reach, y: palm.y + Math.sin(angle) * reach };
+  context.save();
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  if (style === "wand") {
+    roundedLine(context, palm, tip, Math.max(4, handSize * .16), "#754c2d", "#251a2f");
+    context.fillStyle = "#f7e67a";
+    context.beginPath(); context.arc(tip.x, tip.y, Math.max(5, handSize * .24), 0, Math.PI * 2); context.fill();
+    context.strokeStyle = "#fff7bf"; context.lineWidth = 2;
+    context.beginPath(); context.arc(tip.x, tip.y, Math.max(8, handSize * .38), 0, Math.PI * 2); context.stroke();
+  } else {
+    const normal = { x: -Math.sin(angle), y: Math.cos(angle) };
+    const guard = { x: palm.x + Math.cos(angle) * handSize * .42, y: palm.y + Math.sin(angle) * handSize * .42 };
+    roundedLine(context, palm, guard, Math.max(5, handSize * .22), "#5a3b2b", "#251a2f");
+    context.strokeStyle = "#d7e7ef"; context.lineWidth = Math.max(5, handSize * .28);
+    context.beginPath(); context.moveTo(guard.x, guard.y); context.lineTo(tip.x, tip.y); context.stroke();
+    context.strokeStyle = "#fff7ca"; context.lineWidth = Math.max(3, handSize * .14);
+    context.beginPath(); context.moveTo(guard.x + normal.x * handSize * .46, guard.y + normal.y * handSize * .46); context.lineTo(guard.x - normal.x * handSize * .46, guard.y - normal.y * handSize * .46); context.stroke();
+  }
+  // Reapply one compact grip last: readable hand ownership without fingertip z-fighting.
+  context.strokeStyle = "rgba(38, 59, 89, .85)";
+  context.lineWidth = Math.max(3, handSize * .14);
+  context.beginPath();
+  context.moveTo(palm.x - Math.cos(angle) * handSize * .15, palm.y - Math.sin(angle) * handSize * .15);
+  context.lineTo(palm.x + Math.cos(angle) * handSize * .38, palm.y + Math.sin(angle) * handSize * .38);
+  context.stroke();
+  context.restore();
 }
 
 export function updateWizardHatRig(
@@ -286,6 +328,18 @@ function midpoint(left: { x: number; y: number }, right: { x: number; y: number 
 
 function distance(left: { x: number; y: number }, right: { x: number; y: number }) {
   return Math.hypot(right.x - left.x, right.y - left.y);
+}
+
+function roundedLine(context: CanvasRenderingContext2D, start: { x: number; y: number }, end: { x: number; y: number }, width: number, color: string, outline?: string) {
+  context.lineCap = "round";
+  if (outline) {
+    context.strokeStyle = outline;
+    context.lineWidth = width + Math.max(2, width * .32);
+    context.beginPath(); context.moveTo(start.x, start.y); context.lineTo(end.x, end.y); context.stroke();
+  }
+  context.strokeStyle = color;
+  context.lineWidth = width;
+  context.beginPath(); context.moveTo(start.x, start.y); context.lineTo(end.x, end.y); context.stroke();
 }
 
 function rotatePoint(point: { x: number; y: number }, angle: number) {

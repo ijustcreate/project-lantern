@@ -10,7 +10,7 @@ import type {
   TrackingCalibrationProfile
 } from "./types";
 
-export const PHASE4_CONTENT_VERSION = 8;
+export const PHASE4_CONTENT_VERSION = 9;
 export const EFFECT_STUDIO_SEED_TIMESTAMP = "2026-08-06T00:00:00.000Z";
 
 export const CALIBRATION_POSES: Array<{ id: CalibrationPose; label: string; instruction: string }> = [
@@ -79,6 +79,38 @@ function piece(
 }
 
 export const seededCostumes: CostumeDefinition[] = [
+  {
+    id: "costume-friendly-zombie",
+    name: "Friendly Zombie",
+    description: "A cheerful kid-safe Halloween zombie with a simple head, hoodie, arms, and hands that follow the performer.",
+    starter: "zombie",
+    conceptArt: "assets/effects/friendly-zombie-rig.png",
+    createdAt: EFFECT_STUDIO_SEED_TIMESTAMP,
+    updatedAt: EFFECT_STUDIO_SEED_TIMESTAMP,
+    bones: [
+      bone("zombie-head", "Zombie head", "nose", undefined, "ball", 1, .18, .84),
+      bone("zombie-jaw", "Zombie jaw", "mouth-lower", "zombie-head", "hinge", 1, .34, .78),
+      bone("zombie-left-hand", "Left zombie hand", "left-hand", undefined, "ball", 1, .4, .7),
+      bone("zombie-right-hand", "Right zombie hand", "right-hand", undefined, "ball", 1, .4, .7),
+      bone("zombie-left-arm", "Left sleeve", "left-shoulder", undefined, "ball", .78, .3, .74),
+      bone("zombie-right-arm", "Right sleeve", "right-shoulder", undefined, "ball", .78, .3, .74)
+    ],
+    pieces: [
+      piece("zombie-head", "Mint-green head", "head-backplate", "nose", { boneId: "zombie-head", color: "#9dcc9a", accentColor: "#263b59", zIndex: 1, scale: 1.14 }),
+      piece("zombie-left-eye", "Left friendly eye", "eye", "left-eye", { boneId: "zombie-head", side: "left", color: "#fff8df", accentColor: "#263b59", zIndex: 8, scale: 1.08 }),
+      piece("zombie-right-eye", "Right friendly eye", "eye", "right-eye", { boneId: "zombie-head", side: "right", color: "#fff8df", accentColor: "#263b59", zIndex: 8, scale: 1.08 }),
+      piece("zombie-left-brow", "Left stitched brow", "eyebrow", "left-eye", { boneId: "zombie-head", side: "left", color: "#553d6b", y: -.3, zIndex: 10, scale: 1.04 }),
+      piece("zombie-right-brow", "Right stitched brow", "eyebrow", "right-eye", { boneId: "zombie-head", side: "right", color: "#553d6b", y: -.3, zIndex: 10, scale: 1.04 }),
+      piece("zombie-nose", "Button nose", "nose", "nose", { boneId: "zombie-head", color: "#6e4d70", accentColor: "#bd79a8", zIndex: 9, scale: .68 }),
+      piece("zombie-smile", "Friendly stitched smile", "upper-mouth", "mouth-upper", { boneId: "zombie-head", color: "#4d315e", accentColor: "#743f67", zIndex: 10, scale: 1.05 }),
+      piece("zombie-jaw", "Talking zombie jaw", "lower-mouth", "mouth-lower", { boneId: "zombie-jaw", color: "#6a416a", accentColor: "#f19aab", zIndex: 10, scale: .98 }),
+      piece("zombie-body", "Purple hoodie", "body", "chest", { color: "#70509c", accentColor: "#4a326f", y: .48, zIndex: 2, scale: 1.7 }),
+      piece("zombie-left-sleeve", "Left hoodie sleeve", "forearm", "left-shoulder", { boneId: "zombie-left-arm", side: "left", color: "#70509c", accentColor: "#263b59", zIndex: 3, scale: 1 }),
+      piece("zombie-right-sleeve", "Right hoodie sleeve", "forearm", "right-shoulder", { boneId: "zombie-right-arm", side: "right", color: "#70509c", accentColor: "#263b59", zIndex: 3, scale: 1 }),
+      piece("zombie-left-hand", "Left green hand", "hand", "left-hand", { boneId: "zombie-left-hand", side: "left", color: "#9dcc9a", accentColor: "#263b59", zIndex: 28, scale: 1.02 }),
+      piece("zombie-right-hand", "Right green hand", "hand", "right-hand", { boneId: "zombie-right-hand", side: "right", color: "#9dcc9a", accentColor: "#263b59", zIndex: 28, scale: 1.02 })
+    ]
+  },
   {
     id: "costume-talking-teddy",
     name: "Talking Teddy",
@@ -187,7 +219,7 @@ function normalizeCostume(candidate: CostumeDefinition | null | undefined): Cost
     id: candidate.id.trim(),
     name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : "Untitled costume",
     description: typeof candidate.description === "string" ? candidate.description : "",
-    starter: candidate.starter === "teddy" || candidate.starter === "skeleton" ? candidate.starter : undefined,
+    starter: candidate.starter === "teddy" || candidate.starter === "skeleton" || candidate.starter === "zombie" ? candidate.starter : undefined,
     createdAt: candidate.createdAt || now,
     updatedAt: now,
     bones,
@@ -300,6 +332,8 @@ export function normalizePhase4LiveEffects(
   effects.trackedPointsOverlay = incoming?.trackedPointsOverlay ?? incoming?.trackingDebug ?? false;
   effects.trackingDebug = effects.trackedPointsOverlay;
   effects.trackingCameraUnderlay = incoming?.trackingCameraUnderlay ?? true;
+  effects.handProp = incoming?.handProp === "wand" || incoming?.handProp === "dagger" ? incoming.handProp : "none";
+  effects.handPropHand = incoming?.handPropHand === "left" ? "left" : "right";
   if (studio) {
     const activeCostumeExists = studio.costumes.some((costume) => costume.id === effects.costumeId);
     if (!activeCostumeExists) {

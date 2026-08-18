@@ -5240,6 +5240,27 @@ function LivePreviewPanel({
       return false;
     }
     setPreviewError(null);
+    if (source === "camera") {
+      // A newly connected camera is always neutral until the operator enables
+      // an effect. This also protects a freshly reopened studio from stale
+      // persisted experiment settings.
+      patchLive({
+        chromaKey: { ...state.live.chromaKey, enabled: false },
+        effects: {
+          ...state.live.effects,
+          background: "original",
+          faceTracking: false,
+          puppetPreview: false,
+          trackingDebug: false,
+          trackedPointsOverlay: false,
+          glassesEnabled: false,
+          hatEnabled: false,
+          partyHatEnabled: false,
+          costumeEnabled: false,
+          handProp: "none"
+        }
+      });
+    }
     if (source === "demo") {
       stopPreviewStream(true);
       return true;
@@ -5769,6 +5790,7 @@ function LivePreviewPanel({
           </div>
           {state.live.effects.background === "image" && <div className="background-image-status">
             {state.live.effects.backgroundImage && <img src={state.live.effects.backgroundImage} alt="Current screenless-removal background" />}
+            <button type="button" className="command-button secondary compact" onClick={() => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: "image", backgroundImage: `${import.meta.env.BASE_URL}assets/effects/friendly-halloween-background.png` } })}><Sparkles size={14} /> Friendly Halloween scene</button>
             <label className="image-upload"><ImagePlus size={17} /><span>{state.live.effects.backgroundImage ? "Replace background image" : "Choose background image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (backgroundImage) => patchLive({ effects: { ...state.live.effects, backgroundImage } }))} /></label>
             {state.live.effects.backgroundImage && <button type="button" className="command-button secondary compact" onClick={() => patchLive({ effects: { ...state.live.effects, backgroundImage: undefined } })}>Clear image</button>}
           </div>}
@@ -5780,7 +5802,9 @@ function LivePreviewPanel({
           <div className="phase4-effect-choice-grid">
             <div><span>Glasses</span><div className="accessory-options"><button type="button" className={!state.live.effects.glassesEnabled ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, glassesEnabled: false } })}>Off</button>{(["classic", "playful"] as const).map((style) => <button type="button" key={style} className={state.live.effects.glassesEnabled && (state.live.effects.glassesStyle ?? "classic") === style ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, glassesEnabled: true, glassesStyle: style, accessory: "glasses", faceTracking: true } })}><Glasses size={15} /> {style === "classic" ? "Classic" : "Playful"}</button>)}</div></div>
             <div><span>Hats</span><div className="accessory-options"><button type="button" className={!state.live.effects.hatEnabled ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, hatEnabled: false, partyHatEnabled: false } })}>Off</button>{(["party", "wizard"] as const).map((style) => <button type="button" key={style} className={state.live.effects.hatEnabled && (state.live.effects.hatStyle ?? "party") === style ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, hatEnabled: true, partyHatEnabled: style === "party", hatStyle: style, faceTracking: true } })}><PartyPopper size={15} /> {style === "party" ? "Party" : "Wizard"}</button>)}</div></div>
+            <div><span>Hand prop</span><div className="accessory-options"><button type="button" className={!state.live.effects.handProp || state.live.effects.handProp === "none" ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, handProp: "none" } })}>Off</button>{(["wand", "dagger"] as const).map((prop) => <button type="button" key={prop} className={state.live.effects.handProp === prop ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, handProp: prop, handPropHand: state.live.effects.handPropHand ?? "right", faceTracking: true } })}><Sparkles size={15} /> {prop === "wand" ? "Wand" : "Dagger"}</button>)}</div></div>
           </div>
+          {state.live.effects.handProp && state.live.effects.handProp !== "none" && <div className="accessory-options hand-prop-hand"><span>Holding hand</span>{(["left", "right"] as const).map((hand) => <button type="button" key={hand} className={(state.live.effects.handPropHand ?? "right") === hand ? "selected" : ""} onClick={() => patchLive({ effects: { ...state.live.effects, handPropHand: hand } })}>{hand === "left" ? "Left" : "Right"}</button>)}</div>}
           {state.live.effects.hatEnabled && state.live.effects.hatStyle === "wizard" && <div className="two-col wizard-rig-controls"><Slider label="Wizard springiness" info="How eagerly the three linked hat segments follow head movement." value={Math.round((state.live.effects.wizardSpringiness ?? .56) * 100)} min={0} max={100} onChange={(value) => patchLive({ effects: { ...state.live.effects, wizardSpringiness: value / 100 } })} /><Slider label="Wizard damping" info="How quickly the floppy tip settles after movement." value={Math.round((state.live.effects.wizardDamping ?? .7) * 100)} min={0} max={100} onChange={(value) => patchLive({ effects: { ...state.live.effects, wizardDamping: value / 100 } })} /></div>}
         </section>
         <EffectStudio

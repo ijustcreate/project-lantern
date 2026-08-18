@@ -21,7 +21,7 @@ import {
   type TrackingRuntimePhase,
   type TrackingRuntimeStatus
 } from "../trackingRuntime";
-import { createWizardHatRig, drawTrackedGlasses, drawTrackedHat } from "../trackingEffects";
+import { createWizardHatRig, drawTrackedGlasses, drawTrackedHandProp, drawTrackedHat } from "../trackingEffects";
 import { getVisionFileset, getVisionModule, visionBaseOptions, warmVisionResources } from "../visionResources";
 
 export interface ChromaVideoProps {
@@ -61,6 +61,10 @@ const INFERENCE_HEIGHT = 180;
 const SEGMENT_INTERVAL_MS = 1000 / 10;
 const BODY_INTERVAL_MS = 1000 / 15;
 const MOUTH_ANALYSIS_INTERVAL_MS = 1000 / 10;
+const STABLE_FACE_INTERVAL_MS = 1000 / 12;
+const IDLE_FACE_SCAN_INTERVAL_MS = 850;
+const STABLE_BODY_INTERVAL_MS = 1000 / 4;
+const IDLE_BODY_SCAN_INTERVAL_MS = 1_500;
 
 function hexRgb(value: string) {
   const hex = value.replace("#", "");
@@ -88,7 +92,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
   // Ordinary hats and glasses need only a face mesh. Hand/pose inference is
   // opt-in for costumes and the diagnostic overlay, avoiding a three-model
   // CPU workload that can collapse a camera preview to single-digit FPS.
-  const bodyTrackingRequested = Boolean(runtimeEffects.costumeEnabled || runtimeEffects.trackedPointsOverlay || effects.trackingDebug);
+  const bodyTrackingRequested = Boolean(runtimeEffects.costumeEnabled || (runtimeEffects.handProp && runtimeEffects.handProp !== "none") || runtimeEffects.trackedPointsOverlay || effects.trackingDebug);
   const cropStyle = {
     objectFit: fitMode === "fit" ? "contain" as const : "cover" as const,
     transform: `translate(${-crop.x * crop.scale}%, ${-crop.y * crop.scale}%) scale(${crop.scale})`,
@@ -197,6 +201,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
     let lastPoseNose: TrackingPoint | undefined;
     let poseTranslation = { x: 0, y: 0 };
     let lastRenderedAt = -Infinity;
+    let lastVideoTime = -1;
     let lastStatusEmittedAt = -Infinity;
     let lastEmittedPhase: TrackingRuntimePhase | undefined;
     const performanceMonitor = new TrackingPerformanceMonitor(performance.now());
@@ -363,9 +368,21 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         sourceContext.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
         const adaptiveFps = performanceMonitor.getAdaptiveFps();
-        const shouldSegment = segmenter && now - lastSegmentAt >= SEGMENT_INTERVAL_MS;
-        const shouldTrackFace = faceLandmarker && now - lastFaceAt >= 1_000 / adaptiveFps;
-        const shouldTrackBody = bodyTrackingRequested && (handLandmarker || poseLandmarker) && now - lastBodyAt >= BODY_INTERVAL_MS;
+        const faceNearEdge = Boolean(landmarks && [1, 10, 152, 234, 454].some((index) => {
+          const point = landmarks![index];
+          return point && (point.x < .12 || point.x > .88 || point.y < .1 || point.y > .9);
+        }));
+        const stableFace = Boolean(landmarks && !faceHeld && !faceNearEdge && recentFaceMotion < .006 && poseHeadMotion < .006 && now - lastFaceSeenAt < 220);
+        const freshVideoFrame = Math.abs(video.currentTime - lastVideoTime) > .0005;
+        if (freshVideoFrame) lastVideoTime = video.currentTime;
+        const shouldSegment = segmenter && freshVideoFrame && now - lastSegmentAt >= SEGMENT_INTERVAL_MS;
+        // Rendering stays smooth, while the models run only for new camera
+        // frames. Centered, settled faces use a lighter cadence; an empty view
+        // is rescanned within a second so a new guest is found promptly.
+        const faceInterval = !landmarks ? IDLE_FACE_SCAN_INTERVAL_MS : stableFace ? STABLE_FACE_INTERVAL_MS : 1_000 / adaptiveFps;
+        const bodyInterval = !landmarks ? IDLE_BODY_SCAN_INTERVAL_MS : trackedHands.length ? BODY_INTERVAL_MS : stableFace ? STABLE_BODY_INTERVAL_MS : BODY_INTERVAL_MS;
+        const shouldTrackFace = faceLandmarker && freshVideoFrame && now - lastFaceAt >= faceInterval;
+        const shouldTrackBody = bodyTrackingRequested && freshVideoFrame && (handLandmarker || poseLandmarker) && now - lastBodyAt >= bodyInterval;
         if (shouldSegment || shouldTrackFace || shouldTrackBody) {
           inferenceContext.clearRect(0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT);
           inferenceContext.drawImage(source, 0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT);
@@ -435,7 +452,8 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
                   lastOcclusionAt = now;
                   lastOcclusionConfidence = overlapConfidence;
                 }
-                if (currentRuntimeEffects.costumeEnabled && now - lastMouthAnalysisAt >= MOUTH_ANALYSIS_INTERVAL_MS) {
+                const mouthInterval = stableFace ? MOUTH_ANALYSIS_INTERVAL_MS * 3 : MOUTH_ANALYSIS_INTERVAL_MS;
+                if (currentRuntimeEffects.costumeEnabled && now - lastMouthAnalysisAt >= mouthInterval) {
                   experimentalMouth = analyzeExperimentalMouth(inferenceContext.getImageData(0, 0, INFERENCE_WIDTH, INFERENCE_HEIGHT), landmarks);
                   lastMouthAnalysisAt = now;
                 }
@@ -539,6 +557,9 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
             springiness: currentRuntimeEffects.wizardSpringiness ?? 0.62,
             damping: currentRuntimeEffects.wizardDamping ?? 0.68
           });
+          if (currentRuntimeEffects.handProp && currentRuntimeEffects.handProp !== "none") {
+            drawTrackedHandProp(context, trackingFrame, currentRuntimeEffects.handProp, currentRuntimeEffects.handPropHand ?? "right");
+          }
         }
         if (landmarks && faceEffectsActive && currentEffects.puppetPreview && !trackedPointsOverlay) {
           drawPuppetPreview(context, landmarks, transform);

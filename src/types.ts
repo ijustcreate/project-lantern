@@ -478,6 +478,9 @@ export interface LiveEffectsSettings {
   costumeEnabled?: boolean;
   costumeId?: string;
   calibrationProfileId?: string;
+  /** A lightweight tracked item held in one hand. */
+  handProp?: "none" | "wand" | "dagger";
+  handPropHand?: "left" | "right";
 }
 
 /** Per-display placement overrides for a shared broadcast source and styling. */
@@ -560,6 +563,7 @@ export type CostumePieceRole =
   | "hand"
   | "palm"
   | "forearm"
+  | "hand-prop"
   | "body"
   | "hat"
   | "glasses"
@@ -587,7 +591,9 @@ export interface CostumeDefinition {
   id: string;
   name: string;
   description: string;
-  starter?: "teddy" | "skeleton";
+  starter?: "teddy" | "skeleton" | "zombie";
+  /** Optional concept sheet used in the effect authoring UI. */
+  conceptArt?: string;
   createdAt: string;
   updatedAt: string;
   bones: EffectRigBone[];

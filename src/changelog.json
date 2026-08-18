@@ -1,5 +1,28 @@
 [
   {
+    "id": "DEV-0203",
+    "title": "Make live tracking smarter and add friendly Halloween effects",
+    "summary": "Tracking now skips duplicate video frames, reduces stable face/body/mouth work, periodically rescans an empty view, and keeps camera starts effect-free. Added a generated kid-friendly zombie rig concept, matching Halloween removal background, and wand/dagger hand props.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:33 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera effects",
+      "Effect Studio"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/trackingEffects.ts",
+      "src/effectStudio.ts",
+      "src/components/EffectStudio.tsx",
+      "src/types.ts",
+      "public/assets/effects/friendly-zombie-rig.png",
+      "public/assets/effects/friendly-halloween-background.png"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0202",
     "title": "Schedule-aware broadcast backgrounds",
     "summary": "Broadcast previews and display output now preserve the active scheduled board behind the broadcast. Unscheduled previews use a muted no-schedule state instead of the green source background.",

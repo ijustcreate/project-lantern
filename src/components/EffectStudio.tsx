@@ -49,7 +49,7 @@ interface EffectStudioProps {
 
 const PIECE_ROLES: CostumeArtPiece["role"][] = [
   "head-backplate", "cheek", "nose", "upper-mouth", "lower-mouth", "chin", "ear", "eyebrow", "eye",
-  "upper-eyelid", "lower-eyelid", "muzzle", "hand", "palm", "forearm", "body", "hat", "glasses", "custom"
+  "upper-eyelid", "lower-eyelid", "muzzle", "hand", "palm", "forearm", "hand-prop", "body", "hat", "glasses", "custom"
 ];
 
 const CALIBRATION_BASE: Record<TrackingAnchorPoint, { x: number; y: number }> = {
@@ -82,6 +82,10 @@ function downloadCostume(costume: CostumeDefinition) {
 function CostumeMiniPreview({ costume }: { costume: CostumeDefinition }) {
   const skeleton = costume.starter === "skeleton" || /skeleton/i.test(costume.name);
   const visibleCount = costume.pieces.filter((piece) => piece.visible).length;
+  if (costume.conceptArt) return <div className="costume-mini-preview concept" aria-label={`${costume.name} concept art`}>
+    <img src={`${import.meta.env.BASE_URL}${costume.conceptArt}`} alt="" />
+    <span>{visibleCount} active pieces Â· {costume.bones.length} bones</span>
+  </div>;
   return <div className={`costume-mini-preview ${skeleton ? "skeleton" : "teddy"}`} aria-label={`${costume.name} rig preview`}>
     <div className="costume-preview-ear left" /><div className="costume-preview-ear right" />
     <div className="costume-preview-head">

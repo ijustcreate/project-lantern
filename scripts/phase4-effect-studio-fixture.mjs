@@ -11,7 +11,7 @@ const users = [{ id: "user-edward", name: "Edward", createdAt: "2026-01-01T00:00
 const existingTeddy = {
   id: "costume-talking-teddy",
   name: "Edward's Blue Teddy",
-  description: "Customized before the v7 migration.",
+  description: "Customized before the v9 migration.",
   starter: "teddy",
   createdAt: "2026-07-01T00:00:00.000Z",
   updatedAt: "2026-07-02T00:00:00.000Z",
@@ -70,10 +70,11 @@ const defaults = {
 };
 
 const firstPass = normalizeEffectStudioState(v6Studio, users, true);
-assert.equal(PHASE4_CONTENT_VERSION, 7);
+assert.equal(PHASE4_CONTENT_VERSION, 9);
 assert.equal(firstPass.costumes.find((item) => item.id === existingTeddy.id)?.name, existingTeddy.name, "customized starter must not be overwritten");
 assert.equal(firstPass.costumes.find((item) => item.id === customCostume.id)?.pieces[0]?.color, "#663399", "custom costume art must survive");
 assert.ok(firstPass.costumes.some((item) => item.id === "costume-playful-skeleton"), "missing v7 skeleton starter should be appended");
+assert.ok(firstPass.costumes.some((item) => item.id === "costume-friendly-zombie"), "missing v9 zombie starter should be appended");
 assert.equal(firstPass.calibrationProfiles[0]?.landmarkOffsets["head-top"]?.x, .035, "calibration offsets must survive");
 assert.equal(firstPass.activeCalibrationByUserDevice["user-edward::camera-a"], calibration.id, "active profile selection must survive");
 
@@ -86,13 +87,15 @@ assert.equal(migratedEffects.costumeId, customCostume.id, "valid selected costum
 assert.equal(migratedEffects.calibrationProfileId, calibration.id, "valid calibration selection must survive");
 
 const secondPass = normalizeEffectStudioState(firstPass, users, false);
-assert.deepEqual(secondPass, firstPass, "v7 studio normalization must be idempotent");
+assert.deepEqual(secondPass, firstPass, "v9 studio normalization must be idempotent");
 assert.equal(new Set(secondPass.costumes.map((item) => item.id)).size, secondPass.costumes.length, "migration must not duplicate costume IDs");
 assert.equal(new Set(secondPass.calibrationProfiles.map((item) => item.id)).size, secondPass.calibrationProfiles.length, "migration must not duplicate calibration profiles");
 const seededTeddy = seededCostumes.find((item) => item.starter === "teddy");
 const seededSkeleton = seededCostumes.find((item) => item.starter === "skeleton");
+const seededZombie = seededCostumes.find((item) => item.starter === "zombie");
 assert.ok(seededTeddy, "talking teddy starter must exist");
 assert.ok(seededSkeleton, "skeleton starter must exist");
+assert.ok(seededZombie?.conceptArt, "zombie starter must expose generated concept art");
 for (const role of ["head-backplate", "cheek", "nose", "upper-mouth", "lower-mouth", "chin", "ear", "eyebrow", "eye", "upper-eyelid", "lower-eyelid", "muzzle", "hand", "palm"]) {
   assert.ok(seededTeddy.pieces.some((item) => item.role === role), `talking teddy must model ${role} independently`);
 }
