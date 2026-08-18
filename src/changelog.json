@@ -134,6 +134,22 @@
     "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
   },
   {
+    "id": "DEV-0219",
+    "title": "Phone broadcast quick mode",
+    "summary": "Added a compact mobile broadcast setup with default camera settings and shared live display delivery.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:17 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright mobile quick-mode interaction and viewport screenshot"
+  },
+  {
     "id": "DEV-0218",
     "title": "Wrap board text inside panel bounds",
     "summary": "Text panels now wrap within their own bounds by default and include left, center, and right alignment controls in the board editor.",
