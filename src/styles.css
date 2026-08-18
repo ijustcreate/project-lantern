@@ -10195,6 +10195,9 @@ textarea:focus-visible,
 .destructive-confirm-modal h2 { margin: 3px 0 8px; }
 .destructive-confirm-modal p:not(.eyebrow) { margin: 0; color: var(--muted); line-height: 1.5; }
 .schedule-date-range { margin-top: 1px; }
+.schedule-date-range input[type="date"] { color-scheme: dark; }
+.schedule-date-range input[type="date"]::-webkit-calendar-picker-indicator { width: 18px; height: 18px; margin-left: 5px; padding: 4px; border: 1px solid rgba(121, 202, 198, .48); border-radius: 5px; color: #89edf1; background: rgba(83, 203, 220, .14); cursor: pointer; filter: invert(86%) sepia(21%) saturate(743%) hue-rotate(133deg) brightness(103%) contrast(96%); opacity: 1; }
+.schedule-date-range input[type="date"]::-webkit-calendar-picker-indicator:hover { border-color: rgba(121, 202, 198, .86); background: rgba(83, 203, 220, .27); }
 .schedule-display-preview { width: min(780px, calc(100vw - 28px)); }
 .schedule-preview-surface { position: relative; height: min(62vh, 500px); overflow: hidden; border: 1px solid rgba(121, 202, 198, .28); border-radius: 10px; background: #070c20; }
 .schedule-preview-surface.portrait { width: min(54vw, 360px); margin: 0 auto; }

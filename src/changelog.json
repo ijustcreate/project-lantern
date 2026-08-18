@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0209",
+    "title": "Clarify schedule end-date control",
+    "summary": "New calendar events now default their end date to today, and the end-date calendar control has a clearly visible button treatment.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:13 PM",
+    "areas": [
+      "Schedule",
+      "Date controls"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0208",
     "title": "Add Friendly Zombie production art kit",
     "summary": "Organized the zombie concept, full-body preview, parts atlas, matching scene, rig manifest, and printable child-puppet template under a versioned character-kit convention.",

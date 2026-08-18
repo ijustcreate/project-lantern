@@ -6965,6 +6965,7 @@ function ScheduleCalendarView({
     const currentMinutes = new Date();
     const roundedNow = Math.min(1380, Math.round((currentMinutes.getHours() * 60 + currentMinutes.getMinutes()) / 15) * 15);
     const start = slot?.start ?? roundedNow;
+    const eventDate = toDateInputValue(slot?.date ?? currentMinutes);
     const draft: ScheduleEntry = {
       id,
       name: contentType === "announcement" ? saved?.title ?? "Scheduled announcement" : contentType === "blip" ? savedBlip?.name ?? "Scheduled Blip" : contentType === "broadcast" ? "Scheduled broadcast" : "New scheduled board",
@@ -6976,7 +6977,8 @@ function ScheduleCalendarView({
       blipId: contentType === "blip" ? savedBlip?.id : undefined,
       days: slot ? [slot.date.getDay()] : [1, 2, 3, 4, 5],
       recurrence: slot ? "once" : undefined,
-      scheduleDate: slot ? toDateInputValue(slot.date) : undefined,
+      scheduleDate: eventDate,
+      scheduleEndDate: eventDate,
       startTime: minutesToTime(start),
       endTime: minutesToTime(Math.min(1440, start + 60)),
       color: contentType === "announcement" ? "#b45a78" : contentType === "blip" ? savedBlip?.accentColor ?? "#16a6a1" : contentType === "broadcast" ? "#d17928" : "#4f63cf",
