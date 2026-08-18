@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0195",
+    "title": "Add lightweight room tracking",
+    "summary": "Room audio gain now responds immediately, and room camera views can show lightweight face boxes with a guest count.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:47 AM",
+    "areas": [
+      "Room camera",
+      "Audio controls",
+      "Guest tracking"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0194",
     "title": "Keep display settings on screen",
     "summary": "The draggable display settings window now repositions inside the visible viewport when the app is resized.",

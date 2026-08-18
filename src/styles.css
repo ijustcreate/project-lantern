@@ -9759,6 +9759,10 @@ textarea:focus-visible,
 .room-view-video { position: relative; overflow: hidden; }
 .room-view-video video { width: 100%; height: 100%; object-fit: cover; }
 .room-view-video video.mirrored { transform: scaleX(-1); }
+.room-face-tracking { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.room-face-box { position: absolute; display: block; border: 2px solid #74e8ff; border-radius: 5px; box-shadow: 0 0 0 1px rgba(4, 18, 29, .65), 0 0 15px rgba(91, 221, 255, .55); }
+.room-guest-count { position: absolute; top: 13px; left: 13px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid rgba(116, 232, 255, .65); border-radius: 999px; background: rgba(4, 17, 30, .78); color: #dffaff; font-size: 11px; font-weight: 800; box-shadow: 0 5px 18px rgba(0, 0, 0, .28); }
+.room-guest-count.unsupported { border-color: rgba(255, 205, 105, .7); color: #ffe1a1; }
 
 .room-view-empty {
   display: grid;

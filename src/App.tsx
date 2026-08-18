@@ -6134,8 +6134,9 @@ function SoundPicker({ label, value, onChange }: { label: string; value?: string
   return <div className="sound-picker"><span className="sound-picker-label"><Music2 size={14} />{label}</span><label className="sound-upload" title={value ? `Replace ${label.toLowerCase()}` : `Choose ${label.toLowerCase()}`}><Upload size={14} /><span>{value ? "Replace" : "Choose"}</span><input type="file" accept="audio/*" onChange={(event) => loadSound(event.target.files?.[0])} /></label><button type="button" className="icon-button" disabled={!value} onClick={() => value && playSound(value)} title="Preview sound"><Play size={15} /></button>{value && <button type="button" className="icon-button danger-icon" onClick={() => onChange(undefined)} title="Remove sound"><X size={15} /></button>}</div>;
 }
 
-function MediaStreamVideo({ stream, muted, className }: { stream: MediaStream | null; muted: boolean; className?: string }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+function MediaStreamVideo({ stream, muted, className, elementRef }: { stream: MediaStream | null; muted: boolean; className?: string; elementRef?: { current: HTMLVideoElement | null } }) {
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = elementRef ?? localVideoRef;
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -6144,6 +6145,61 @@ function MediaStreamVideo({ stream, muted, className }: { stream: MediaStream | 
     return () => { video.srcObject = null; };
   }, [stream]);
   return <video ref={videoRef} autoPlay playsInline muted={muted} className={className} />;
+}
+
+type LightweightFace = { x: number; y: number; width: number; height: number };
+
+function RoomFaceTrackingOverlay({ videoRef, enabled, mirrored }: { videoRef: { current: HTMLVideoElement | null }; enabled: boolean; mirrored: boolean }) {
+  const [faces, setFaces] = useState<LightweightFace[]>([]);
+  const [status, setStatus] = useState<"idle" | "tracking" | "unsupported">("idle");
+
+  useEffect(() => {
+    if (!enabled) {
+      setFaces([]);
+      setStatus("idle");
+      return;
+    }
+    type BrowserFace = { boundingBox: { x: number; y: number; width: number; height: number } };
+    type BrowserFaceDetector = { detect: (source: HTMLVideoElement) => Promise<BrowserFace[]> };
+    type BrowserFaceDetectorConstructor = new (options?: { maxDetectedFaces?: number; fastMode?: boolean }) => BrowserFaceDetector;
+    const Detector = (window as Window & { FaceDetector?: BrowserFaceDetectorConstructor }).FaceDetector;
+    if (!Detector) {
+      setStatus("unsupported");
+      return;
+    }
+    const detector = new Detector({ maxDetectedFaces: 8, fastMode: true });
+    let cancelled = false;
+    let detecting = false;
+    const detect = () => {
+      const video = videoRef.current;
+      if (cancelled || detecting || !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+      detecting = true;
+      void detector.detect(video).then((detected) => {
+        if (cancelled) return;
+        const scale = Math.max(video.clientWidth / video.videoWidth, video.clientHeight / video.videoHeight);
+        const cropX = (video.videoWidth * scale - video.clientWidth) / 2;
+        const cropY = (video.videoHeight * scale - video.clientHeight) / 2;
+        setFaces(detected.map(({ boundingBox }) => ({
+          x: boundingBox.x * scale - cropX,
+          y: boundingBox.y * scale - cropY,
+          width: boundingBox.width * scale,
+          height: boundingBox.height * scale
+        })));
+        setStatus("tracking");
+      }).catch(() => {
+        if (!cancelled) setStatus("unsupported");
+      }).finally(() => { detecting = false; });
+    };
+    detect();
+    const interval = window.setInterval(detect, 350);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [enabled, videoRef]);
+
+  if (!enabled) return null;
+  return <div className="room-face-tracking" aria-live="polite">
+    {faces.map((face, index) => <i key={`${index}-${Math.round(face.x)}-${Math.round(face.y)}`} className="room-face-box" style={{ left: mirrored ? undefined : face.x, right: mirrored ? face.x : undefined, top: face.y, width: face.width, height: face.height }} />)}
+    <div className={status === "unsupported" ? "room-guest-count unsupported" : "room-guest-count"}><ScanFace size={15} /><span>{status === "unsupported" ? "Face tracking unavailable" : `${faces.length} guest${faces.length === 1 ? "" : "s"} in room`}</span></div>
+  </div>;
 }
 
 function MediaStreamAudioOutput({ stream, muted, gain }: { stream: MediaStream | null; muted: boolean; gain: number }) {
@@ -6218,6 +6274,7 @@ function ScreensView({
   const [roomScreenId, setRoomScreenId] = useState<ScreenId | null>(null);
   const [roomStream, setRoomStream] = useState<MediaStream | null>(null);
   const [roomMuted, setRoomMuted] = useState(false);
+  const [roomAudioGain, setRoomAudioGain] = useState(1);
   const [roomPopoutWindow, setRoomPopoutWindow] = useState<Window | null>(null);
   const [editorPosition, setEditorPosition] = useState({ x: Math.max(8, window.innerWidth - 790), y: 72 });
   const [roomViewLayout, setRoomViewLayout] = useState(() => ({
@@ -6232,6 +6289,7 @@ function ScreensView({
   const roomViewResizeRef = useRef<{ pointerX: number; pointerY: number; width: number; height: number } | null>(null);
   const roomViewLayoutRef = useRef(roomViewLayout);
   const roomStreamRef = useRef<MediaStream | null>(null);
+  const roomVideoRef = useRef<HTMLVideoElement | null>(null);
   const roomLeaseRef = useRef<MediaDeviceLease | null>(null);
   const roomPopoutWindowRef = useRef<Window | null>(null);
   const editingScreen = editingId ? state.screens[editingId] : null;
@@ -6252,6 +6310,9 @@ function ScreensView({
   const roomMicOptions = deviceOptionList(roomMics, "Default mic", "Mic");
   const monitorOptions = ["", ...availableMonitors.map((monitor) => String(monitor.id))];
   const monitorLabels = Object.fromEntries([["", availableMonitors.length ? "Use current monitor" : "Current monitor (browser preview)"], ...availableMonitors.map((monitor) => [String(monitor.id), monitor.name?.trim() || `Monitor ${monitor.id + 1} · ${monitor.width}×${monitor.height}`])]);
+  useEffect(() => {
+    if (roomScreen) setRoomAudioGain(roomScreen.roomAudioGain ?? 1);
+  }, [roomScreen?.id, roomScreen?.roomAudioGain]);
   const patchDisplay = (id: ScreenId, patch: Partial<DisplayProfile>) => {
     updateState((current) => ({ ...current, screens: { ...current.screens, [id]: { ...current.screens[id], ...patch } } }));
   };
@@ -6537,6 +6598,7 @@ function ScreensView({
           <div><span className={roomStream ? "live-indicator active" : "live-indicator"} /><strong>{roomScreen.label}</strong><small>{roomStream ? "Camera Active" : "Camera inactive"} · {roomPopoutRoot ? "separate movable window" : "drag within app"}</small></div>
           <div>
             {!roomPopoutRoot && <button type="button" className="icon-button" onClick={() => popOutRoomView(roomScreen)} title="Pop out to a movable window"><ExternalLink size={18} /></button>}
+            <button type="button" className={roomScreen.roomFaceTrackingEnabled ? "icon-button active" : "icon-button"} onClick={() => patchDisplay(roomScreen.id, { roomFaceTrackingEnabled: !(roomScreen.roomFaceTrackingEnabled ?? false) })} title={roomScreen.roomFaceTrackingEnabled ? "Turn off room tracking" : "Turn on room tracking"}><ScanFace size={18} /></button>
             <button type="button" className={roomMuted ? "icon-button active" : "icon-button"} onClick={() => setRoomMuted((current) => !current)} title={roomMuted ? "Unmute room audio" : "Mute room audio"}>{roomMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
             <button type="button" className={roomMirrored ? "icon-button active" : "icon-button"} onClick={() => toggleRoomMirror(roomScreen.id)} title={roomMirrored ? "Show room camera normally" : "Mirror room camera for monitoring"}><Rotate3d size={18} /></button>
             <button type="button" className="icon-button" onClick={closeRoomView} title="Close room view"><X size={18} /></button>
@@ -6548,10 +6610,10 @@ function ScreensView({
           <button type="button" className="icon-button" onClick={() => void detectRoomDevices()} title="Detect cameras and microphones"><RefreshCcw size={16} /></button>
         </div>
         <div className="room-view-video">
-          {roomStream ? <><MediaStreamVideo stream={roomStream} muted className={roomMirrored ? "mirrored" : undefined} /><MediaStreamAudioOutput stream={roomStream} muted={roomMuted || roomScreen.roomAudioEnabled === false} gain={roomScreen.roomAudioGain ?? 1} /></> : <div className="room-view-empty"><Camera size={34} /><strong>Room camera unavailable</strong><span>{deviceError ?? "Connecting to the camera assigned to this display…"}</span></div>}
+          {roomStream ? <><MediaStreamVideo stream={roomStream} muted className={roomMirrored ? "mirrored" : undefined} elementRef={roomVideoRef} /><RoomFaceTrackingOverlay videoRef={roomVideoRef} enabled={roomScreen.roomFaceTrackingEnabled ?? false} mirrored={roomMirrored} /><MediaStreamAudioOutput stream={roomStream} muted={roomMuted || roomScreen.roomAudioEnabled === false} gain={roomAudioGain} /></> : <div className="room-view-empty"><Camera size={34} /><strong>Room camera unavailable</strong><span>{deviceError ?? "Connecting to the camera assigned to this display…"}</span></div>}
         </div>
-        <div className="room-audio-monitor"><AudioLevelMeter stream={roomStream} muted={roomMuted || roomScreen.roomAudioEnabled === false} gain={roomScreen.roomAudioGain ?? 1} label="Room microphone" /><label><span>Gain</span><input type="range" min="0" max="2" step="0.05" value={roomScreen.roomAudioGain ?? 1} onChange={(event) => patchDisplay(roomScreen.id, { roomAudioGain: Number(event.target.value) })} /><output>{Math.round((roomScreen.roomAudioGain ?? 1) * 100)}%</output></label>{deviceError && roomStream && <p className="room-device-warning"><AlertTriangle size={13} /> {deviceError}</p>}</div>
-        <footer className="room-view-footer"><span>{roomMuted || roomScreen.roomAudioEnabled === false ? "Audio muted" : `Room audio · ${Math.round((roomScreen.roomAudioGain ?? 1) * 100)}%`}</span><span>{roomMirrored ? "Mirrored monitor" : roomScreen.roomVideoDeviceId ? "Assigned camera" : "Default camera"}</span></footer>
+        <div className="room-audio-monitor"><AudioLevelMeter stream={roomStream} muted={roomMuted || roomScreen.roomAudioEnabled === false} gain={roomAudioGain} label="Room microphone" /><label><span>Gain</span><input type="range" min="0" max="2" step="0.05" value={roomAudioGain} onInput={(event) => setRoomAudioGain(Number(event.currentTarget.value))} onPointerUp={() => patchDisplay(roomScreen.id, { roomAudioGain })} onBlur={() => patchDisplay(roomScreen.id, { roomAudioGain })} /><output>{Math.round(roomAudioGain * 100)}%</output></label>{deviceError && roomStream && <p className="room-device-warning"><AlertTriangle size={13} /> {deviceError}</p>}</div>
+        <footer className="room-view-footer"><span>{roomMuted || roomScreen.roomAudioEnabled === false ? "Audio muted" : `Room audio · ${Math.round(roomAudioGain * 100)}%`}</span><span>{roomMirrored ? "Mirrored monitor" : roomScreen.roomVideoDeviceId ? "Assigned camera" : "Default camera"}</span></footer>
       </div>
     : null;
   const roomPortal = roomScreen && roomViewPanel
@@ -6604,6 +6666,7 @@ function ScreensView({
           <LabeledSelect label="Room webcam" info="Camera physically facing visitors at this monitor." value={editingScreen.roomVideoDeviceId ?? ""} options={roomCameraOptions.options} optionLabels={roomCameraOptions.labels} onChange={(value) => patchDisplay(editingScreen.id, { roomVideoDeviceId: value || undefined })} />
           <LabeledSelect label="Room microphone" info="Microphone used to hear people near this monitor." value={editingScreen.roomAudioDeviceId ?? ""} options={roomMicOptions.options} optionLabels={roomMicOptions.labels} onChange={(value) => patchDisplay(editingScreen.id, { roomAudioDeviceId: value || undefined })} />
           <label className="switch-row"><input type="checkbox" checked={editingScreen.roomAudioEnabled ?? true} onChange={(event) => patchDisplay(editingScreen.id, { roomAudioEnabled: event.target.checked })} /><Volume2 size={16} /><span>Capture room audio</span></label>
+          <label className="switch-row"><input type="checkbox" checked={editingScreen.roomFaceTrackingEnabled ?? false} onChange={(event) => patchDisplay(editingScreen.id, { roomFaceTrackingEnabled: event.target.checked })} /><ScanFace size={16} /><span><strong>Track room guests</strong><small>Lightweight face boxes and a guest count. Runs locally at a low refresh rate.</small></span></label>
           {deviceError && <div className="device-error"><AlertTriangle size={16} /><span>{deviceError}</span></div>}
           <button type="button" className="command-button primary" onClick={() => void openRoomView(editingScreen)}><PictureInPicture2 size={17} /> Pop out room camera</button>
         </div>}

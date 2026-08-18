@@ -743,6 +743,7 @@ export interface DisplayProfile {
   roomAudioDeviceId?: string;
   roomAudioEnabled?: boolean;
   roomAudioGain?: number;
+  roomFaceTrackingEnabled?: boolean;
 }
 
 export interface RevisionRecord {
