@@ -4573,6 +4573,12 @@ function DirectLiveStage({
   const [controlHeld, setControlHeld] = useState(false);
   const displayLive = liveCompositionForDisplay(live, screen.id);
   const composedLive = normalizeBroadcastComposition(frameDraft ? { ...displayLive, frame: frameDraft } : displayLive);
+  const scheduledBoard = resolveCurrentBoardSchedule(state, screen.id);
+  // A manually chosen preview board is useful while editing; otherwise the studio
+  // should faithfully show the board that is actually scheduled for this display.
+  const backgroundBoardId = boardProgramId ?? scheduledBoard?.boardId;
+  const hasBoardBackground = showBoard && Boolean(backgroundBoardId);
+  const hasUnscheduledDisplayBackground = showBoard && !backgroundBoardId;
   const activeCostume = state.effectStudio.costumes.find((costume) => costume.id === composedLive.effects.costumeId);
   const activeCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === composedLive.effects.calibrationProfileId);
   const trackedCostumeRenderer = useMemo(() => composedLive.effects.costumeEnabled && activeCostume
@@ -4791,13 +4797,15 @@ function DirectLiveStage({
       </div>}
       <div ref={stageRef} className={`direct-live-stage ${orientationClass(screen)}`}>
         <div className="direct-stage-board">
-          {showBoard && composedLive.backgroundMode !== "none"
-            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={boardProgramId} interactive={interactive && boardViewMode === "3d"} fitToScreen viewMode={boardViewMode} />
+          {hasBoardBackground
+            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={backgroundBoardId} interactive={interactive && boardViewMode === "3d"} fitToScreen viewMode={boardViewMode} />
+            : hasUnscheduledDisplayBackground
+              ? <div className="direct-unscheduled-backdrop"><span>No scheduled boards or events</span></div>
             : composedLive.backgroundMode === "none"
               ? <div className="broadcast-transparent-backdrop"><span>Transparent output</span></div>
               : <div className="broadcast-only-backdrop"><Radio size={24} /><span>Broadcast only</span></div>}
         </div>
-        <BroadcastBackgroundLayer live={composedLive} orientation={screen.orientation} className="direct-broadcast-background" />
+        {!hasBoardBackground && !hasUnscheduledDisplayBackground && <BroadcastBackgroundLayer live={composedLive} orientation={screen.orientation} className="direct-broadcast-background" />}
         <div
           className={`direct-live-frame ${interactionMode === "crop" ? "crop-mode" : ""}`}
           style={{ left: `${composedLive.frame.x}%`, top: `${composedLive.frame.y}%`, width: `${composedLive.frame.width}%`, height: `${composedLive.frame.height}%` }}
@@ -8105,7 +8113,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         </div>
       )}
       {scheduledBroadcast?.broadcastVideoUrl && <video className="scheduled-broadcast-video" src={scheduledBroadcast.broadcastVideoUrl} autoPlay loop playsInline />}
-      {showLive && <BroadcastBackgroundLayer live={liveComposition} orientation={screen.orientation} className="live-broadcast-background" />}
+      {showLive && !scheduledBoard && <BroadcastBackgroundLayer live={liveComposition} orientation={screen.orientation} className="live-broadcast-background" />}
       {showLive && (
         <div className={`live-overlay broadcast-frame-surface mask-${liveComposition.frame.maskShape ?? "rectangle"}`} style={{ left: `${liveComposition.frame.x}%`, top: `${liveComposition.frame.y}%`, width: `${liveComposition.frame.width}%`, height: `${liveComposition.frame.height}%`, clipPath: liveComposition.frame.maskShape === "polygon" ? livePolygonClip(liveComposition.frame) : undefined, ...frameSurfaceStyle(liveComposition) }}>
           <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${liveCropEdges.top}% ${liveCropEdges.right}% ${liveCropEdges.bottom}% ${liveCropEdges.left}%)` }}>

@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0202",
+    "title": "Schedule-aware broadcast backgrounds",
+    "summary": "Broadcast previews and display output now preserve the active scheduled board behind the broadcast. Unscheduled previews use a muted no-schedule state instead of the green source background.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:19 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Display output"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false"
+  },
+  {
     "id": "DEV-0201",
     "title": "Separate broadcast layouts by display",
     "summary": "Each display now keeps its own broadcast video box and text placement in previews, pop-outs, and live output.",

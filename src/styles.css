@@ -9227,6 +9227,25 @@ textarea:focus-visible,
   text-transform: uppercase;
 }
 
+.direct-unscheduled-backdrop {
+  display: grid;
+  height: 100%;
+  align-content: start;
+  justify-items: center;
+  padding-top: 12px;
+  color: rgba(172, 190, 205, .56);
+  background:
+    linear-gradient(rgba(12, 22, 34, .96), rgba(7, 15, 25, .98)),
+    repeating-linear-gradient(0deg, transparent 0 39px, rgba(255, 255, 255, .025) 39px 40px);
+}
+
+.direct-unscheduled-backdrop span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .direct-live-frame {
   z-index: 2;
   overflow: visible;
