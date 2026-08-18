@@ -3018,6 +3018,7 @@ body,
 .display-idle-notice span { color: rgba(172, 201, 216, .68); font-size: 9px; line-height: 1.45; }
 .display-idle-notice b { color: rgba(209, 230, 239, .82); font-weight: 780; }
 .display-idle-notice small { display: block; margin-top: 2px; color: rgba(129, 170, 190, .64); font-size: 8px; }
+.idle-schedule-button { justify-self: start; margin-top: 5px; }
 
 .display-shell > .display-idle-notice.presentation {
   position: absolute;

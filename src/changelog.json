@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0192",
+    "title": "Place scheduling action in the display empty state",
+    "summary": "The dashboard now shows Add schedule directly under Nothing scheduled instead of in the display header.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:27 AM",
+    "areas": [
+      "Dashboard",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0191",
     "title": "Protect and restore board elements",
     "summary": "Board element deletion now requires an in-place confirmation, supports Ctrl/Cmd+Z undo, and recovers one accidentally removed legacy donor star.",

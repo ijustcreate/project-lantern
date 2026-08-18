@@ -2060,14 +2060,14 @@ function Dashboard({
                     </div>
                     <span>{screen.orientation} · {screen.resolution}</span>
                   </div>
-                  <div className="dashboard-display-status">{noScheduledBoard && assignedBoard && <button className="command-button secondary compact dashboard-schedule-now" onClick={() => scheduleBoardNow(screen.id, assignedBoard.id)}><CalendarDays size={15} /> Add schedule</button>}<button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id], } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
+                  <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id], } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
                 <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}`}>
                   {activeBoard ? <>
                     <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
                     <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
                     <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
-                  </> : <IdleDisplayNotice upcoming={nextScheduledContent} />}
+                  </> : <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
                 </div>
                 <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!assignedBoard} onClick={() => assignedBoard && editBoard(assignedBoard.id)} title={assignedBoard ? `Edit ${assignedBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
@@ -8427,7 +8427,7 @@ function resolveNextScheduledContent(state: LanternState, screenId: ScreenId, no
   return null;
 }
 
-function IdleDisplayNotice({ upcoming, presentation = false }: { upcoming: ReturnType<typeof resolveNextScheduledContent>; presentation?: boolean }) {
+function IdleDisplayNotice({ upcoming, presentation = false, onAddSchedule }: { upcoming: ReturnType<typeof resolveNextScheduledContent>; presentation?: boolean; onAddSchedule?: () => void }) {
   const type = upcoming?.entry.contentType === "blip"
     ? "Pop-up"
     : upcoming?.entry.contentType === "announcement"
@@ -8438,7 +8438,7 @@ function IdleDisplayNotice({ upcoming, presentation = false }: { upcoming: Retur
   const when = upcoming?.startsAt.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
   return <div className={`display-idle-notice${presentation ? " presentation" : ""}`}>
     <Clock3 size={presentation ? 26 : 18} aria-hidden="true" />
-    <div><strong>Nothing scheduled</strong>{upcoming ? <span>Next {type.toLowerCase()}: <b>{upcoming.entry.name}</b><small>{when}</small></span> : <span>No upcoming board or pop-up</span>}</div>
+    <div><strong>Nothing scheduled</strong>{upcoming ? <span>Next {type.toLowerCase()}: <b>{upcoming.entry.name}</b><small>{when}</small></span> : <span>No upcoming board or pop-up</span>}{onAddSchedule && <button type="button" className="command-button secondary compact idle-schedule-button" onClick={onAddSchedule}><CalendarDays size={14} /> Add schedule</button>}</div>
   </div>;
 }
 
