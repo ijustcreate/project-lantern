@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Activity,
@@ -3863,6 +3863,7 @@ function DirectBoardCanvas({
         fontFamily: panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat",
         "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? palette.accent : panel.type === "message" || panel.type === "story" ? palette.text : palette.text),
         "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
+        "--panel-base-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
         "--panel-letter-spacing": `${panel.letterSpacing ?? 0}px`,
         "--panel-line-height": panel.lineHeight ?? 1.2,
         "--panel-font-weight": panel.fontWeight === "bold" ? 700 : 400,
@@ -3876,12 +3877,12 @@ function DirectBoardCanvas({
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
-        {panel.type === "text" && <EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} />}
-        {panel.type === "heading" && <EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
-        {panel.type === "supporters-heading" && <EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}
+        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
+        {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
+        {panel.type === "supporters-heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
-        {panel.type === "message" && <><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></>}
-        {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><div><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></div></>}
+        {panel.type === "message" && <AutoFitBoardContent className="direct-message-content"><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></AutoFitBoardContent>}
+        {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><AutoFitBoardContent className="direct-story-copy"><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></AutoFitBoardContent></>}
         {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={resolveProjectAssetUrl(panel.imageUrl)} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
         {panel.type === "donor-star" && <DirectStarDonorName donor={state.donors.find((donor) => donor.id === panel.donorId)} fallbackName={panel.title} imageUrl={panel.imageUrl} fontFamily={panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "DM Sans"} fontSize={panel.fontSize ?? 14} textColor={panel.textColor ?? "#201708"} onRename={onRenameDonor} />}
         {panel.type === "footer" && <div className={`direct-footer-line icons-${panel.footerIconPlacement ?? "left"}`}><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />{panel.footerIconPlacement === "both" && <span className="footer-heart">♡</span>}<span /></div>}
@@ -3950,6 +3951,42 @@ function DirectStarDonorName({ donor, fallbackName, imageUrl, fontFamily, fontSi
     {imageUrl ? <img src={resolveProjectAssetUrl(imageUrl)} alt="" /> : <span className="direct-star-placeholder">★</span>}
     <EditableBoardText className="direct-star-donor-name" value={name} multiline onCommit={(value) => donor && onRename(donor.id, value)} />
   </div>;
+}
+
+function AutoFitBoardContent({ className, children }: { className: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const originalSize = Number.parseFloat(getComputedStyle(element).getPropertyValue("--panel-base-font-size")) || 24;
+        let scale = 1;
+        const hasOverflow = () => {
+          const textNodes = Array.from(element.querySelectorAll<HTMLElement>(".editable-board-text"));
+          return element.scrollHeight > element.clientHeight + 1
+            || element.scrollWidth > element.clientWidth + 1
+            || textNodes.some((node) => node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1);
+        };
+        element.style.setProperty("--panel-font-size", `${originalSize}px`);
+        while (scale > .48 && hasOverflow()) {
+          scale = Math.max(.48, Number((scale - .04).toFixed(2)));
+          element.style.setProperty("--panel-font-size", `${Math.max(8, originalSize * scale)}px`);
+        }
+      });
+    };
+    const resizeObserver = new ResizeObserver(fit);
+    const mutationObserver = new MutationObserver(fit);
+    resizeObserver.observe(element);
+    mutationObserver.observe(element, { childList: true, characterData: true, subtree: true });
+    fit();
+    return () => { cancelAnimationFrame(frame); resizeObserver.disconnect(); mutationObserver.disconnect(); };
+  }, []);
+
+  return <div ref={ref} className={className}>{children}</div>;
 }
 
 function EditableBoardText({ value, onCommit, className = "", animation, multiline = false }: { value: string; onCommit: (value: string) => void; className?: string; animation?: BoardDonorPresentation["animation"]; multiline?: boolean }) {

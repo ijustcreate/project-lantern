@@ -7391,7 +7391,7 @@ textarea:focus-visible,
   -webkit-text-stroke: .35px rgba(118, 81, 31, .72);
 }
 .panel-supporters-heading { flex-direction: column; }
-.panel-supporters-heading .board-section-title { max-width: 100%; overflow: hidden; font-size: min(var(--panel-font-size), 7cqw, 58cqh); white-space: nowrap; }
+.panel-supporters-heading .board-section-title { max-width: 100%; overflow: hidden; font-size: min(var(--panel-font-size), 7cqw, 58cqh); white-space: normal; text-wrap: balance; }
 .panel-donors { flex-direction: column; align-items: stretch; min-height: 92px; }
 
 .direct-donor-grid {
@@ -7653,7 +7653,28 @@ textarea:focus-visible,
 .direct-story-image { display: grid; place-items: center; width: 100%; height: 100%; min-height: 46px; background-color: #24353a; background-position: center; background-size: cover; color: #79cac6; }
 .direct-story-image[style] svg { opacity: 0; }
 .panel-footer { flex-grow: .45; }
-.direct-footer-line { display: grid; grid-template-columns: minmax(18px, 1fr) auto auto minmax(18px, 1fr); align-items: center; gap: 8px; width: 100%; color: #d9a657; font-size: clamp(8px, 1.35vh, 14px); letter-spacing: .12em; }
+.direct-single-text-content,
+.direct-message-content,
+.direct-story-copy {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+.direct-single-text-content { display: grid; place-items: center; }
+.direct-message-content,
+.direct-story-copy { display: grid; align-content: center; gap: clamp(2px, .55vh, 7px); }
+.direct-message-content .editable-board-text,
+.direct-story-copy .editable-board-text { min-height: 0; }
+.board-title,
+.board-section-title,
+.board-message-title { text-wrap: balance; }
+.board-copy { text-wrap: pretty; }
+
+.direct-footer-line { display: grid; grid-template-columns: minmax(18px, 1fr) auto minmax(0, auto) minmax(18px, 1fr); align-items: center; gap: 8px; width: 100%; color: #d9a657; font-size: var(--panel-font-size); letter-spacing: .12em; }
 .direct-footer-line.icons-both { grid-template-columns: minmax(18px, 1fr) auto auto auto minmax(18px, 1fr); }
 .direct-footer-line > span:first-child, .direct-footer-line > span:last-child { height: 1px; background: #9a7036; }
 .direct-footer-line .footer-heart { height: auto; background: transparent; }

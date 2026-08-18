@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0227",
+    "title": "Prevent board text clipping",
+    "summary": "Added adaptive fitting and balanced wrapping to the Board Editor so existing portrait and landscape board text stays inside its panels without replacing saved layouts or content.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 3:20 PM",
+    "areas": [
+      "Board Editor",
+      "Board Rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build; local Chrome Board Editor visual smoke test"
+  },
+  {
     "id": "DEV-0226",
     "title": "Unify Toy Soldier head artwork",
     "summary": "Updated the reusable announcement and preview heads to match the clean face used by the complete Toy Soldier illustrations.",
