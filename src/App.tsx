@@ -2028,7 +2028,6 @@ function Dashboard({
   const displays = Object.values(state.screens);
   const [preview3d, setPreview3d] = useState<Record<string, boolean>>({});
   const [previewReset, setPreviewReset] = useState<Record<string, number>>({});
-  const [undimmedDisplays, setUndimmedDisplays] = useState<Record<string, boolean>>({});
   const previewGridClass = displays.length === 1
     ? "single"
     : displays.length === 2
@@ -2041,9 +2040,13 @@ function Dashboard({
         <div className="preview-stage">
           <div className={`dashboard-display-grid ${previewGridClass}`} data-display-count={displays.length}>
             {displays.map((screen) => {
-              const activeBoard = resolveActiveBoardProgram(state, screen.id);
-              const noScheduledBoard = !resolveCurrentBoardSchedule(state, screen.id);
-              const previewDimmed = noScheduledBoard && !undimmedDisplays[screen.id];
+              const activeSchedule = resolveCurrentBoardSchedule(state, screen.id);
+              const activeBoard = activeSchedule
+                ? state.boardPrograms.find((program) => program.id === activeSchedule.boardId && program.active)
+                : undefined;
+              const assignedBoard = resolveActiveBoardProgram(state, screen.id);
+              const noScheduledBoard = !activeBoard;
+              const nextScheduledContent = resolveNextScheduledContent(state, screen.id);
               const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
               return (
               <article className="dashboard-display-tile" key={screen.id}>
@@ -2051,21 +2054,21 @@ function Dashboard({
                   <div>
                     <div className="dashboard-display-heading">
                       <strong>{screen.label}</strong>
-                      <span className="dashboard-assignment-pill board" title={`Active board: ${activeBoard?.name ?? "No board assigned"}`}>Board · {activeBoard?.name ?? "None"}</span>
-                      {noScheduledBoard && <span className="dashboard-assignment-pill unscheduled">No scheduled board</span>}
+                      <span className={`dashboard-assignment-pill ${activeBoard ? "board" : "unscheduled"}`} title={activeBoard ? `Active board: ${activeBoard.name}` : "No active board is scheduled"}>{activeBoard ? `Board · ${activeBoard.name}` : "Nothing scheduled"}</span>
                       {liveMessage && <span className="dashboard-assignment-pill live" title={`Live scheduled message: ${liveMessage.title || "Untitled message"}`}>Live · {liveMessage.title || "Message"}</span>}
                     </div>
                     <span>{screen.orientation} · {screen.resolution}</span>
                   </div>
-                  <div className="dashboard-display-status">{noScheduledBoard && activeBoard && <button className="command-button secondary compact dashboard-schedule-now" onClick={() => scheduleBoardNow(screen.id, activeBoard.id)}><CalendarDays size={15} /> Add schedule</button>}<button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="command-button secondary compact" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`}><Settings2 size={15} /> Edit Display</button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
+                  <div className="dashboard-display-status">{noScheduledBoard && assignedBoard && <button className="command-button secondary compact dashboard-schedule-now" onClick={() => scheduleBoardNow(screen.id, assignedBoard.id)}><CalendarDays size={15} /> Add schedule</button>}<button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="command-button secondary compact" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`}><Settings2 size={15} /> Edit Display</button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id].enabled } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
-                <div className={`dashboard-display-preview ${orientationClass(screen)} mode-${preview3d[screen.id] ? "3d" : "2d"}${previewDimmed ? " dimmed" : ""}`}>
-                  {noScheduledBoard && <button type="button" className={`preview-dim-toggle${previewDimmed ? "" : " active"}`} onClick={() => setUndimmedDisplays((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={previewDimmed ? "Show this unscheduled preview at full brightness" : "Dim this unscheduled preview"}><Eye size={15} /></button>}
-                  <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
-                  <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
-                  <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
+                <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}`}>
+                  {activeBoard ? <>
+                    <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
+                    <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
+                    <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
+                  </> : <IdleDisplayNotice upcoming={nextScheduledContent} />}
                 </div>
-                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!activeBoard} onClick={() => activeBoard && editBoard(activeBoard.id)} title={activeBoard ? `Edit ${activeBoard.name}` : "No active board assigned"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
+                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!assignedBoard} onClick={() => assignedBoard && editBoard(assignedBoard.id)} title={assignedBoard ? `Edit ${assignedBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
             );})}
           </div>
@@ -7778,6 +7781,9 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const showAnnouncement = !broadcastActive && !displayBlip && state.announcement.active && immediateAnnouncementIsCurrent && (state.announcement.targets?.length ? state.announcement.targets.includes(screenId) : targetIncludes(state.announcement.target, screenId));
   const scheduledAnnouncement = broadcastActive || displayBlip || showAnnouncement ? null : resolveScheduledAnnouncement(state, screenId, scheduleNow);
   const scheduledMessage = activeScheduleMessage(state, screenId, scheduleNow);
+  const scheduledBoard = resolveCurrentBoardSchedule(state, screenId, scheduleNow);
+  const displayHasScheduledContent = Boolean(scheduledBoard || scheduledBroadcast || displayBlip || showAnnouncement || scheduledAnnouncement);
+  const nextScheduledContent = resolveNextScheduledContent(state, screenId, scheduleNow);
 
   useEffect(() => {
     if (!displayBlip || blipSoundKeyRef.current === displayBlip.key) return;
@@ -7837,16 +7843,17 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         });
       }}
     >
-      <BabylonDonorWall
-        state={state}
-        screenId={screenId}
-        onFps={setFps}
-        fitToScreen={fitToScreen}
-        viewMode="2d"
-        announcementCharacter={(showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement)?.character ?? "off"}
-        announcementCharacterAsset={showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement}
-        announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
-      />
+      {scheduledBoard && <BabylonDonorWall
+          state={state}
+          screenId={screenId}
+          onFps={setFps}
+          fitToScreen={fitToScreen}
+          viewMode="2d"
+          announcementCharacter={(showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement)?.character ?? "off"}
+          announcementCharacterAsset={showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement}
+          announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
+        />}
+      {!displayHasScheduledContent && <IdleDisplayNotice upcoming={nextScheduledContent} presentation />}
       {displayBlip && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
       {showAnnouncement && (
         <FixedAnnouncementComposition screen={screen} announcement={state.announcement} startedAt={state.announcement.startedAt} />
@@ -8280,6 +8287,40 @@ function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, no
     && time >= entry.startTime
     && time < entry.endTime
   );
+}
+
+function resolveNextScheduledContent(state: LanternState, screenId: ScreenId, now = new Date()) {
+  const schedules = state.schedules ?? [];
+  for (let offset = 0; offset <= 31; offset += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const candidates = schedules
+      .filter((entry) => entry.active && (entry.target === "all" || entry.target === screenId) && scheduleMatchesDate(entry, date))
+      .map((entry) => {
+        const startsAt = new Date(date);
+        const [hours, minutes] = entry.startTime.split(":").map(Number);
+        startsAt.setHours(hours, minutes, 0, 0);
+        return { entry, startsAt };
+      })
+      .filter((candidate) => candidate.startsAt.getTime() > now.getTime())
+      .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+    if (candidates[0]) return candidates[0];
+  }
+  return null;
+}
+
+function IdleDisplayNotice({ upcoming, presentation = false }: { upcoming: ReturnType<typeof resolveNextScheduledContent>; presentation?: boolean }) {
+  const type = upcoming?.entry.contentType === "blip"
+    ? "Pop-up"
+    : upcoming?.entry.contentType === "announcement"
+      ? "Announcement"
+      : upcoming?.entry.contentType === "broadcast"
+        ? "Broadcast"
+        : "Board";
+  const when = upcoming?.startsAt.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+  return <div className={`display-idle-notice${presentation ? " presentation" : ""}`}>
+    <Clock3 size={presentation ? 26 : 18} aria-hidden="true" />
+    <div><strong>Nothing scheduled</strong>{upcoming ? <span>Next {type.toLowerCase()}: <b>{upcoming.entry.name}</b><small>{when}</small></span> : <span>No upcoming board or pop-up</span>}</div>
+  </div>;
 }
 
 function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now = new Date()) {
