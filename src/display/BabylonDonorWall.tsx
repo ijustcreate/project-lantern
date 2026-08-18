@@ -813,15 +813,18 @@ function drawComposableBoard(
         nameColor: panelTextColor ?? "#201708",
         accentColor: panelTextColor ?? "#201708"
       });
-      context.font = `700 ${starFontSize}px ${presentation.fontFamily}, Inter, sans-serif`;
+      const starTextWidth = contentWidth * .38;
+      const starTextHeight = panelHeight * .31;
+      const fittedStarFontSize = fitStarDonorFontSize(context, name.toUpperCase(), starFontSize, Math.max(7, Math.round(starFontSize * .42)), starTextWidth, starTextHeight, presentation.fontFamily);
+      context.font = `700 ${fittedStarFontSize}px ${presentation.fontFamily}, Inter, sans-serif`;
       drawBoardDonorName(
         context,
         name.toUpperCase(),
         centerX,
-        centerY + starFontSize * .08,
-        contentWidth * .7,
-        starFontSize,
-        Math.max(7, Math.round(starFontSize * .56)),
+        centerY + fittedStarFontSize * .08,
+        starTextWidth,
+        fittedStarFontSize,
+        Math.max(7, Math.round(fittedStarFontSize * .56)),
         presentation,
         animationTime,
         donor?.id ?? panel.id
@@ -1322,6 +1325,25 @@ function drawBoardDonorName(
 
   drawLines();
   context.restore();
+}
+
+function fitStarDonorFontSize(
+  context: CanvasRenderingContext2D,
+  name: string,
+  initialSize: number,
+  minSize: number,
+  maxWidth: number,
+  maxHeight: number,
+  fontFamily: string
+) {
+  const lines = splitDonorNameLines(name);
+  for (let size = initialSize; size >= minSize; size -= 1) {
+    context.font = `700 ${size}px ${fontFamily}, Inter, sans-serif`;
+    const widestLine = Math.max(...lines.map((line) => context.measureText(line).width));
+    const totalHeight = lines.length * size * .92;
+    if (widestLine <= maxWidth && totalHeight <= maxHeight) return size;
+  }
+  return minSize;
 }
 
 function resolveProgramDonorPresentation(

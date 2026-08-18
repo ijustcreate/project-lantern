@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0181",
+    "title": "Fit donor labels inside stars and add board view controls",
+    "summary": "Legacy donor labels now stay inside star centers, and Board Editor includes bottom-right zoom, pan, and reset controls for close positioning work.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:15 AM",
+    "areas": [
+      "Board Editor",
+      "Donor displays",
+      "Legacy donor wall"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; browser verification of 22 star labels and zoom/pan controls"
+  },
+  {
     "id": "DEV-0180",
     "title": "Keep Settings vocabulary controls from overlapping",
     "summary": "The Settings tier, category, and tag editors now reserve space for Save and Delete actions, keeping every control separate at desktop widths.",

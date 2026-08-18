@@ -3018,6 +3018,7 @@ function ThemeStudio({
   const [donorSearch, setDonorSearch] = useState("");
   const [boardSearch, setBoardSearch] = useState("");
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
+  const [boardEditorPan, setBoardEditorPan] = useState({ x: 0, y: 0 });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [pendingProgramDeleteId, setPendingProgramDeleteId] = useState<string | null>(null);
   const boardPickerRef = useRef<HTMLDetailsElement>(null);
@@ -3047,6 +3048,8 @@ function ThemeStudio({
 
   useEffect(() => {
     setSelectedPanelId("");
+    setBoardEditorZoom(1);
+    setBoardEditorPan({ x: 0, y: 0 });
   }, [selectedProgramId]);
 
   useEffect(() => {
@@ -3326,7 +3329,7 @@ function ThemeStudio({
         <main className="direct-board-stage" onPointerDown={(event) => {
           if (!(event.target as Element).closest(".direct-board-canvas")) setSelectedPanelId("");
         }}>
-          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span><div className="mobile-board-zoom" aria-label="Board preview zoom"><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value - .15, .75, 1.75))}>−</button><button type="button" onClick={() => setBoardEditorZoom(1)}>{Math.round(boardEditorZoom * 100)}%</button><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value + .15, .75, 1.75))}>+</button></div></div>
+          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span></div>
           <DirectBoardCanvas
             state={state}
             display={boardDisplay}
@@ -3345,7 +3348,12 @@ function ThemeStudio({
             onAddWidget={addWidget}
             onSaveWidget={saveWidget}
             editorZoom={boardEditorZoom}
+            editorPan={boardEditorPan}
           />
+          <div className="board-editor-view-controls" aria-label="Board editor view controls">
+            <div className="board-editor-zoom-controls"><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value - .15, .75, 2.4))} title="Zoom out" aria-label="Zoom out"><ZoomOut size={15} /></button><button type="button" className="board-editor-zoom-value" onClick={() => { setBoardEditorZoom(1); setBoardEditorPan({ x: 0, y: 0 }); }} title="Reset zoom and pan">{Math.round(boardEditorZoom * 100)}%</button><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value + .15, .75, 2.4))} title="Zoom in" aria-label="Zoom in"><ZoomIn size={15} /></button></div>
+            <div className="board-editor-pan-controls" aria-label="Pan board view"><span /><button type="button" onClick={() => setBoardEditorPan((value) => ({ ...value, y: value.y + 44 }))} title="Pan up" aria-label="Pan up"><ChevronUp size={15} /></button><span /><button type="button" onClick={() => setBoardEditorPan((value) => ({ ...value, x: value.x + 44 }))} title="Pan left" aria-label="Pan left"><ChevronLeft size={15} /></button><button type="button" onClick={() => { setBoardEditorZoom(1); setBoardEditorPan({ x: 0, y: 0 }); }} title="Reset board view" aria-label="Reset board view"><RotateCcw size={14} /></button><button type="button" onClick={() => setBoardEditorPan((value) => ({ ...value, x: value.x - 44 }))} title="Pan right" aria-label="Pan right"><ChevronRight size={15} /></button><span /><button type="button" onClick={() => setBoardEditorPan((value) => ({ ...value, y: value.y - 44 }))} title="Pan down" aria-label="Pan down"><ChevronDown size={15} /></button><span /></div>
+          </div>
         </main>
 
         <aside className="board-panel-inspector">
@@ -3476,7 +3484,8 @@ function DirectBoardCanvas({
   placingPanelType,
   onBeginPlace,
   onAdd,
-  editorZoom
+  editorZoom,
+  editorPan
   ,selectedPanelIds = [], widgets = [], onAddWidget, onSaveWidget
 }: {
   state: LanternState;
@@ -3493,6 +3502,7 @@ function DirectBoardCanvas({
   onBeginPlace: (type: BoardPanelType | null) => void;
   onAdd: (type?: BoardPanelType, position?: { x: number; y: number }) => void;
   editorZoom: number;
+  editorPan: { x: number; y: number };
   widgets?: BoardWidget[]; onAddWidget?: (widget: BoardWidget) => void; onSaveWidget?: (name: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -3572,6 +3582,8 @@ function DirectBoardCanvas({
   return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${(program.textFinish ?? display.textFinish) === "cut-brass" ? " finish-cut-brass" : ""}${(program.textShadowEnabled ?? display.textShadowEnabled) ? " text-shadow-enabled" : ""}`} style={{
     fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
     "--board-editor-zoom": editorZoom,
+    "--board-editor-pan-x": `${editorPan.x}px`,
+    "--board-editor-pan-y": `${editorPan.y}px`,
     "--board-palette-text": palette.text,
     "--board-palette-accent": palette.accent,
     "--board-palette-secondary": palette.secondary,
