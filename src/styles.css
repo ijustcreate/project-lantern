@@ -4984,9 +4984,9 @@ textarea:focus-visible,
 .announcement-target-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .announcement-target-picker > span { color: #8f96b8; font-size: 9px; font-weight: 750; text-transform: uppercase; }
 .announcement-target-picker label { display: flex; align-items: center; gap: 5px; padding: 7px 9px; border: 1px solid rgba(148,158,220,.15); border-radius: 8px; color: #c3c8e0; font-size: 9px; background: rgba(7,9,28,.35); }
-.announcement-preview-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.announcement-preview-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .announcement-preview-header { padding-bottom: 10px; border-bottom: 1px solid rgba(148, 158, 220, .14); }
-.announcement-preview-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
+.announcement-preview-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; margin-left: auto; }
 .announcement-preview-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
 .announcement-preview-display-select { display: flex; align-items: center; gap: 7px; color: #a8b0d0; font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .announcement-preview-display-select select { min-width: 112px; padding: 6px 24px 6px 8px; border: 1px solid rgba(148,158,220,.18); border-radius: 7px; color: #f5f6ff; background: #151936; font: inherit; text-transform: none; }
@@ -5286,8 +5286,9 @@ textarea:focus-visible,
 .announcement-preview-card {
   position: relative;
   display: grid;
-  grid-template-rows: auto auto auto auto;
-  align-content: start;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  height: 100%;
   align-self: start;
   min-height: 0;
   min-width: 0;
@@ -5299,7 +5300,7 @@ textarea:focus-visible,
   position: relative;
   display: grid;
   width: 100%;
-  height: auto;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -5308,15 +5309,18 @@ textarea:focus-visible,
   background: #020912;
 }
 
-.announcement-preview-stage.landscape {
-  aspect-ratio: 16 / 9;
-}
+.announcement-preview-stage.landscape,
+.announcement-preview-stage.portrait { aspect-ratio: auto; }
 
-.announcement-preview-stage.portrait {
-  width: min(100%, 46vh);
-  justify-self: center;
-  aspect-ratio: 9 / 16;
+/* The stage owns the available rectangle; the monitor surface inside it keeps
+   the selected 16:9 or 9:16 ratio and scales to the largest non-stretched fit. */
+.announcement-preview-card > .eyebrow {
+  position: relative;
+  z-index: 2;
+  min-height: 18px;
+  margin: 7px 0 5px;
 }
+.announcement-preview-header { position: relative; z-index: 3; }
 
 .announcement-monitor {
   position: relative;

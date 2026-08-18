@@ -6147,6 +6147,12 @@ function AnnouncementMonitorSurface({
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1, rotateX: -3, rotateY: 7 });
   const dragRef = useRef<{ pointerId: number; x: number; y: number; view: typeof view; pan: boolean } | null>(null);
   const resetView = () => setView({ x: 0, y: 0, zoom: 1, rotateX: -3, rotateY: 7 });
+  useEffect(() => {
+    // Every display format begins centered at its natural, maximum fitted size.
+    setViewMode("2d");
+    setEditing(false);
+    resetView();
+  }, [screen.id]);
   const setMode = (mode: "2d" | "3d") => {
     setViewMode(mode);
     resetView();
