@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0199",
+    "title": "Remove inactive board assignment action",
+    "summary": "Removed the non-functional Use on Display action from Board Editor.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:04 PM",
+    "areas": [
+      "Board editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0198",
     "title": "Tag historical star donors as Legacy",
     "summary": "Legacy recognition-star names are now regular donor records carrying the exact Legacy tag, including in existing saved data.",

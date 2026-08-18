@@ -3263,32 +3263,6 @@ function ThemeStudio({
     setPendingProgramDeleteId(null);
   };
 
-  const useBoardOnDisplay = () => {
-    if (!selectedProgram) return;
-    updateState((current) => ({
-      ...current,
-      donors: current.donors.map((donor) => selectedProgram.donorIds.includes(donor.id)
-        ? { ...donor, displayIds: [...new Set([...(donor.displayIds ?? []), display.id])] }
-        : donor),
-      boardPrograms: current.boardPrograms.map((program) => program.id === selectedProgram.id ? { ...program, active: true } : program),
-      screens: {
-        ...current.screens,
-        [display.id]: {
-          ...current.screens[display.id],
-          style: "donor-wall",
-          boardProgramId: selectedProgram.id,
-          orientation: selectedProgram.orientation,
-          resolution: selectedProgram.orientation === "Portrait" ? "1080 x 1920" : "1920 x 1080",
-          donorIds: [],
-          donorRosterConfigured: false,
-          customHeading: "",
-          customSubheading: "",
-          columns: undefined
-        }
-      }
-    }));
-  };
-
   const chooseBoardBackground = async (file?: File) => {
     if (!file || !selectedProgram) return;
     try {
@@ -3413,7 +3387,6 @@ function ThemeStudio({
           <details className="board-toolbar-menu">
             <summary className="command-button secondary compact"><SlidersHorizontal size={15} /> Board actions <ChevronDown size={14} /></summary>
             <div className="board-toolbar-popover">
-              <button type="button" onClick={useBoardOnDisplay}><Monitor size={15} /> Use on {display.label}</button>
               <button type="button" onClick={duplicateProgram}><ClipboardCopy size={15} /> Make a copy</button>
               <button type="button" onClick={createProgram}><Plus size={15} /> New blank board</button>
               <button type="button" className="danger" onClick={() => setPendingProgramDeleteId(selectedProgram.id)} disabled={state.boardPrograms.length <= 1}><Trash2 size={15} /> Delete board</button>
