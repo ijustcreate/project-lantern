@@ -3037,6 +3037,7 @@ function ThemeStudio({
   }, []);
   const [selectedPanelId, setSelectedPanelId] = useState("");
   const [selectedPanelIds, setSelectedPanelIds] = useState<string[]>([]);
+  const [panelClipboard, setPanelClipboard] = useState<BoardPanel | null>(null);
   const [newPanelType, setNewPanelType] = useState<BoardPanelType>("message");
   const [placingPanelType, setPlacingPanelType] = useState<BoardPanelType | null>(null);
   const [donorPage, setDonorPage] = useState(0);
@@ -3133,6 +3134,28 @@ function ThemeStudio({
     patchProgram({ panels: [...panels, panel] });
     setSelectedPanelId(panel.id);
     setPlacingPanelType(null);
+  };
+  const copySelectedPanel = () => {
+    if (!selectedPanel) return;
+    setPanelClipboard({ ...selectedPanel, donorTierFilter: selectedPanel.donorTierFilter ? [...selectedPanel.donorTierFilter] : undefined });
+  };
+  const pastePanel = () => {
+    if (!selectedProgram || !panelClipboard) return;
+    const width = panelClipboard.width ?? 30;
+    const height = panelClipboard.height ?? 18;
+    const pasted: BoardPanel = {
+      ...panelClipboard,
+      id: `${panelClipboard.type}-copy-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      groupId: undefined,
+      donorTierFilter: panelClipboard.donorTierFilter ? [...panelClipboard.donorTierFilter] : undefined,
+      x: clamp((panelClipboard.x ?? 30) + 2, 0, Math.max(0, 100 - width)),
+      y: clamp((panelClipboard.y ?? 35) + 2, 0, Math.max(0, 100 - height)),
+      width,
+      height
+    };
+    patchProgram({ panels: [...panels, pasted] });
+    setSelectedPanelId(pasted.id);
+    setSelectedPanelIds([pasted.id]);
   };
   const addWidget = (widget: BoardWidget) => {
     const cloned = widget.panels.map((panel) => ({ ...panel, id: `${widget.id}-${Date.now()}-${panel.id}`, imageUrl: panel.imageUrl ?? widget.defaultImageUrl }));
@@ -3446,6 +3469,8 @@ function ThemeStudio({
                   <button type="button" onClick={() => setPlacingPanelType(newPanelType)}><Move size={14} /> Place on board</button>
                 </div>
               </details>
+              {selectedPanel && <button type="button" className="command-button secondary compact" onClick={copySelectedPanel} title="Copy the selected panel so it can be pasted onto another board"><ClipboardCopy size={15} /> Copy</button>}
+              <button type="button" className="command-button secondary compact" disabled={!panelClipboard} onClick={pastePanel} title={panelClipboard ? "Paste the copied panel onto this board" : "Copy a panel first"}><Plus size={15} /> Paste</button>
               {selectedPanel && <button type="button" className="icon-button" title="Return to board settings" aria-label="Return to board settings" onClick={() => { setSelectedPanelId(""); setSelectedPanelIds([]); }}><X size={16} /></button>}
             </div>
           </div>

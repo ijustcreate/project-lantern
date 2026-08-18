@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0197",
+    "title": "Copy panels between boards",
+    "summary": "Board Editor now lets you copy a panel and paste an independent copy onto another board.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:56 AM",
+    "areas": [
+      "Board editor",
+      "Reusable content"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0196",
     "title": "Open assigned room cameras from Dashboard",
     "summary": "The Dashboard camera shortcut now opens an assigned room camera directly, while unconfigured displays open their Room camera settings.",
