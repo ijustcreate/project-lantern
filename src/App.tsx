@@ -4577,25 +4577,19 @@ function AnnouncementsView({
             </div>
           </details>
           <div className="announcement-actions composer-actions"><div><small>{previewLabel} · {state.announcement.durationMinutes ? `${state.announcement.durationMinutes} minutes` : "Manual end"}</small></div><button className={state.announcement.active ? "command-button danger" : "command-button primary"} onClick={toggleAnnouncement}><Megaphone size={18} />{state.announcement.active ? "End announcement" : "Send announcement"}</button></div>
-          <details className="saved-announcement-panel" aria-label="Saved announcements">
-            <summary><span><Save size={15} /> Saved announcements</span><strong>{state.savedAnnouncements.find((item) => item.id === selectedSavedId)?.title ?? `${state.savedAnnouncements.length} created`}</strong><div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={(event) => { event.preventDefault(); newAnnouncement(); }}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={(event) => { event.preventDefault(); saveAnnouncement(); }}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div><ChevronDown size={15} /></summary>
-            <div className="saved-announcement-list">
-              {state.savedAnnouncements.map((item) => <article key={item.id} className={selectedSavedId === item.id ? "saved-announcement-card selected" : "saved-announcement-card"} onClick={() => loadSavedAnnouncement(item.id)}>
-                <div><strong>{item.title || "Untitled announcement"}</strong><p>{item.message || "No message"}</p><small>{targetOptionLabels(state)[item.target]} · {item.durationMinutes ? `${item.durationMinutes} min` : "Manual"}</small></div>
-                <div className="saved-announcement-card-actions">
-                  <button type="button" onClick={(event) => { event.stopPropagation(); loadSavedAnnouncement(item.id); }} title="Edit announcement"><Pencil size={14} /> Edit</button>
-                  <button type="button" onClick={(event) => { event.stopPropagation(); duplicateSavedAnnouncement(item.id); }} title="Create a new version"><Plus size={14} /> Version</button>
-                  <button type="button" onClick={(event) => { event.stopPropagation(); setScheduleAnnouncementId(item.id); }} title="Add to calendar"><CalendarDays size={14} /> Calendar</button>
-                  <button type="button" className="danger" onClick={(event) => { event.stopPropagation(); deleteSavedAnnouncement(item.id); }} title="Delete announcement"><Trash2 size={14} /></button>
-                </div>
-              </article>)}
-              {!state.savedAnnouncements.length && <div className="saved-announcement-empty"><Megaphone size={20} /><span>No saved announcements yet. Finish this draft and choose Save draft.</span></div>}
-            </div>
-          </details>
+          <section className="saved-announcement-picker" aria-label="Saved announcements">
+            <span><Save size={15} /> Saved announcements</span>
+            <select aria-label="Choose saved announcement" value={selectedSavedId ?? ""} onChange={(event) => event.target.value ? loadSavedAnnouncement(event.target.value) : newAnnouncement()}>
+              <option value="">Unsaved draft</option>
+              {state.savedAnnouncements.map((item) => <option key={item.id} value={item.id}>{item.title || "Untitled announcement"}</option>)}
+            </select>
+            <small>{state.savedAnnouncements.length} saved</small>
+            <div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={newAnnouncement}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div>
+          </section>
         </div>
         <div className="announcement-preview-card">
           <header className="announcement-preview-header">
-            <div className="announcement-preview-tools"><label className="announcement-preview-display-select"><Monitor size={15} /><span>Preview display</span><select aria-label="Preview display" value={previewScreen.id} onChange={(event) => setPreviewScreenId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select></label><div className="announcement-preview-header-actions"><div className="announcement-preview-actions"><button type="button" className="command-button secondary compact" onClick={openAnnouncementDemo}><ExternalLink size={15} /> Preview</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save announcement"}</button></div><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div></div>
+            <div className="announcement-preview-tools"><label className="announcement-preview-display-select"><Monitor size={15} /><span>Preview format</span><select aria-label="Preview format" value={previewScreen.id} onChange={(event) => setPreviewScreenId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label} · {screen.orientation}</option>)}</select></label><div className="announcement-preview-aspect" role="group" aria-label="Announcement layout aspect"><button type="button" className={previewScreen.orientation === "Portrait" ? "active" : ""} onClick={() => { const screen = Object.values(state.screens).find((item) => item.orientation === "Portrait"); if (screen) setPreviewScreenId(screen.id); }}>Portrait</button><button type="button" className={previewScreen.orientation === "Landscape" ? "active" : ""} onClick={() => { const screen = Object.values(state.screens).find((item) => item.orientation === "Landscape"); if (screen) setPreviewScreenId(screen.id); }}>Landscape</button></div><div className="announcement-preview-header-actions"><div className="announcement-preview-actions"><button type="button" className="command-button secondary compact" onClick={openAnnouncementDemo}><ExternalLink size={15} /> Preview</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save announcement"}</button></div><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div></div>
           </header>
           <p className="eyebrow">Live preview · {previewLabel}</p>
           <div className={`announcement-preview-stage ${orientationClass(previewScreen)}`}>
@@ -6014,9 +6008,9 @@ function AnnouncementMonitorSurface({
 }) {
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [editing, setEditing] = useState(false);
-  const [view, setView] = useState({ x: 0, y: 0, zoom: 1, rotateX: -2, rotateY: 6 });
+  const [view, setView] = useState({ x: 0, y: 0, zoom: 1, rotateX: -3, rotateY: 7 });
   const dragRef = useRef<{ pointerId: number; x: number; y: number; view: typeof view; pan: boolean } | null>(null);
-  const resetView = () => setView({ x: 0, y: 0, zoom: 1, rotateX: -2, rotateY: 6 });
+  const resetView = () => setView({ x: 0, y: 0, zoom: 1, rotateX: -3, rotateY: 7 });
   const setMode = (mode: "2d" | "3d") => {
     setViewMode(mode);
     resetView();
@@ -6038,7 +6032,7 @@ function AnnouncementMonitorSurface({
     if (drag.pan) {
       setView({ ...drag.view, x: drag.view.x + dx, y: drag.view.y + dy });
     } else {
-      setView({ ...drag.view, rotateX: clamp(drag.view.rotateX - dy * .16, -34, 34), rotateY: clamp(drag.view.rotateY + dx * .2, -44, 44) });
+      setView({ ...drag.view, rotateX: clamp(drag.view.rotateX - dy * .1, -24, 24), rotateY: clamp(drag.view.rotateY + dx * .12, -28, 28) });
     }
   };
   const endViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -6139,6 +6133,8 @@ function AnnouncementLayer({
     y: number;
     width: number;
   } | null>(null);
+  const pendingPatchRef = useRef<Partial<LanternState["announcement"]> | null>(null);
+  const patchFrameRef = useRef<number | null>(null);
   const isTicker = announcement.style === "News Ticker";
   const timerInAnnouncement = !isTicker && announcement.timerStyle !== "off" && announcement.timerPosition === "announcement-right";
   const floatingTimerPosition = isTicker && announcement.timerPosition === "announcement-right" ? "top-right" : announcement.timerPosition;
@@ -6147,6 +6143,20 @@ function AnnouncementLayer({
   const defaultLayoutY = announcement.style === "Temporary Card" ? 50 : isTicker ? 91 : 88;
   const defaultLayoutWidth = isTicker ? 96 : announcement.style === "Ribbon" ? 90 : 78;
   const hasCustomLayout = announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
+  const queuePatch = (patch: Partial<LanternState["announcement"]>) => {
+    if (!onPatch) return;
+    pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
+    if (patchFrameRef.current !== null) return;
+    patchFrameRef.current = requestAnimationFrame(() => {
+      patchFrameRef.current = null;
+      const nextPatch = pendingPatchRef.current;
+      pendingPatchRef.current = null;
+      if (nextPatch) onPatch(nextPatch);
+    });
+  };
+  useEffect(() => () => {
+    if (patchFrameRef.current !== null) cancelAnimationFrame(patchFrameRef.current);
+  }, []);
   const overlayStyle = {
     color: announcement.textColor ?? undefined,
     background: announcement.backgroundColor ?? undefined,
@@ -6183,7 +6193,7 @@ function AnnouncementLayer({
     const dx = (event.clientX - drag.pointerX) / bounds.width * 100;
     const dy = (event.clientY - drag.pointerY) / bounds.height * 100;
     if (drag.edge === "move") {
-      onPatch(drag.kind === "layout"
+      queuePatch(drag.kind === "layout"
         ? { layoutX: clamp(drag.x + dx, 0, 100), layoutY: clamp(drag.y + dy, 0, 100) }
         : { imageX: clamp(drag.x + dx, 0, 100), imageY: clamp(drag.y + dy, 0, 100) });
       return;
@@ -6191,7 +6201,7 @@ function AnnouncementLayer({
     const horizontal = drag.edge.includes("e") ? dx : drag.edge.includes("w") ? -dx : 0;
     const width = clamp(drag.width + horizontal, drag.kind === "layout" ? 20 : 5, drag.kind === "layout" ? 96 : 70);
     const centerShift = drag.edge.includes("e") ? horizontal / 2 : drag.edge.includes("w") ? -horizontal / 2 : 0;
-    onPatch(drag.kind === "layout"
+    queuePatch(drag.kind === "layout"
       ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, 0, 100) }
       : { imageWidth: width, imageX: clamp(drag.x + centerShift, 0, 100) });
   };
@@ -6232,9 +6242,9 @@ function AnnouncementLayer({
         <span {...editableText("message")}>{announcement.message || "Your message appears here."}</span>
         {announcement.details && <small className="announcement-details" {...editableText("details")}>{announcement.details}</small>}
       </>}
-      {announcement.imageUrl && !isTicker && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("image")}</>}</div>}
       {timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className="inside-announcement" />}
     </div>
+    {announcement.imageUrl && !isTicker && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("image")}</>}</div>}
     {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${floatingTimerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
   </>;
 }

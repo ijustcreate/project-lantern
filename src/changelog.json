@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0217",
+    "title": "Refine announcement composer editing",
+    "summary": "Made saved announcements a compact selector, separated message images into independent layers, added portrait and landscape preview controls, and improved preview responsiveness and readability.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:08 PM",
+    "areas": [
+      "Announcements",
+      "Preview",
+      "Performance"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0216",
     "title": "Move announcement actions into preview header",
     "summary": "Placed Preview and Save announcement controls in the unused preview header space to reclaim vertical room.",
