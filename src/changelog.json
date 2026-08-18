@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0191",
+    "title": "Protect and restore board elements",
+    "summary": "Board element deletion now requires an in-place confirmation, supports Ctrl/Cmd+Z undo, and recovers one accidentally removed legacy donor star.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:23 AM",
+    "areas": [
+      "Board editor",
+      "Legacy donor wall"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/host/lanternHost.ts",
+      "src/sampleData.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0190",
     "title": "Add Word-like text panel controls",
     "summary": "Text panels now support editable font sizes, spacing, formatting, direction, and arc effects in the shared typography inspector.",

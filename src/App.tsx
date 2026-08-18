@@ -3044,6 +3044,8 @@ function ThemeStudio({
   const [boardEditorPan, setBoardEditorPan] = useState({ x: 0, y: 0 });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [pendingProgramDeleteId, setPendingProgramDeleteId] = useState<string | null>(null);
+  const [pendingPanelDelete, setPendingPanelDelete] = useState<{ programId: string; ids: string[]; removed: Array<{ panel: BoardPanel; index: number }>; x: number; y: number } | null>(null);
+  const [lastDeletedPanels, setLastDeletedPanels] = useState<{ programId: string; removed: Array<{ panel: BoardPanel; index: number }> } | null>(null);
   const boardPickerRef = useRef<HTMLDetailsElement>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const pendingProgramDelete = state.boardPrograms.find((program) => program.id === pendingProgramDeleteId);
@@ -3140,12 +3142,46 @@ function ThemeStudio({
     updateState((current) => ({ ...current, widgets: [...(current.widgets ?? []), widget] }));
   };
 
-  const removePanel = (panelId: string) => {
+  const requestRemovePanel = (panelId: string, position?: { x: number; y: number }) => {
+    if (!selectedProgram) return;
     const ids = selectedPanelIds.includes(panelId) ? selectedPanelIds : [panelId];
-    const nextPanels = panels.filter((panel) => !ids.includes(panel.id));
-    patchProgram({ panels: nextPanels });
-    setSelectedPanelId(""); setSelectedPanelIds([]);
+    const removed = panels.flatMap((panel, index) => ids.includes(panel.id) ? [{ panel, index }] : []);
+    setPendingPanelDelete({ programId: selectedProgram.id, ids, removed, x: Math.max(8, Math.min(window.innerWidth - 260, position?.x ?? window.innerWidth / 2 - 130)), y: Math.max(8, Math.min(window.innerHeight - 132, position?.y ?? window.innerHeight / 2 - 66)) });
   };
+  const confirmRemovePanel = () => {
+    if (!pendingPanelDelete) return;
+    updateState((current) => ({ ...current, boardPrograms: current.boardPrograms.map((program) => program.id === pendingPanelDelete.programId ? { ...program, panels: (program.panels ?? []).filter((panel) => !pendingPanelDelete.ids.includes(panel.id)) } : program) }));
+    setLastDeletedPanels({ programId: pendingPanelDelete.programId, removed: pendingPanelDelete.removed });
+    setSelectedPanelId(""); setSelectedPanelIds([]);
+    setPendingPanelDelete(null);
+  };
+  const undoLastPanelDelete = useCallback(() => {
+    if (!lastDeletedPanels) return;
+    updateState((current) => ({ ...current, boardPrograms: current.boardPrograms.map((program) => {
+      if (program.id !== lastDeletedPanels.programId) return program;
+      const currentPanels = program.panels ?? [];
+      const existingIds = new Set(currentPanels.map((panel) => panel.id));
+      const restored = lastDeletedPanels.removed.filter(({ panel }) => !existingIds.has(panel.id));
+      const nextPanels = [...currentPanels];
+      restored.sort((a, b) => a.index - b.index).forEach(({ panel, index }) => nextPanels.splice(Math.min(index, nextPanels.length), 0, panel));
+      return { ...program, panels: nextPanels };
+    }) }));
+    setSelectedPanelIds(lastDeletedPanels.removed.map(({ panel }) => panel.id));
+    setSelectedPanelId(lastDeletedPanels.removed[0]?.panel.id ?? "");
+    setLastDeletedPanels(null);
+  }, [lastDeletedPanels, updateState]);
+  useEffect(() => {
+    const handleUndo = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!lastDeletedPanels) return;
+      event.preventDefault();
+      undoLastPanelDelete();
+    };
+    window.addEventListener("keydown", handleUndo);
+    return () => window.removeEventListener("keydown", handleUndo);
+  }, [lastDeletedPanels, undoLastPanelDelete]);
   const groupSelectedPanels = () => {
     const ids = selectedPanelIds.length > 1 ? selectedPanelIds : selectedPanelId ? [selectedPanelId] : [];
     if (ids.length < 2) return;
@@ -3379,7 +3415,7 @@ function ThemeStudio({
             selectedPanelIds={selectedPanelIds}
             onSelect={(id, additive) => { setSelectedPanelId(id); setSelectedPanelIds((current) => additive ? (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]) : [id]); }}
             onPatch={patchPanel}
-            onRemove={removePanel}
+            onRemove={requestRemovePanel}
             onRenameDonor={renameDonor}
             placingPanelType={placingPanelType}
             onBeginPlace={setPlacingPanelType}
@@ -3441,7 +3477,7 @@ function ThemeStudio({
               </>}
               {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row"><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
               <div className="panel-group-actions"><span>{selectedPanel.groupId ? "Grouped panels move together." : "Select two panels with Shift to group them."}</span>{selectedPanel.groupId ? <button type="button" onClick={() => ungroupPanel(selectedPanel)}>Ungroup</button> : <button type="button" disabled={selectedPanelIds.length < 2} onClick={groupSelectedPanels}>Group selected</button>}</div>
-              <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0); patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) }); }} /></label>)}</div><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={() => removePanel(selectedPanel.id)}><Trash2 size={14} /> Remove element</button></div></details>
+              <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0); patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) }); }} /></label>)}</div><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={(event) => requestRemovePanel(selectedPanel.id, { x: event.clientX, y: event.clientY })}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
             <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
@@ -3495,6 +3531,7 @@ function ThemeStudio({
         </aside>
       </div>
       {pendingProgramDelete && <LanternConfirmDialog eyebrow="Delete board template" title={`Delete “${pendingProgramDelete.name}”?`} description="This removes the reusable board and its board-specific presentation settings. Donor profiles remain available, and displays using this board move to the next available board." confirmLabel="Delete board" onCancel={() => setPendingProgramDeleteId(null)} onConfirm={() => deleteProgram(pendingProgramDelete.id)} />}
+      {pendingPanelDelete && createPortal(<section className="panel-delete-confirm" style={{ left: pendingPanelDelete.x, top: pendingPanelDelete.y }} role="alertdialog" aria-label="Confirm element deletion"><strong>Remove {pendingPanelDelete.removed.length === 1 ? "this element" : `${pendingPanelDelete.removed.length} elements`}?</strong><span>You can restore it with Ctrl/Cmd+Z.</span><div><button type="button" onClick={() => setPendingPanelDelete(null)}>Cancel</button><button type="button" className="danger" onClick={confirmRemovePanel}>Remove</button></div></section>, document.body)}
     </section>
   );
 }
@@ -3530,7 +3567,7 @@ function DirectBoardCanvas({
   onSelect: (id: string, additive?: boolean) => void;
   selectedPanelIds?: string[];
   onPatch: (id: string, patch: Partial<BoardPanel>) => void;
-  onRemove: (id: string) => void;
+  onRemove: (id: string, position?: { x: number; y: number }) => void;
   onRenameDonor: (id: string, name: string) => void;
   placingPanelType: BoardPanelType | null;
   onBeginPlace: (type: BoardPanelType | null) => void;
@@ -3673,7 +3710,7 @@ function DirectBoardCanvas({
         "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
       } as React.CSSProperties} onClick={(event) => { event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
-        <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id); }}><Trash2 size={15} /></button>
+        <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
         {panel.type === "text" && <EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} />}
         {panel.type === "heading" && <EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />}

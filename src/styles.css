@@ -7210,6 +7210,12 @@ textarea:focus-visible,
 .direct-board-panel:hover .panel-remove-handle,
 .direct-board-panel.selected .panel-remove-handle { opacity: 1; }
 .panel-remove-handle:disabled { opacity: .22; cursor: default; }
+.panel-delete-confirm { position: fixed; z-index: 2300; display: grid; width: min(244px, calc(100vw - 16px)); gap: 7px; padding: 11px; border: 1px solid rgba(255, 139, 150, .62); border-radius: 9px; color: var(--text); background: #1b1729; box-shadow: 0 14px 34px rgba(0, 0, 0, .48); }
+.panel-delete-confirm strong { font-size: 12px; }
+.panel-delete-confirm > span { color: var(--muted); font-size: 10px; line-height: 1.35; }
+.panel-delete-confirm > div { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.panel-delete-confirm button { min-height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: #111a31; font: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+.panel-delete-confirm button.danger { border-color: rgba(255, 115, 133, .68); color: #fff4f5; background: #a83b4d; }
 .direct-board-panel.panel-tools-below .panel-move-handle,
 .direct-board-panel.panel-tools-below .panel-remove-handle { top: calc(100% + 4px); bottom: auto; }
 .direct-board-panel:hover .panel-move-handle,

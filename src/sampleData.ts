@@ -7,7 +7,9 @@ import { seededVisitorMessages } from "./visitorMessages";
 /** Installs the historical donor walls without altering existing donor records. */
 export const LEGACY_DONOR_STARS_CONTENT_VERSION = 9;
 export const DONOR_ROSTER_BOARDS_CONTENT_VERSION = 10;
-export const LANTERN_CONTENT_VERSION = DONOR_ROSTER_BOARDS_CONTENT_VERSION;
+/** One-time recovery for a single accidentally removed legacy recognition star. */
+export const LEGACY_STAR_RECOVERY_CONTENT_VERSION = 11;
+export const LANTERN_CONTENT_VERSION = LEGACY_STAR_RECOVERY_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",

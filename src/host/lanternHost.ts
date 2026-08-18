@@ -1,4 +1,4 @@
-import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -912,6 +912,7 @@ export function normalizeState(state: LanternState): LanternState {
   const needsEffectStudioMigration = incomingContentVersion < PHASE4_CONTENT_VERSION;
   const needsLegacyDonorStarsMigration = incomingContentVersion < LEGACY_DONOR_STARS_CONTENT_VERSION;
   const needsDonorRosterBoardsMigration = incomingContentVersion < DONOR_ROSTER_BOARDS_CONTENT_VERSION;
+  const needsLegacyStarRecovery = incomingContentVersion < LEGACY_STAR_RECOVERY_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -971,10 +972,16 @@ export function normalizeState(state: LanternState): LanternState {
             ? { ...panel, title: generousDefault.footer }
             : panel)
     } : incomingProgram;
+    const defaultLegacyStarWall = legacyBoardPrograms.find((candidate) => candidate.id === program.id);
+    const currentPanels = program.panels ?? [];
+    const missingLegacyStarPanels = defaultLegacyStarWall?.panels?.filter((panel) => !currentPanels.some((current) => current.id === panel.id)) ?? [];
+    const recoveredPanels = needsLegacyStarRecovery && /^board-legacy-stars-photo-[12]$/.test(program.id) && missingLegacyStarPanels.length > 0 && missingLegacyStarPanels.length <= 2
+      ? [...currentPanels, ...missingLegacyStarPanels]
+      : currentPanels;
     return {
       ...program,
       donorIds: remapDonorIds(program.donorIds, donorAliases) ?? [],
-      panels: program.panels
+      panels: recoveredPanels
         ?.filter((panel) => !(needsDonorRosterBoardsMigration
           && program.id === "board-legacy-donors-portrait"
           && panel.id === "legacy-list-donors-heading"
