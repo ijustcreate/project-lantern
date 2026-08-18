@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0190",
+    "title": "Add Word-like text panel controls",
+    "summary": "Text panels now support editable font sizes, spacing, formatting, direction, and arc effects in the shared typography inspector.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:15 AM",
+    "areas": [
+      "Board editor",
+      "Typography"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false"
+  },
+  {
     "id": "DEV-0189",
     "title": "Remove the custom annual test tier",
     "summary": "Stops the temporary Custom Annual Commitment level from being injected or restored from saved recognition data.",

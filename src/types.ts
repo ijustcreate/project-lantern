@@ -302,6 +302,15 @@ export interface BoardPanel {
   fontFamily?: DisplayProfile["fontFamily"];
   fontSize?: number;
   textColor?: string;
+  /** Per-panel text controls shared by all unified text boxes. */
+  letterSpacing?: number;
+  lineHeight?: number;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  underline?: boolean;
+  strikethrough?: boolean;
+  textDirection?: "horizontal" | "vertical";
+  textArc?: "none" | "up" | "down";
   /** Preserved only to migrate boards created before the supporters heading was its own panel. */
   donorHeadingSize?: number;
   /** Preserved only to migrate boards created before the donor list used the panel font size. */
