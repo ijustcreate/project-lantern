@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0205",
+    "title": "Refine compact schedule board picker",
+    "summary": "Simplified the selected-board field, added orientation icons throughout grouped board lists, and eliminated competing scroll regions while the picker is open.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:48 PM",
+    "areas": [
+      "Schedule",
+      "Board selection"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0204",
     "title": "Protect user content during startup sync",
     "summary": "Startup now merges shared and browser state instead of replacing it. Local schedules and other user edits are retained on conflicts, remote-only records are added, collisions are logged for review, and pre-migration snapshots are retained locally.",

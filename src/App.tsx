@@ -62,6 +62,7 @@ import {
   Square,
   ArrowUpRight,
   Star,
+  Smartphone,
   Sun,
   PartyPopper,
   Trash2,
@@ -2985,7 +2986,12 @@ function ScheduleBoardPicker({ programs, value, onChange }: { programs: DonorBoa
   const needle = search.trim().toLowerCase();
   const filteredGroups = groups.map((group) => ({ ...group, programs: group.programs.filter((program) => !needle || program.name.toLowerCase().includes(needle) || program.orientation.toLowerCase().includes(needle) || group.label.toLowerCase().includes(needle)) })).filter((group) => group.programs.length);
   if (!current) return null;
-  return <div className="field schedule-board-picker"><span>Board <InfoDot text="Choose the donor board shown during this event." /></span><details className="board-picker" ref={pickerRef} onToggle={(event) => { if (!(event.currentTarget as HTMLDetailsElement).open) setSearch(""); }}><summary aria-label={`Choose board. Current board: ${current.name}`}><span className="board-picker-current"><Folder size={16} /><span><strong>{displayName(current)}</strong><small>{currentGroup?.label ?? "Custom boards"} Â· {current.orientation}</small></span></span><ChevronDown size={16} /></summary><div className="board-picker-popover"><label className="board-picker-search"><Search size={15} /><span className="sr-only">Search boards</span><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search boards or folders" /></label><div className="board-picker-groups">{filteredGroups.map((group) => <section className="board-picker-group" key={group.label}><header><Folder size={14} /><strong>{group.label}</strong><span>{group.programs.length}</span></header>{group.programs.map((program) => <button type="button" className={program.id === current.id ? "selected" : ""} aria-current={program.id === current.id ? "true" : undefined} key={program.id} onClick={() => { onChange(program.id); pickerRef.current?.removeAttribute("open"); }}><span>{displayName(program)}</span><small>{program.orientation}</small></button>)}</section>)}{!filteredGroups.length && <div className="board-picker-empty"><Search size={18} /><span>No boards match â€œ{search}â€.</span></div>}</div></div></details></div>;
+  return <div className="field schedule-board-picker"><span>Board <InfoDot text="Choose the donor board shown during this event." /></span><details className="board-picker" ref={pickerRef} onToggle={(event) => { if (!(event.currentTarget as HTMLDetailsElement).open) setSearch(""); }}><summary aria-label={`Choose board. Current board: ${current.name}`}><span className="board-picker-current"><BoardOrientationIcon orientation={current.orientation} /><span><strong>{displayName(current)}</strong><small>{currentGroup?.label ?? "Custom boards"} Â· {current.orientation}</small></span></span><ChevronDown size={16} /></summary><div className="board-picker-popover"><label className="board-picker-search"><Search size={15} /><span className="sr-only">Search boards</span><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search boards or folders" /></label><div className="board-picker-groups">{filteredGroups.map((group) => <section className="board-picker-group" key={group.label}><header><Folder size={14} /><strong>{group.label}</strong><span>{group.programs.length}</span></header>{group.programs.map((program) => <button type="button" className={program.id === current.id ? "selected board-picker-option" : "board-picker-option"} aria-current={program.id === current.id ? "true" : undefined} key={program.id} onClick={() => { onChange(program.id); pickerRef.current?.removeAttribute("open"); }}><BoardOrientationIcon orientation={program.orientation} /><span>{displayName(program)}</span><small>{program.orientation}</small></button>)}</section>)}{!filteredGroups.length && <div className="board-picker-empty"><Search size={18} /><span>No boards match â€œ{search}â€.</span></div>}</div></div></details></div>;
+}
+
+function BoardOrientationIcon({ orientation }: { orientation: DonorBoardProgram["orientation"] }) {
+  const Icon = orientation === "Portrait" ? Smartphone : Monitor;
+  return <span className="board-orientation-icon" title={`${orientation} board`}><Icon size={14} aria-hidden="true" /><span className="sr-only">{orientation}</span></span>;
 }
 
 function defaultBoardPanels(program: LanternState["boardPrograms"][number]): BoardPanel[] {
@@ -3372,7 +3378,7 @@ function ThemeStudio({
           <details className="board-picker" ref={boardPickerRef} onToggle={(event) => { if (!(event.currentTarget as HTMLDetailsElement).open) setBoardSearch(""); }}>
             <summary aria-label={`Choose board. Current board: ${selectedProgram.name}`}>
               <span className="board-picker-label">Board</span>
-              <span className="board-picker-current"><Folder size={16} /><span><strong>{boardPickerName(selectedProgram)}</strong><small>{selectedBoardGroup?.label ?? "Custom boards"} · {selectedProgram.orientation}</small></span></span>
+              <span className="board-picker-current"><BoardOrientationIcon orientation={selectedProgram.orientation} /><span><strong>{boardPickerName(selectedProgram)}</strong><small>{selectedBoardGroup?.label ?? "Custom boards"} · {selectedProgram.orientation}</small></span></span>
               <ChevronDown size={16} />
             </summary>
             <div className="board-picker-popover">
@@ -3380,7 +3386,7 @@ function ThemeStudio({
               <div className="board-picker-groups">
                 {filteredBoardGroups.map((group) => <section className="board-picker-group" key={group.label}>
                   <header><Folder size={14} /><strong>{group.label}</strong><span>{group.programs.length}</span></header>
-                  {group.programs.map((program) => <button type="button" className={program.id === selectedProgram.id ? "selected" : ""} aria-current={program.id === selectedProgram.id ? "true" : undefined} key={program.id} onClick={() => { setSelectedProgramId(program.id); boardPickerRef.current?.removeAttribute("open"); }}><span>{boardPickerName(program)}</span><small>{program.orientation}</small></button>)}
+                  {group.programs.map((program) => <button type="button" className={program.id === selectedProgram.id ? "selected board-picker-option" : "board-picker-option"} aria-current={program.id === selectedProgram.id ? "true" : undefined} key={program.id} onClick={() => { setSelectedProgramId(program.id); boardPickerRef.current?.removeAttribute("open"); }}><BoardOrientationIcon orientation={program.orientation} /><span>{boardPickerName(program)}</span><small>{program.orientation}</small></button>)}
                 </section>)}
                 {!filteredBoardGroups.length && <div className="board-picker-empty"><Search size={18} /><span>No boards match “{boardSearch}”.</span></div>}
               </div>
