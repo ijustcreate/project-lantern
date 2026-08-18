@@ -6227,6 +6227,7 @@ function ScreensView({
     height: Math.min(520, window.innerHeight - 16)
   }));
   const editorDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
+  const editorDrawerRef = useRef<HTMLElement | null>(null);
   const roomViewDragRef = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null);
   const roomViewResizeRef = useRef<{ pointerX: number; pointerY: number; width: number; height: number } | null>(null);
   const roomViewLayoutRef = useRef(roomViewLayout);
@@ -6258,6 +6259,24 @@ function ScreensView({
     if (!(window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return;
     void import("@tauri-apps/api/core").then(({ invoke }) => invoke<Array<{ id: number; name?: string; positionX: number; positionY: number; width: number; height: number }>>("available_displays")).then(setAvailableMonitors).catch(() => setAvailableMonitors([]));
   }, []);
+  useEffect(() => {
+    if (!editingId) return;
+    const keepEditorOnScreen = () => {
+      const bounds = editorDrawerRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      setEditorPosition((current) => {
+        const x = clamp(current.x, 8, Math.max(8, window.innerWidth - bounds.width - 8));
+        const y = clamp(current.y, 8, Math.max(8, window.innerHeight - bounds.height - 8));
+        return x === current.x && y === current.y ? current : { x, y };
+      });
+    };
+    const frame = window.requestAnimationFrame(keepEditorOnScreen);
+    window.addEventListener("resize", keepEditorOnScreen);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", keepEditorOnScreen);
+    };
+  }, [editingId, editorTab]);
   const applyRoomViewLayout = (layout: typeof roomViewLayout) => {
     const bounded = {
       x: clamp(layout.x, 8, Math.max(8, window.innerWidth - layout.width - 8)),
@@ -6558,7 +6577,7 @@ function ScreensView({
         ))}
       </div>
       <div className="collection-footer"><span>{screens.length} configured display{screens.length === 1 ? "" : "s"}</span><Pager page={page} pageCount={pageCount} onChange={setPage} /></div>
-      {editingScreen && <aside className="screen-editor-drawer" style={{ left: editorPosition.x, top: editorPosition.y, right: "auto", bottom: "auto" }}>
+      {editingScreen && <aside ref={editorDrawerRef} className="screen-editor-drawer" style={{ left: editorPosition.x, top: editorPosition.y, right: "auto", bottom: "auto" }}>
         <button className="icon-button screen-editor-close" onClick={() => { setEditingId(null); onClose?.(); }} title="Close editor"><X size={18} /></button>
         <div className="panel-heading screen-editor-drag-handle" onPointerDown={(event) => { if ((event.target as Element).closest("button, input, select")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 320)), y: clamp(drag.y + event.clientY - drag.pointerY, 8, Math.max(8, window.innerHeight - 120)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Display settings · drag to move</p><h2>{editingScreen.label}</h2></div></div>
         <EditorTabs value={editorTab} options={[["setup", "Configuration"], ["room", "Room camera"]]} onChange={(value) => setEditorTab(value as typeof editorTab)} />

@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0194",
+    "title": "Keep display settings on screen",
+    "summary": "The draggable display settings window now repositions inside the visible viewport when the app is resized.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 11:39 AM",
+    "areas": [
+      "Display settings",
+      "Responsive layout"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0193",
     "title": "Fix display focus ring and add default monitor",
     "summary": "Display settings focus highlights now render fully, and desktop display previews can be assigned a preferred monitor.",
