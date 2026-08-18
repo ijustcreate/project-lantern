@@ -309,6 +309,8 @@ export interface BoardPanel {
   fontStyle?: "normal" | "italic";
   underline?: boolean;
   strikethrough?: boolean;
+  /** Horizontal alignment for text inside the panel's own bounds. */
+  textAlign?: "left" | "center" | "right";
   textDirection?: "horizontal" | "vertical";
   textArc?: "none" | "up" | "down";
   /** Preserved only to migrate boards created before the supporters heading was its own panel. */

@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0218",
+    "title": "Wrap board text inside panel bounds",
+    "summary": "Text panels now wrap within their own bounds by default and include left, center, and right alignment controls in the board editor.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 2:15 PM",
+    "areas": [
+      "Board Editor",
+      "Typography"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0217",
     "title": "Refine announcement composer editing",
     "summary": "Made saved announcements a compact selector, separated message images into independent layers, added portrait and landscape preview controls, and improved preview responsiveness and readability.",

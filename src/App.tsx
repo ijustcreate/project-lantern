@@ -3520,7 +3520,7 @@ function ThemeStudio({
                   </div>
                 </details>
               </>}
-              {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row"><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
+              {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row"><div className="field"><span>Text alignment</span><SegmentedControl value={selectedPanel.textAlign ?? "center"} options={[["left", "Left"], ["center", "Center"], ["right", "Right"]]} onChange={(textAlign) => patchPanel(selectedPanel.id, { textAlign: textAlign as BoardPanel["textAlign"] })} /></div><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
               <div className="panel-group-actions"><span>{selectedPanel.groupId ? "Grouped panels move together." : "Select two panels with Shift to group them."}</span>{selectedPanel.groupId ? <button type="button" onClick={() => ungroupPanel(selectedPanel)}>Ungroup</button> : <button type="button" disabled={selectedPanelIds.length < 2} onClick={groupSelectedPanels}>Group selected</button>}</div>
               <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : 0} max={100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const limit = field === "x" ? 100 - (selectedPanel.width ?? 4) : field === "y" ? 100 - (selectedPanel.height ?? 4) : field === "width" ? 100 - (selectedPanel.x ?? 0) : 100 - (selectedPanel.y ?? 0); patchPanel(selectedPanel.id, { [field]: Math.max(field === "width" || field === "height" ? 4 : 0, Math.min(limit, value)) }); }} /></label>)}</div><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={(event) => requestRemovePanel(selectedPanel.id, { x: event.clientX, y: event.clientY })}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
@@ -3798,12 +3798,13 @@ function DirectBoardCanvas({
       } as React.CSSProperties} />;
     })}</div>}
     <div className="direct-board-inner">
-      {panels.map((panel, index) => <section key={panel.id} data-panel-id={panel.id} data-text-direction={panel.textDirection ?? "horizontal"} data-text-arc={panel.textArc ?? "none"} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}${(panel.y ?? index * 20 + 5) < 8 ? " panel-tools-below" : ""}`} style={{
+      {panels.map((panel, index) => <section key={panel.id} data-panel-id={panel.id} data-text-align={panel.textAlign ?? "center"} data-text-direction={panel.textDirection ?? "horizontal"} data-text-arc={panel.textArc ?? "none"} className={`direct-board-panel panel-${panel.type} panel-${panel.size}${panel.id === selectedPanelId ? " selected" : ""}${(panel.y ?? index * 20 + 5) < 8 ? " panel-tools-below" : ""}`} style={{
         left: `${panel.x ?? 5}%`,
         top: `${panel.y ?? index * 20 + 5}%`,
         width: `${panel.width ?? 90}%`,
         height: `${panel.height ?? 18}%`,
         zIndex: panel.id === selectedPanelId ? panels.length + 20 : index + 2,
+        textAlign: panel.textAlign ?? "center",
         fontFamily: panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat",
         "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? palette.accent : panel.type === "message" || panel.type === "story" ? palette.text : palette.text),
         "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
@@ -5214,6 +5215,7 @@ function LivePreviewPanel({
   const [liveTab, setLiveTab] = useState<"setup" | "frame" | "effects">("setup");
   const [previewWindow, setPreviewWindow] = useState<Window | null>(null);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
+  const [phoneMode, setPhoneMode] = useState(false);
   const [sourcePromptOpen, setSourcePromptOpen] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -5772,6 +5774,28 @@ function LivePreviewPanel({
     void startLive();
   };
 
+  const enablePhoneMode = () => {
+    stopPreviewStream(true);
+    patchLive({
+      source: "camera",
+      chromaKey: { ...state.live.chromaKey, enabled: false },
+      effects: {
+        ...state.live.effects,
+        background: "original",
+        faceTracking: false,
+        puppetPreview: false,
+        trackingDebug: false,
+        trackedPointsOverlay: false,
+        glassesEnabled: false,
+        hatEnabled: false,
+        partyHatEnabled: false,
+        costumeEnabled: false,
+        handProp: "none"
+      }
+    });
+    setPhoneMode(true);
+  };
+
   const popoutScreens = popoutMode === "all" ? allScreens : [previewScreen];
   const previewPortal = previewWindow && !previewWindow.closed && previewWindow.document.getElementById("lantern-live-preview-root")
     ? createPortal(
@@ -5805,9 +5829,28 @@ function LivePreviewPanel({
 
   return (
     <div className="form-panel live-setup-panel">
+      {phoneMode ? <section className="phone-broadcast" aria-label="Phone broadcast controls">
+        <header className="phone-broadcast-head">
+          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><div><strong>{state.live.active ? "LIVE" : "Phone broadcast"}</strong><small>{state.live.active ? `Broadcasting to ${labelForTarget(state.live.target)}` : "Quick camera setup"}</small></div></div>
+          <button type="button" className="command-button secondary compact" onClick={() => setPhoneMode(false)}>Full studio</button>
+        </header>
+        <div className="phone-broadcast-preview"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode="frame" previewError={previewError} interactive={false} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchDisplayLayout(previewScreen.id, { frame })} onTitlePositionChange={(titlePosition) => patchDisplayLayout(previewScreen.id, { titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchDisplayLayout(previewScreen.id, { lowerThirdPosition })} /></div>
+        <div className="phone-broadcast-fields">
+          <LabeledInput label="Your name" value={state.live.title} onChange={(title) => patchLive({ title })} />
+          <LabeledInput label="Message" value={state.live.lowerThird} onChange={(lowerThird) => patchLive({ lowerThird })} />
+          <LabeledSelect label="Broadcast to" value={state.live.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => patchLive({ target: target as TargetScreen })} />
+          <label className="switch-row phone-background-removal"><input type="checkbox" checked={backgroundRemoval.enabled} onChange={(event) => setBackgroundRemovalEnabled(event.target.checked)} /><span>Remove background</span></label>
+        </div>
+        {previewError && <p className="phone-broadcast-error">{previewError}</p>}
+        <footer className="phone-broadcast-actions">
+          <button type="button" className={previewStream ? "command-button secondary" : "command-button primary"} disabled={previewBusy} onClick={previewStream ? () => stopPreviewStream() : () => void startPreview("camera")}><Camera size={17} />{previewStream ? "Camera on" : previewBusy ? "Opening camera…" : "Turn on camera"}</button>
+          <button type="button" className={state.live.active ? "command-button danger" : "command-button primary"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>{state.live.active ? <Square size={17} /> : <Radio size={17} />}{state.live.active ? "End live" : "Broadcast"}</button>
+        </footer>
+      </section> : <>
       <div className="live-panel-heading">
         <div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div>
         <div className="live-heading-actions">
+          <button type="button" className="command-button phone-mode-button" onClick={enablePhoneMode}><Smartphone size={16} /> I’m on my phone</button>
           <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => setPopoutMode(event.target.value as typeof popoutMode)}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
           <button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
           <button className={state.live.active ? "command-button danger compact" : "command-button primary compact"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
@@ -5968,6 +6011,7 @@ function LivePreviewPanel({
       </div>}
       </aside>
       </div>
+      </>}
       {previewPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>

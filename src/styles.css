@@ -7339,19 +7339,29 @@ textarea:focus-visible,
 .panel-heading, .panel-message { flex-direction: column; }
 
 .editable-board-text {
+  display: block;
+  width: 100%;
   max-width: 100%;
   min-width: 18px;
   outline: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
   cursor: text;
 }
 
 .editable-board-text:hover { box-shadow: 0 1px 0 rgba(209, 159, 82, .55); }
 .editable-board-text:focus { border-radius: 2px; background: rgba(255, 255, 255, .08); box-shadow: 0 0 0 2px #79cac6; }
 .board-eyebrow { color: #d9a657; font-size: calc(var(--panel-font-size) * .55); letter-spacing: .22em; }
-.board-title { margin-top: clamp(3px, .9vh, 10px); font-size: var(--panel-font-size); line-height: 1.08; letter-spacing: .14em; white-space: nowrap; }
+.board-title { margin-top: clamp(3px, .9vh, 10px); font-size: var(--panel-font-size); line-height: 1.08; letter-spacing: .14em; }
 .board-copy { margin-top: clamp(3px, .65vh, 8px); color: #c5cdcd; font-size: calc(var(--panel-font-size) * .44); line-height: 1.35; }
-.board-text { display: grid; width: 100%; height: 100%; place-items: center; overflow: auto; font-size: var(--panel-font-size); font-weight: 700; line-height: 1.18; letter-spacing: .04em; white-space: pre-wrap; }
+.board-text { display: grid; width: 100%; height: 100%; min-width: 0; place-items: center; overflow: hidden; font-size: var(--panel-font-size); font-weight: 700; line-height: 1.18; letter-spacing: .04em; text-align: inherit; }
+.direct-board-panel[data-text-align="left"] .board-text { place-items: center start; }
+.direct-board-panel[data-text-align="right"] .board-text { place-items: center end; }
+.direct-board-panel[data-text-align="left"] .editable-board-text { text-align: left; }
+.direct-board-panel[data-text-align="center"] .editable-board-text { text-align: center; }
+.direct-board-panel[data-text-align="right"] .editable-board-text { text-align: right; }
 .board-section-title, .board-message-title { color: #d9a657; font-size: calc(var(--panel-font-size) * .62); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .direct-board-panel .board-title,
 .direct-board-panel .board-section-title,
@@ -10979,6 +10989,57 @@ textarea:focus-visible,
 }
 
 /* Broadcast / Stream: never retain the desktop side-by-side editor on a phone. */
+.phone-mode-button { display: none; }
+
+@media (max-width: 760px) {
+  .phone-mode-button { display: inline-flex; }
+
+  .live-setup-panel:has(.phone-broadcast) {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .phone-broadcast {
+    display: grid;
+    grid-template-rows: auto 112px auto auto;
+    gap: 7px;
+    min-height: 0;
+    padding: 10px;
+    border: 1px solid rgba(116, 141, 205, .3);
+    border-radius: 16px;
+    background: linear-gradient(145deg, rgba(22, 29, 69, .98), rgba(8, 17, 38, .98));
+  }
+
+  .phone-broadcast-head,
+  .phone-broadcast-head > div:first-child,
+  .phone-broadcast-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .phone-broadcast-head { justify-content: space-between; }
+  .phone-broadcast-head > div:first-child { min-width: 0; }
+  .phone-broadcast-head strong,
+  .phone-broadcast-head small { display: block; }
+  .phone-broadcast-head strong { color: var(--text); font-size: 14px; }
+  .phone-broadcast-head small { margin-top: 2px; color: var(--muted); font-size: 9px; }
+  .phone-broadcast-preview { min-height: 0; overflow: hidden; border: 1px solid rgba(124, 141, 192, .28); border-radius: 11px; background: #07111e; }
+  .phone-broadcast-preview .direct-live-stage-shell { width: 100%; height: 100%; min-height: 0; }
+  .phone-broadcast-preview .direct-live-stage { height: 100%; max-height: none; }
+  .phone-broadcast-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .phone-broadcast-fields .field { gap: 4px; }
+  .phone-broadcast-fields input,
+  .phone-broadcast-fields select { min-height: 36px; }
+  .phone-background-removal { min-height: 36px; padding: 0 9px; border: 1px solid rgba(124, 141, 192, .28); border-radius: 9px; font-size: 10px; }
+  .phone-broadcast-error { margin: -2px 0 0; color: #ff9ca3; font-size: 10px; }
+  .phone-broadcast-actions { justify-content: stretch; }
+  .phone-broadcast-actions .command-button { flex: 1 1 0; min-height: 38px; justify-content: center; }
+}
+
 @media (max-width: 760px) {
   .live-frame-tab {
     grid-template-columns: minmax(0, 1fr);
