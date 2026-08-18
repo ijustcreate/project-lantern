@@ -2036,6 +2036,12 @@ function Dashboard({
   const displays = Object.values(state.screens);
   const [preview3d, setPreview3d] = useState<Record<string, boolean>>({});
   const [previewReset, setPreviewReset] = useState<Record<string, number>>({});
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!state.activeBlip.active) return;
+    const timer = window.setInterval(() => setNow(new Date()), 500);
+    return () => window.clearInterval(timer);
+  }, [state.activeBlip.active]);
   const previewGridClass = displays.length === 1
     ? "single"
     : displays.length === 2
@@ -2055,6 +2061,18 @@ function Dashboard({
               const assignedBoard = resolveActiveBoardProgram(state, screen.id);
               const editableBoard = activeBoard ?? assignedBoard;
               const noScheduledBoard = !activeBoard;
+              const activeBlip = state.activeBlip;
+              const immediateBlipExpiresAt = activeBlip.startedAt && activeBlip.durationMinutes > 0
+                ? Date.parse(activeBlip.startedAt) + activeBlip.durationMinutes * 60_000
+                : null;
+              const immediateBlipIsCurrent = immediateBlipExpiresAt === null || now.getTime() < immediateBlipExpiresAt;
+              const immediateBlipTargetsDisplay = activeBlip.targets?.length
+                ? activeBlip.targets.includes(screen.id)
+                : targetIncludes(activeBlip.target, screen.id);
+              const immediateBlip = activeBlip.active && immediateBlipIsCurrent && immediateBlipTargetsDisplay && activeBlip.startedAt
+                ? { blip: activeBlip, startedAt: activeBlip.startedAt }
+                : null;
+              const displayBlip = immediateBlip ?? resolveScheduledBlip(state, screen.id, now);
               const nextScheduledContent = resolveNextScheduledContent(state, screen.id);
               const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
               return (
@@ -2070,13 +2088,24 @@ function Dashboard({
                   </div>
                   <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id], } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
                 </header>
-                <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}`}>
+                <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}`}>
                   {activeBoard ? <>
                     <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
                     <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
                     <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
-                  </> : <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
+                  </> : !displayBlip && <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
+                  {displayBlip && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
                 </div>
+                {immediateBlip && <DashboardBlipControl
+                  blip={immediateBlip.blip}
+                  startedAt={immediateBlip.startedAt}
+                  onSetRemaining={(minutes) => updateState((current) => {
+                    if (!current.activeBlip.active || !current.activeBlip.startedAt) return current;
+                    const elapsedMinutes = Math.max(0, (Date.now() - Date.parse(current.activeBlip.startedAt)) / 60_000);
+                    return { ...current, activeBlip: { ...current.activeBlip, durationMinutes: elapsedMinutes + minutes } };
+                  })}
+                  onEnd={() => updateState((current) => current.activeBlip.active ? { ...current, activeBlip: { ...current.activeBlip, active: false } } : current)}
+                />}
                 <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!editableBoard} onClick={() => editableBoard && editBoard(screen.id, editableBoard.id)} title={editableBoard ? `Edit ${editableBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
             );})}
@@ -3550,6 +3579,47 @@ function ThemeStudio({
       {pendingPanelDelete && createPortal(<section className="panel-delete-confirm" style={{ left: pendingPanelDelete.x, top: pendingPanelDelete.y }} role="alertdialog" aria-label="Confirm element deletion"><strong>Remove {pendingPanelDelete.removed.length === 1 ? "this element" : `${pendingPanelDelete.removed.length} elements`}?</strong><span>You can restore it with Ctrl/Cmd+Z.</span><div><button type="button" onClick={() => setPendingPanelDelete(null)}>Cancel</button><button type="button" className="danger" onClick={confirmRemovePanel}>Remove</button></div></section>, document.body)}
     </section>
   );
+}
+
+function DashboardBlipControl({ blip, startedAt, onSetRemaining, onEnd }: {
+  blip: LanternState["activeBlip"];
+  startedAt: string;
+  onSetRemaining: (minutes: number) => void;
+  onEnd: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const totalSeconds = Math.max(1, Math.round(blip.durationMinutes * 60));
+  const elapsedSeconds = Math.max(0, (now - Date.parse(startedAt)) / 1000);
+  const remainingSeconds = Math.max(0, Math.ceil(totalSeconds - elapsedSeconds));
+  const remainingMinutes = Math.max(.1, Math.ceil(remainingSeconds / 6) / 10);
+  const [draftMinutes, setDraftMinutes] = useState(() => String(remainingMinutes));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setDraftMinutes(String(remainingMinutes));
+  }, [blip.durationMinutes, startedAt]);
+
+  const commitRemaining = () => {
+    const next = Number(draftMinutes);
+    if (!Number.isFinite(next) || next <= 0) {
+      setDraftMinutes(String(remainingMinutes));
+      return;
+    }
+    onSetRemaining(Math.min(1440, Math.max(.1, next)));
+  };
+
+  return <section className="dashboard-blip-control" style={{ "--dashboard-blip-accent": blip.accentColor, "--dashboard-blip-progress": `${Math.max(0, Math.min(1, remainingSeconds / totalSeconds)) * 360}deg` } as React.CSSProperties} aria-label={`Active Blip: ${blip.name}`}>
+    <div className="dashboard-blip-ring" aria-label={`Blip active, ${formatCountdown(remainingSeconds)} remaining`}>
+      <i aria-hidden="true" />
+      <div><span>Blip active</span><strong>{formatCountdown(remainingSeconds)}</strong><small>remaining</small></div>
+    </div>
+    <label className="dashboard-blip-duration"><span>Time remaining</span><div><input type="number" min="0.1" max="1440" step="0.1" value={draftMinutes} onChange={(event) => setDraftMinutes(event.target.value)} onBlur={commitRemaining} onKeyDown={(event) => { if (event.key === "Enter") { event.currentTarget.blur(); } }} aria-label="Blip time remaining in minutes" /><b>min</b></div></label>
+    <button type="button" className="command-button danger compact" onClick={onEnd}><Square size={14} /> End blip</button>
+  </section>;
 }
 
 /** Keep bundled board assets working when the app is hosted below a repository path on GitHub Pages. */

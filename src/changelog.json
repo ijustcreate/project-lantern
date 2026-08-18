@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0213",
+    "title": "Show active Blips on dashboard displays",
+    "summary": "Dashboard previews now display active and scheduled Blips, while active Blips include a circular countdown, adjustable remaining time, and an end control.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:38 PM",
+    "areas": [
+      "Dashboard",
+      "Blips",
+      "Display previews"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0212",
     "title": "Open scheduled board from dashboard",
     "summary": "Dashboard Edit Board now opens Board Editor on the display's currently scheduled board, with the correct display selected.",
