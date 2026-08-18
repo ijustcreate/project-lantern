@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0226",
+    "title": "Unify Toy Soldier head artwork",
+    "summary": "Updated the reusable announcement and preview heads to match the clean face used by the complete Toy Soldier illustrations.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 3:03 PM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Announcements"
+    ],
+    "files": [
+      "public/assets/brigade/head-red.svg",
+      "public/assets/brigade/head-blue.svg",
+      "public/assets/brigade/head-yellow.svg"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0225",
     "title": "Add Brigade joke Blip creator",
     "summary": "Replaced the Brigade page’s redundant Blip entry points with a focused joke form that saves a new joke directly to the shared Blip library.",

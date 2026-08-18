@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-labelledby="title">
-  <title id="title">Child-drawn yellow toy soldier head</title>
-  <path d="M48 57c10-30 69-38 84-2l-4 33H52z" fill="#f3c64f" stroke="#173f61" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M59 51c18 8 41 8 65-1M45 78c28-7 59-5 90 1" fill="none" stroke="#c64a3c" stroke-width="8" stroke-linecap="round"/>
-  <path d="M61 84c-2 38 11 57 31 60 23 0 36-22 30-60" fill="#f0b68d" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
-  <circle cx="77" cy="105" r="4" fill="#173f61"/><circle cx="106" cy="106" r="4" fill="#173f61"/>
-  <path d="M78 125c10 7 19 6 29-1M91 108l-3 11 7 1" fill="none" stroke="#173f61" stroke-width="5" stroke-linecap="round"/>
-  <path d="M56 92l-12 8 10 11M126 91l12 9-10 12" fill="none" stroke="#173f61" stroke-width="7" stroke-linecap="round"/>
+  <title id="title">Clean yellow toy soldier head</title>
+  <path d="M49 49c8-25 68-33 82 1l-3 37H52z" fill="#f3c64f" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M46 75c30-7 60-5 89 2" fill="none" stroke="#c74b3d" stroke-width="8" stroke-linecap="round"/>
+  <path d="M62 83c-1 36 11 50 30 51 22 0 32-18 29-51" fill="#efb58b" stroke="#173f61" stroke-width="7"/>
+  <circle cx="77" cy="102" r="4" fill="#173f61"/><circle cx="105" cy="102" r="4" fill="#173f61"/>
+  <path d="M80 120c8 5 16 5 24 0" fill="none" stroke="#173f61" stroke-width="5" stroke-linecap="round"/>
 </svg>
