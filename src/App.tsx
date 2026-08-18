@@ -5028,12 +5028,22 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
   const [scheduleDate, setScheduleDate] = useState(() => toDateInputValue(new Date()));
   const [scheduleTime, setScheduleTime] = useState(() => minutesToTime(Math.min(1430, new Date().getHours() * 60 + new Date().getMinutes() + 10)));
   const [scheduleTarget, setScheduleTarget] = useState<TargetScreen>(() => state.savedBlips[0]?.target ?? firstDisplayId(state));
+  const [previewElapsedSeconds, setPreviewElapsedSeconds] = useState(0);
   const selected = draftBlip?.id === selectedId ? draftBlip : state.savedBlips.find((blip) => blip.id === selectedId) ?? state.savedBlips[0];
   const previewScreen = state.screens[selected?.target === "all" ? firstDisplayId(state) : selected?.target] ?? Object.values(state.screens)[0];
+  const previewDurationSeconds = selected?.kind === "celebration" ? 3 : Math.max(3, (selected?.countdownSeconds ?? 0) + 3);
 
   useEffect(() => {
     if (!selected && state.savedBlips[0]) setSelectedId(state.savedBlips[0].id);
   }, [selected, state.savedBlips]);
+
+  useEffect(() => {
+    setPreviewElapsedSeconds(0);
+  }, [selected?.id]);
+
+  useEffect(() => {
+    setPreviewElapsedSeconds((current) => Math.min(current, previewDurationSeconds));
+  }, [previewDurationSeconds]);
 
   const patchBlip = (patch: Partial<LanternState["savedBlips"][number]>) => {
     if (!selected) return;
@@ -5141,13 +5151,40 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
           <div className="two-col"><label className="field"><span>Background</span><input type="color" value={selected.backgroundColor} onChange={(event) => patchBlip({ backgroundColor: event.target.value })} /></label><label className="field"><span>Accent</span><input type="color" value={selected.accentColor} onChange={(event) => patchBlip({ accentColor: event.target.value })} /></label></div>
           <div className="two-col"><LabeledSelect label="Motion" value={selected.motion} options={["slide", "pop", "gentle"]} optionLabels={{ slide: "Slide in/out", pop: "Playful pop", gentle: "Gentle fade" }} onChange={(motion) => patchBlip({ motion: motion as typeof selected.motion })} /><label className="image-upload command-button secondary compact"><ImagePlus size={14} /><span>{selected.imageUrl ? "Replace image" : "Add celebration image"}</span><input type="file" accept="image/*" onChange={(event) => void upload(event.target.files?.[0], "imageUrl")} /></label></div>
         </div>
-        <div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} startedAt={new Date(Date.now() - Math.max(0, selected.countdownSeconds - 3) * 1000).toISOString()} /></div><p>Preview · answer reveals after the countdown</p></div>
+        <div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} previewElapsedSeconds={previewElapsedSeconds} /></div><BlipPreviewTimeline blip={selected} orientation={orientationClass(previewScreen)} elapsedSeconds={previewElapsedSeconds} durationSeconds={previewDurationSeconds} onChange={setPreviewElapsedSeconds} /><p>{selected.kind === "celebration" ? "Preview the celebration moment before it goes live." : "Scrub the timeline to inspect the setup, countdown, and answer reveal."}</p></div>
       </div>
       <footer>{draftBlip ? <p className="field-note blip-draft-note">Save this draft before scheduling or running it.</p> : <><button className="command-button secondary" onClick={() => { setScheduleTarget(selected.target); setScheduleOpen(true); }}><CalendarDays size={16} /> Schedule</button>{state.activeBlip.active && state.activeBlip.id === selected.id && <button className="command-button secondary" onClick={() => updateState((current) => ({ ...current, activeBlip: { ...current.activeBlip, active: false } }))}><Square size={15} /> Stop</button>}<button className="command-button primary" onClick={openRun}><Play size={16} /> Run now</button></>}</footer>
     </main>
     {runOpen && createPortal(<div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setRunOpen(false)}><section className="editor-modal blip-run-modal"><div className="editor-modal-head"><div><p className="eyebrow">Go live now</p><h2>Run “{selected.name}”</h2></div><button className="icon-button" onClick={() => setRunOpen(false)}><X size={17} /></button></div><div className="blip-target-list">{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={runTargets.includes(screen.id)} onChange={(event) => setRunTargets((current) => event.target.checked ? [...new Set([...current, screen.id])] : current.filter((id) => id !== screen.id))} /><span><strong>{screen.label}</strong><small>{screen.orientation} · {screen.resolution}</small></span></label>)}</div><LabeledInput label="How many minutes?" type="number" value={String(runMinutes)} onChange={(value) => setRunMinutes(Math.max(1, Number(value) || 1))} /><p className="field-note">Runs immediately without adding anything to the schedule. Broadcasts will cover it if both are live.</p><div className="editor-modal-actions"><button className="command-button secondary" onClick={() => setRunOpen(false)}>Cancel</button><button className="command-button primary" disabled={!runTargets.length} onClick={runNow}><Play size={15} /> Run Blip</button></div></section></div>, document.body)}
     {scheduleOpen && createPortal(<div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setScheduleOpen(false)}><section className="editor-modal blip-run-modal"><div className="editor-modal-head"><div><p className="eyebrow">Add to calendar</p><h2>Schedule “{selected.name}”</h2></div><button className="icon-button" title="Cancel scheduling" onClick={() => setScheduleOpen(false)}><X size={17} /></button></div><div className="two-col"><label className="field"><span>Date</span><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></label><label className="field"><span>Start time</span><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label></div><LabeledSelect label="Display" value={scheduleTarget} options={["all", ...Object.keys(state.screens)]} optionLabels={{ all: "All Displays", ...Object.fromEntries(Object.values(state.screens).map((screen) => [screen.id, `${screen.label} (${screen.orientation})`])) }} onChange={(target) => setScheduleTarget(target as TargetScreen)} /><p className="field-note">The calendar event uses this Blip’s {selected.durationMinutes}-minute default duration. Nothing is added until you confirm.</p><div className="editor-modal-actions"><button className="command-button secondary" onClick={() => setScheduleOpen(false)}>Cancel</button><button className="command-button primary" onClick={scheduleBlip}><CalendarDays size={15} /> Add to schedule</button></div></section></div>, document.body)}
     {pendingDeleteBlip && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDeleteBlip(null); }}><section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-blip-title" aria-describedby="delete-blip-description"><div className="destructive-confirm-icon"><Trash2 size={22} /></div><div><p className="eyebrow">Delete saved Blip</p><h2 id="delete-blip-title">Delete “{pendingDeleteBlip.name}”?</h2><p id="delete-blip-description">This also removes its scheduled calendar occurrences. This action cannot be undone.</p></div><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setPendingDeleteBlip(null)}>Cancel</button><button type="button" className="command-button danger" onClick={confirmDeleteBlip}><Trash2 size={15} /> Delete Blip</button></div></section></div>, document.body)}
+  </section>;
+}
+
+function BlipPreviewTimeline({ blip, orientation, elapsedSeconds, durationSeconds, onChange }: {
+  blip: LanternState["savedBlips"][number];
+  orientation: string;
+  elapsedSeconds: number;
+  durationSeconds: number;
+  onChange: (seconds: number) => void;
+}) {
+  const hasReveal = blip.kind !== "celebration";
+  const revealAt = Math.max(0, blip.countdownSeconds);
+  const stage = !hasReveal
+    ? "Celebration moment"
+    : elapsedSeconds >= revealAt
+      ? "Reveal"
+      : elapsedSeconds <= .05
+        ? "Opening"
+        : "Countdown";
+  const stageButtons = hasReveal
+    ? [["Opening", 0], ["Countdown", Math.max(.1, revealAt / 2)], ["Reveal", Math.min(durationSeconds, revealAt + .1)]] as const
+    : [["Moment", 0], ["Hold", Math.min(durationSeconds, 1.5)]] as const;
+  return <section className={`blip-preview-timeline ${orientation}`} aria-label="Blip preview timeline">
+    <header><span>Preview timeline</span><strong>{stage} · +{elapsedSeconds.toFixed(1)}s</strong></header>
+    <input type="range" min="0" max={durationSeconds} step="0.1" value={elapsedSeconds} onChange={(event) => onChange(Number(event.target.value))} aria-label="Preview point in the Blip timeline" />
+    <div className="blip-preview-beats">{stageButtons.map(([label, second]) => <button type="button" key={label} className={stage === (label === "Moment" || label === "Hold" ? "Celebration moment" : label) ? "active" : ""} onClick={() => onChange(second)}><span>{label}</span><small>+{second.toFixed(second % 1 ? 1 : 0)}s</small></button>)}</div>
+    {hasReveal && <p>Answer appears at +{revealAt}s, then remains visible for the rest of the Blip.</p>}
   </section>;
 }
 
@@ -7984,13 +8021,14 @@ function RevisionsView({ state }: { state: LanternState }) {
   );
 }
 
-function BlipComposition({ blip, startedAt }: { blip: LanternState["activeBlip"]; startedAt?: string }) {
+function BlipComposition({ blip, startedAt, previewElapsedSeconds }: { blip: LanternState["activeBlip"]; startedAt?: string; previewElapsedSeconds?: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
+    if (previewElapsedSeconds !== undefined) return;
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
-  }, []);
-  const elapsed = Math.max(0, (now - Date.parse(startedAt ?? new Date().toISOString())) / 1000);
+  }, [previewElapsedSeconds]);
+  const elapsed = previewElapsedSeconds ?? Math.max(0, (now - Date.parse(startedAt ?? new Date().toISOString())) / 1000);
   const remaining = Math.max(0, Math.ceil(blip.countdownSeconds - elapsed));
   const revealed = blip.kind === "celebration" || elapsed >= blip.countdownSeconds;
   return <div className={`blip-overlay blip-${blip.kind} motion-${blip.motion}${revealed ? " revealed" : ""}`} style={{ "--blip-background": blip.backgroundColor, "--blip-accent": blip.accentColor } as React.CSSProperties}>

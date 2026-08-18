@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0214",
+    "title": "Add Blip preview timeline",
+    "summary": "Blip previews now include a timeline slider and labeled jump points for opening, countdown, and reveal states.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:44 PM",
+    "areas": [
+      "Blips",
+      "Preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0213",
     "title": "Show active Blips on dashboard displays",
     "summary": "Dashboard previews now display active and scheduled Blips, while active Blips include a circular countdown, adjustable remaining time, and an end control.",
