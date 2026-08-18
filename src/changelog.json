@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0184",
+    "title": "Open each display in its own preview window",
+    "summary": "Replaced the combined display wall with one reusable preview per display, and recenter active previews over the control app when reopened.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:33 AM",
+    "areas": [
+      "Dashboard",
+      "Display previews",
+      "Desktop app"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src-tauri/src/lib.rs"
+    ],
+    "tests": "npm run build; cargo check attempted (blocked by missing msvcrt.lib in local Visual C++ environment)"
+  },
+  {
     "id": "DEV-0183",
     "title": "Use compact display edit controls",
     "summary": "Replaced dashboard header Edit Display text buttons with accessible gear buttons to preserve space.",

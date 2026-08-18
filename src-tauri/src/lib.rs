@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::{Path, PathBuf}, process::Command};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Serialize)]
 struct DisplayInfo {
@@ -92,18 +92,26 @@ fn available_displays(app: AppHandle) -> Result<Vec<DisplayInfo>, String> {
 
 #[tauri::command]
 fn open_test_displays(app: AppHandle, displays: Vec<OpenDisplayInput>) -> Result<(), String> {
+    let control_window = app.get_webview_window("control");
+    let control_position = control_window.as_ref().and_then(|window| window.outer_position().ok());
+    let control_size = control_window.as_ref().and_then(|window| window.outer_size().ok());
     for (index, display) in displays.iter().enumerate() {
         let portrait = display.orientation == "Portrait";
         let window_label = format!("lantern-display-{}", slug(&display.id));
+        let width = if portrait { 540.0 } else { 1280.0 };
+        let height = if portrait { 920.0 } else { 760.0 };
+        let cascade = index as f64 * 28.0;
+        let x = control_position.map(|position| position.x as f64 + control_size.map(|size| (size.width as f64 - width) / 2.0).unwrap_or(60.0) + cascade).unwrap_or(60.0 + cascade);
+        let y = control_position.map(|position| position.y as f64 + control_size.map(|size| (size.height as f64 - height) / 2.0).unwrap_or(40.0) + cascade).unwrap_or(40.0 + cascade);
         open_display(
             &app,
             &window_label,
             &display.id,
             &display.label,
-            if portrait { 540.0 } else { 1280.0 },
-            if portrait { 920.0 } else { 760.0 },
-            60.0 + index as f64 * 580.0,
-            40.0 + index as f64 * 30.0,
+            width,
+            height,
+            x,
+            y,
         )?;
     }
     Ok(())
@@ -394,6 +402,8 @@ fn open_display(
     y: f64,
 ) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(label) {
+        window.set_fullscreen(false).map_err(|error| error.to_string())?;
+        window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32)).map_err(|error| error.to_string())?;
         window.show().map_err(|error| error.to_string())?;
         window.set_focus().map_err(|error| error.to_string())?;
         return Ok(());
@@ -408,11 +418,10 @@ fn open_display(
     .inner_size(width, height)
     .position(x, y)
     .resizable(true)
-    // Display windows are intended for TVs and signage, not operator input.
-    // Keep the control-center window decorated, but make each output window
-    // a borderless native fullscreen surface on its selected monitor.
+    // Preserve each preview as an independent movable window. Window-state
+    // remembers its last location; reopening it centers it over the control app.
     .decorations(false)
-    .fullscreen(true)
+    .fullscreen(false)
     .build()
     .map(|_| ())
     .map_err(|error| error.to_string())

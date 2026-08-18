@@ -351,29 +351,45 @@ export interface DisplayWindowOpenResult {
   blocked: string[];
 }
 
+const browserDisplayWindows = new Map<string, Window>();
+
 export function openBrowserDisplayWindows(screens = Object.values(loadLanternState().screens)): DisplayWindowOpenResult {
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   const result: DisplayWindowOpenResult = { opened: [], blocked: [] };
   if (!screens.length) return result;
-  // Browsers consume transient user activation after one window.open call.
-  // A single wall popup therefore carries every requested display on first click;
-  // the native Tauri path below still opens independent physical windows.
-  const multiDisplay = screens.length > 1;
-  const route = multiDisplay
-    ? `#/display-wall/${screens.map((screen) => encodeURIComponent(screen.id)).join(",")}`
-    : `#/display/${encodeURIComponent(screens[0].id)}`;
-  const portrait = !multiDisplay && screens[0].orientation === "Portrait";
-  const popup = window.open(
-    `${appUrl}${route}`,
-    multiDisplay ? "lantern-display-wall" : `lantern-display-${screens[0].id}`,
-    `popup=yes,width=${multiDisplay ? 1240 : portrait ? 540 : 960},height=${multiDisplay ? 800 : portrait ? 900 : 620},left=80,top=60`
-  );
-  if (popup) {
-    result.opened.push(...screens.map((screen) => screen.id));
+  screens.forEach((screen, index) => {
+    const popupName = `lantern-display-${screen.id}`;
+    const knownPopup = browserDisplayWindows.get(screen.id);
+    const wasAlreadyOpen = Boolean(knownPopup && !knownPopup.closed);
+    const portrait = screen.orientation === "Portrait";
+    const width = portrait ? 540 : 960;
+    const height = portrait ? 900 : 620;
+    const cascade = index * 28;
+    const left = window.screenX + Math.round((window.outerWidth - width) / 2) + cascade;
+    const top = window.screenY + Math.round((window.outerHeight - height) / 2) + cascade;
+    const popup = window.open(
+      `${appUrl}#/display/${encodeURIComponent(screen.id)}`,
+      popupName,
+      `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no`
+    );
+    if (!popup) {
+      result.blocked.push(screen.id);
+      return;
+    }
+    browserDisplayWindows.set(screen.id, popup);
+    // A named popup keeps its last position. Reopening it deliberately brings it
+    // back to the operator's current monitor and centers it over the control app.
+    if (wasAlreadyOpen) {
+      try {
+        popup.resizeTo(width, height);
+        popup.moveTo(left, top);
+      } catch {
+        // Browsers may restrict window movement; focus remains a safe fallback.
+      }
+    }
     popup.focus();
-  } else {
-    result.blocked.push(...screens.map((screen) => screen.id));
-  }
+    result.opened.push(screen.id);
+  });
   window.dispatchEvent(new CustomEvent("lantern:display-open-result", { detail: result }));
   return result;
 }
