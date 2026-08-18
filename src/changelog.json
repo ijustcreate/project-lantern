@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0212",
+    "title": "Open scheduled board from dashboard",
+    "summary": "Dashboard Edit Board now opens Board Editor on the display's currently scheduled board, with the correct display selected.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 1:32 PM",
+    "areas": [
+      "Dashboard",
+      "Board Editor",
+      "Scheduling"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0211",
     "title": "Improve board text contrast",
     "summary": "Replaced the dark outlined brass treatment on current boards with clean flat text and removed it from shipped board defaults.",

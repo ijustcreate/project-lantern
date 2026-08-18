@@ -261,6 +261,7 @@ function ControlCenter() {
   const [view, setView] = useHashView();
   const [query, setQuery] = useState("");
   const [selectedDisplayId, setSelectedDisplayId] = useState<ScreenId>(() => firstDisplayId(loadLanternState()));
+  const [requestedBoardEditorId, setRequestedBoardEditorId] = useState<string | null>(null);
   const [videoStatus, setVideoStatus] = useState("Idle");
   const [donorSetupOpen, setDonorSetupOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -941,9 +942,10 @@ function ControlCenter() {
             deleteDisplay={deleteDisplay}
             identifyDisplay={identifyDisplay}
             editDisplay={(screenId) => openDisplayEditor(screenId)}
-            editBoard={(boardId) => {
+            editBoard={(screenId, boardId) => {
+              setSelectedDisplayId(screenId);
+              setRequestedBoardEditorId(boardId);
               setView("theme");
-              window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0);
             }}
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room", Boolean(state.screens[screenId]?.roomVideoDeviceId))}
             scheduleBoardNow={scheduleBoardNow}
@@ -971,7 +973,7 @@ function ControlCenter() {
             onOpenBoard={(boardId) => { setView("theme"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0); }}
           />
         )}
-        {view === "theme" && <ThemeStudio state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} updateState={updateState} />}
+        {view === "theme" && <ThemeStudio state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} requestedBoardId={requestedBoardEditorId} updateState={updateState} />}
         {view === "schedule" && <ScheduleCalendarView
           state={state}
           updateState={updateState}
@@ -2027,7 +2029,7 @@ function Dashboard({
   deleteDisplay: (screenId: ScreenId) => void;
   identifyDisplay: (screenId: ScreenId) => void;
   editDisplay: (screenId: ScreenId) => void;
-  editBoard: (boardId: string) => void;
+  editBoard: (screenId: ScreenId, boardId: string) => void;
   editRoomCamera: (screenId: ScreenId) => void;
   scheduleBoardNow: (screenId: ScreenId, boardId: string) => void;
 }) {
@@ -2048,9 +2050,10 @@ function Dashboard({
             {displays.map((screen) => {
               const activeSchedule = resolveCurrentBoardSchedule(state, screen.id);
               const activeBoard = activeSchedule
-                ? state.boardPrograms.find((program) => program.id === activeSchedule.boardId && program.active)
+                ? state.boardPrograms.find((program) => program.id === activeSchedule.boardId)
                 : undefined;
               const assignedBoard = resolveActiveBoardProgram(state, screen.id);
+              const editableBoard = activeBoard ?? assignedBoard;
               const noScheduledBoard = !activeBoard;
               const nextScheduledContent = resolveNextScheduledContent(state, screen.id);
               const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
@@ -2074,7 +2077,7 @@ function Dashboard({
                     <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
                   </> : <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
                 </div>
-                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!assignedBoard} onClick={() => assignedBoard && editBoard(assignedBoard.id)} title={assignedBoard ? `Edit ${assignedBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
+                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!editableBoard} onClick={() => editableBoard && editBoard(screen.id, editableBoard.id)} title={editableBoard ? `Edit ${editableBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
             );})}
           </div>
@@ -3029,15 +3032,20 @@ function ThemeStudio({
   state,
   selectedDisplayId,
   setSelectedDisplayId,
+  requestedBoardId,
   updateState
 }: {
   state: LanternState;
   selectedDisplayId: ScreenId;
   setSelectedDisplayId: (screenId: ScreenId) => void;
+  requestedBoardId: string | null;
   updateState: (updater: (current: LanternState) => LanternState) => void;
 }) {
   const display = state.screens[selectedDisplayId] ?? Object.values(state.screens)[0];
-  const [selectedProgramId, setSelectedProgramId] = useState(() => resolveDisplayedBoardProgramId(state, display.id));
+  const [selectedProgramId, setSelectedProgramId] = useState(() => requestedBoardId ?? resolveDisplayedBoardProgramId(state, display.id));
+  useEffect(() => {
+    if (requestedBoardId && state.boardPrograms.some((program) => program.id === requestedBoardId)) setSelectedProgramId(requestedBoardId);
+  }, [requestedBoardId, state.boardPrograms]);
   useEffect(() => {
     const openBoard = (event: Event) => setSelectedProgramId((event as CustomEvent<string>).detail);
     window.addEventListener("lantern:open-board", openBoard);
