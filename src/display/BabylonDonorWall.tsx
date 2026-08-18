@@ -771,6 +771,35 @@ function drawComposableBoard(
       lines.forEach((line, lineIndex) => context.fillText(line, textX, y + panelHeight * (bodyStart + lineIndex * bodyStep)));
     }
 
+    if (panel.type === "text" && /^legacy-photo[12]-.+-star-text$/.test(panel.id)) {
+      // Legacy stars use their own text layer. The star image is a separate panel
+      // beneath this one, so a long donor name can fit the safe center without
+      // changing the image's size or position.
+      context.textAlign = "center";
+      const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / 900));
+      const presentation = resolveBoardDonorPresentation(program, panel.id, {
+        fontFamily: panel.fontFamily ?? font,
+        nameColor: panelTextColor ?? "#201708",
+        accentColor: panelTextColor ?? "#201708"
+      });
+      const starTextWidth = contentWidth * .42;
+      const starTextHeight = panelHeight * .3;
+      const fittedStarFontSize = fitStarDonorFontSize(context, panel.title.toUpperCase(), starFontSize, Math.max(7, Math.round(starFontSize * .42)), starTextWidth, starTextHeight, presentation.fontFamily);
+      context.font = `700 ${fittedStarFontSize}px ${presentation.fontFamily}, Inter, sans-serif`;
+      drawBoardDonorName(
+        context,
+        panel.title.toUpperCase(),
+        centerX,
+        centerY + fittedStarFontSize * .08,
+        starTextWidth,
+        fittedStarFontSize,
+        Math.max(7, Math.round(fittedStarFontSize * .56)),
+        presentation,
+        animationTime,
+        panel.id
+      );
+    }
+
     if (panel.type === "image") {
       if (panel.imageUrl) drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain");
       else {

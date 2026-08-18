@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0231",
+    "title": "Fit independent legacy star labels",
+    "summary": "Legacy donor stars now use independent image and fitted text layers, preserving existing star positions while keeping donor names inside the star-safe area.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 4:14 PM",
+    "areas": [
+      "Board Editor",
+      "Legacy Donor Wall",
+      "Board Rendering"
+    ],
+    "files": [
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build; local Chrome legacy-star visual smoke test"
+  },
+  {
     "id": "DEV-0229",
     "title": "Fit announcement previews to the available stage",
     "summary": "The announcement preview now uses the full available stage while keeping portrait and landscape displays at their natural aspect ratios, with persistent responsive header controls.",

@@ -1,4 +1,4 @@
-import { BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -1003,6 +1003,7 @@ export function normalizeState(state: LanternState): LanternState {
   const needsLegacyStarRecovery = incomingContentVersion < LEGACY_STAR_RECOVERY_CONTENT_VERSION;
   const needsLegacyDonorTagsMigration = incomingContentVersion < LEGACY_DONOR_TAGS_CONTENT_VERSION;
   const needsBoardTextContrastMigration = incomingContentVersion < BOARD_TEXT_CONTRAST_CONTENT_VERSION;
+  const needsLegacyStarLayerMigration = incomingContentVersion < LEGACY_STAR_LAYER_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -1089,7 +1090,15 @@ export function normalizeState(state: LanternState): LanternState {
             && (!panel.imageUrl || panel.imageUrl === "/assets/donor-icons/star.png")
             ? "/assets/donor-icons/legacy-star-flat.svg"
             : panel.imageUrl;
-          return { ...panel, ...(donorIds ? { donorIds } : {}), imageUrl: flatStarImage };
+          const isLegacyStarLayer = /^legacy-photo[12]-.+-star-(image|text)$/.test(panel.id);
+          return {
+            ...panel,
+            ...(donorIds ? { donorIds } : {}),
+            imageUrl: flatStarImage,
+            ...(needsLegacyStarLayerMigration && isLegacyStarLayer
+              ? { groupId: undefined, lineHeight: panel.type === "text" ? (panel.lineHeight ?? .92) : panel.lineHeight }
+              : {})
+          };
         })
     };
   });

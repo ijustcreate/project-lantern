@@ -13,7 +13,9 @@ export const LEGACY_STAR_RECOVERY_CONTENT_VERSION = 11;
 export const LEGACY_DONOR_TAGS_CONTENT_VERSION = 12;
 /** Replaces the legacy brass outline treatment with clear, flat board text. */
 export const BOARD_TEXT_CONTRAST_CONTENT_VERSION = 13;
-export const LANTERN_CONTENT_VERSION = BOARD_TEXT_CONTRAST_CONTENT_VERSION;
+/** Makes legacy recognition stars independent image and text layers. */
+export const LEGACY_STAR_LAYER_CONTENT_VERSION = 14;
+export const LANTERN_CONTENT_VERSION = LEGACY_STAR_LAYER_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -200,10 +202,9 @@ const legacyDonorIds = legacyDonors.map((donor) => donor.id);
 
 function legacyStarPanels(donorId: string, position: [number, number, number, number], fontSize = 12): BoardPanel[] {
   const donor = legacyDonors.find((item) => item.id === donorId);
-  const groupId = `group-${donorId}-star`;
   return [
-    { id: `${donorId}-star-image`, type: "image", title: "Recognition star", size: "standard", groupId, x: position[0], y: position[1], width: position[2], height: position[3], imageUrl: "/assets/donor-icons/legacy-star-flat.svg", imageFit: "contain" },
-    { id: `${donorId}-star-text`, type: "text", title: donor?.name ?? "Legacy donor", size: "standard", groupId, x: position[0], y: position[1], width: position[2], height: position[3], fontFamily: "DM Sans", fontSize, textColor: "#201708" }
+    { id: `${donorId}-star-image`, type: "image", title: "Recognition star", size: "standard", x: position[0], y: position[1], width: position[2], height: position[3], imageUrl: "/assets/donor-icons/legacy-star-flat.svg", imageFit: "contain" },
+    { id: `${donorId}-star-text`, type: "text", title: donor?.name ?? "Legacy donor", size: "standard", x: position[0], y: position[1], width: position[2], height: position[3], fontFamily: "DM Sans", fontSize, textColor: "#201708", lineHeight: .92 }
   ];
 }
 

@@ -7497,6 +7497,23 @@ textarea:focus-visible,
 .direct-star-donor-name .donor-name-line { white-space: normal; }
 .direct-board-canvas.text-shadow-enabled .direct-star-donor-name { text-shadow: var(--board-text-shadow-x) var(--board-text-shadow-y) var(--board-text-shadow-blur) rgb(255 255 255 / .26); }
 
+/* Legacy wall stars are deliberately two independent layers. The text panel sits
+   in the safe center of the star but can be moved or edited without moving art. */
+.direct-board-panel[data-panel-id$="-star-text"] { padding: 0; border-color: transparent; background: transparent; }
+.direct-board-panel[data-panel-id$="-star-text"] .direct-single-text-content {
+  position: absolute;
+  inset: 30% 23% 28%;
+  width: auto;
+  height: auto;
+}
+.direct-board-panel[data-panel-id$="-star-text"] .board-text {
+  color: #201708;
+  font-weight: 700;
+  line-height: .92;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .board-editor-view-controls {
   position: absolute;
   z-index: 20;
