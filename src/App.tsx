@@ -112,6 +112,7 @@ import {
   hydrateLanternMedia,
   loadLanternState,
   loadSharedLanternState,
+  mergeSharedLanternState,
   openDisplayWindows,
   publishState,
   saveSharedLanternState,
@@ -341,7 +342,8 @@ function ControlCenter() {
     void (async () => {
       let loaded = loadLanternState();
       try {
-        loaded = await loadSharedLanternState() ?? loaded;
+        const shared = await loadSharedLanternState();
+        loaded = shared ? mergeSharedLanternState(loaded, shared) : loaded;
       } catch {
         // The local browser copy remains usable whenever the shared service is unavailable.
       }
@@ -7911,7 +7913,10 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
     let mounted = true;
     void loadSharedLanternState()
       .catch(() => null)
-      .then((shared) => hydrateLanternMedia(shared ?? loadLanternState()))
+      .then((shared) => {
+        const local = loadLanternState();
+        return hydrateLanternMedia(shared ? mergeSharedLanternState(local, shared) : local);
+      })
       .then((hydrated) => mounted && setState(hydrated));
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") setState(message.state);
@@ -7980,7 +7985,10 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
     let mounted = true;
     void loadSharedLanternState()
       .catch(() => null)
-      .then((shared) => hydrateLanternMedia(shared ?? loadLanternState()))
+      .then((shared) => {
+        const local = loadLanternState();
+        return hydrateLanternMedia(shared ? mergeSharedLanternState(local, shared) : local);
+      })
       .then((hydrated) => mounted && setState(hydrated));
     return () => {
       mounted = false;

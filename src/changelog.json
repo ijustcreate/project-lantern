@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0204",
+    "title": "Protect user content during startup sync",
+    "summary": "Startup now merges shared and browser state instead of replacing it. Local schedules and other user edits are retained on conflicts, remote-only records are added, collisions are logged for review, and pre-migration snapshots are retained locally.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:42 PM",
+    "areas": [
+      "Data preservation",
+      "Schedule",
+      "Shared state"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0203",
     "title": "Make live tracking smarter and add friendly Halloween effects",
     "summary": "Tracking now skips duplicate video frames, reduces stable face/body/mouth work, periodically rescans an empty view, and keeps camera starts effect-free. Added a generated kid-friendly zombie rig concept, matching Halloween removal background, and wand/dagger hand props.",

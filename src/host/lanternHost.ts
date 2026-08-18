@@ -10,6 +10,9 @@ export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
 const DEMO_DATA_VERSION = "8";
+const LANTERN_PROTECTED_SNAPSHOTS_KEY = "project-lantern-protected-snapshots-v1";
+const LANTERN_DATA_PROTECTION_REPORT_KEY = "project-lantern-data-protection-report-v1";
+const MAX_PROTECTED_SNAPSHOTS = 8;
 const LANTERN_MEDIA_DB = "project-lantern-media-v1";
 const LANTERN_MEDIA_STORE = "assets";
 const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT as string | undefined)?.trim()
@@ -26,6 +29,34 @@ let sharedPersistenceEnabled = false;
 let sharedSaveTimer: number | undefined;
 
 type Listener = (message: HostMessage) => void;
+
+export interface DataProtectionReport {
+  at: string;
+  source: "migration" | "shared-state";
+  preserved: string[];
+  conflicts: string[];
+}
+
+function saveProtectedSnapshot(state: LanternState, reason: string) {
+  try {
+    const snapshots = JSON.parse(window.localStorage.getItem(LANTERN_PROTECTED_SNAPSHOTS_KEY) ?? "[]") as Array<{ at: string; reason: string; state: LanternState }>;
+    snapshots.push({ at: new Date().toISOString(), reason, state });
+    window.localStorage.setItem(LANTERN_PROTECTED_SNAPSHOTS_KEY, JSON.stringify(snapshots.slice(-MAX_PROTECTED_SNAPSHOTS)));
+  } catch {
+    // Storage may be full; the active state remains the authoritative copy.
+  }
+}
+
+function writeDataProtectionReport(report: DataProtectionReport) {
+  try { window.localStorage.setItem(LANTERN_DATA_PROTECTION_REPORT_KEY, JSON.stringify(report)); } catch { /* non-essential notice */ }
+}
+
+export function readDataProtectionReport(): DataProtectionReport | null {
+  try {
+    const report = JSON.parse(window.localStorage.getItem(LANTERN_DATA_PROTECTION_REPORT_KEY) ?? "null") as DataProtectionReport | null;
+    return report?.at && Array.isArray(report.preserved) && Array.isArray(report.conflicts) ? report : null;
+  } catch { return null; }
+}
 
 /** Read-only compatibility shape for migrating profiles saved before v5. */
 type LegacyDonorAppearance = {
@@ -47,6 +78,8 @@ export function loadLanternState(): LanternState {
   try {
     const parsed = JSON.parse(stored) as Partial<LanternState>;
     const saved = { ...initialState, ...parsed, contentVersion: parsed.contentVersion ?? 0 } as LanternState;
+    const needsNormalizationBackup = saved.contentVersion !== LANTERN_CONTENT_VERSION;
+    if (needsNormalizationBackup) saveProtectedSnapshot(saved, "Before a content/schema migration");
     const normalized = normalizeState(saved);
     const demoVersionChanged = window.localStorage.getItem(DEMO_DATA_VERSION_KEY) !== DEMO_DATA_VERSION;
     const contentVersionChanged = normalized.contentVersion !== parsed.contentVersion;
@@ -349,6 +382,60 @@ export function nextRevision(state: LanternState, note: string): LanternState {
 export interface DisplayWindowOpenResult {
   opened: string[];
   blocked: string[];
+}
+
+function preserveCollection<T extends { id: string }>(local: readonly T[], shared: readonly T[], label: string, report: DataProtectionReport) {
+  const sharedById = new Map(shared.map((item) => [item.id, item]));
+  const localIds = new Set(local.map((item) => item.id));
+  const preserved = local.map((item) => {
+    const remote = sharedById.get(item.id);
+    if (remote && JSON.stringify(remote) !== JSON.stringify(item)) {
+      report.conflicts.push(`${label}: kept this browser's edit for ${item.id}`);
+    }
+    return item;
+  });
+  const additions = shared.filter((item) => !localIds.has(item.id));
+  if (additions.length) report.preserved.push(`${label}: included ${additions.length} change${additions.length === 1 ? "" : "s"} from shared storage`);
+  return [...preserved, ...additions];
+}
+
+/**
+ * Remote state is useful for another workstation, but must never erase edits
+ * that already exist in this browser. Collection IDs are stable, so local
+ * records win a collision and both the preservation and conflict are recorded.
+ */
+export function mergeSharedLanternState(local: LanternState, shared: LanternState): LanternState {
+  const report: DataProtectionReport = { at: new Date().toISOString(), source: "shared-state", preserved: [], conflicts: [] };
+  const preferences = preserveCollection(
+    local.userPreferences.map((preference) => ({ ...preference, id: preference.userId })),
+    shared.userPreferences.map((preference) => ({ ...preference, id: preference.userId })),
+    "User preferences",
+    report
+  ).map(({ id: _id, ...preference }) => preference);
+  const merged: LanternState = {
+    ...shared,
+    ...local,
+    contentVersion: Math.max(local.contentVersion ?? 0, shared.contentVersion ?? 0),
+    donors: preserveCollection(local.donors, shared.donors, "Donors", report),
+    boardPrograms: preserveCollection(local.boardPrograms, shared.boardPrograms, "Boards", report),
+    schedules: preserveCollection(local.schedules, shared.schedules, "Schedules", report),
+    savedAnnouncements: preserveCollection(local.savedAnnouncements, shared.savedAnnouncements, "Announcements", report),
+    savedBlips: preserveCollection(local.savedBlips, shared.savedBlips, "Pop-ups", report),
+    donorGroups: preserveCollection(local.donorGroups, shared.donorGroups, "Donor groups", report),
+    givingPrograms: preserveCollection(local.givingPrograms, shared.givingPrograms, "Giving programs", report),
+    users: preserveCollection(local.users, shared.users, "Users", report),
+    userPreferences: preferences,
+    visitorMessages: preserveCollection(local.visitorMessages, shared.visitorMessages, "Visitor messages", report),
+    effectStudio: {
+      ...shared.effectStudio,
+      ...local.effectStudio,
+      costumes: preserveCollection(local.effectStudio.costumes, shared.effectStudio.costumes, "Costumes", report),
+      calibrationProfiles: preserveCollection(local.effectStudio.calibrationProfiles, shared.effectStudio.calibrationProfiles, "Calibration profiles", report)
+    },
+    screens: { ...shared.screens, ...local.screens }
+  };
+  if (report.conflicts.length || report.preserved.length) writeDataProtectionReport(report);
+  return normalizeState(merged);
 }
 
 const browserDisplayWindows = new Map<string, Window>();
