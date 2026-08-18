@@ -8530,18 +8530,20 @@ textarea:focus-visible,
 .vocabulary-select-row,
 .vocabulary-edit-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
   align-items: end;
   gap: 6px;
 }
+.vocabulary-select-row { grid-template-columns: minmax(108px, .82fr) minmax(0, 1.18fr); }
 .vocabulary-edit-row { grid-template-columns: minmax(0, 1fr) 64px; }
 .vocabulary-select-row label,
+.vocabulary-edit-actions label,
 .vocabulary-edit-row label {
   display: grid;
   min-width: 0;
   gap: 4px;
 }
 .vocabulary-select-row label > span,
+.vocabulary-edit-actions label > span,
 .vocabulary-edit-row label > span {
   color: #858dab;
   font-size: 8px;
@@ -8550,8 +8552,11 @@ textarea:focus-visible,
   text-transform: uppercase;
 }
 .vocabulary-select-row select,
+.vocabulary-edit-actions input,
 .vocabulary-edit-row input {
   min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 34px;
   padding: 0 8px;
   border-radius: 6px;
@@ -8562,6 +8567,14 @@ textarea:focus-visible,
   height: 34px;
   border-radius: 7px;
 }
+.vocabulary-edit-actions {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto 34px;
+  align-items: end;
+  gap: 6px;
+}
+.vocabulary-edit-actions .command-button { min-width: 58px; min-height: 34px; padding-inline: 9px; }
 .vocabulary-edit-row .command-button { min-height: 34px; padding-inline: 10px; }
 .vocabulary-add {
   display: grid;
@@ -11826,7 +11839,7 @@ textarea:focus-visible,
 .live-inspector .image-upload,
 .live-inspector .effect-settings-card .command-button { width: 100%; box-sizing: border-box; white-space: normal; }
 
-.vocabulary-select-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: end; }
+.vocabulary-select-row { grid-template-columns: minmax(108px, .82fr) minmax(0, 1.18fr); align-items: end; }
 .vocabulary-add { display: block; }
 .vocabulary-add > summary { width: max-content; list-style: none; cursor: pointer; }
 .vocabulary-add > summary::-webkit-details-marker { display: none; }

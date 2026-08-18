@@ -7530,9 +7530,11 @@ function VocabularyEditor({ title, description, values, onChange }: { title: str
       </div>
       <div className="vocabulary-select-row">
         <label><span>Selected {singularTitle}</span><select aria-label={`Select ${singularTitle}`} value={selectedValue} onChange={(event) => select(event.target.value)}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-        <label><span>Edit selected</span><input value={editValue} aria-label={`Edit selected ${singularTitle}`} onChange={(event) => setEditValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } }} /></label>
-        <button type="button" className="command-button secondary" onClick={save} disabled={!selectedValue || !editValue.trim() || editValue.trim() === selectedValue}>Save</button>
-        <button type="button" className="icon-button danger-icon" onClick={() => setDeletePending(true)} disabled={values.length <= 1} title={selectedValue ? `Delete ${selectedValue}` : `Delete selected ${singularTitle}`}><Trash2 size={14} /></button>
+        <div className="vocabulary-edit-actions">
+          <label><span>Edit selected</span><input value={editValue} aria-label={`Edit selected ${singularTitle}`} onChange={(event) => setEditValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } }} /></label>
+          <button type="button" className="command-button secondary" onClick={save} disabled={!selectedValue || !editValue.trim() || editValue.trim() === selectedValue}>Save</button>
+          <button type="button" className="icon-button danger-icon" onClick={() => setDeletePending(true)} disabled={values.length <= 1} title={selectedValue ? `Delete ${selectedValue}` : `Delete selected ${singularTitle}`}><Trash2 size={14} /></button>
+        </div>
       </div>
       {deletePending && <div className="gift-delete-confirm"><span>Delete “{selectedValue}”? This cannot be undone.</span><div><button type="button" className="command-button secondary compact" onClick={() => setDeletePending(false)}>Cancel</button><button type="button" className="command-button danger compact" onClick={remove}>Delete</button></div></div>}
       <details className="vocabulary-add">

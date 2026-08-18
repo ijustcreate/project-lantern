@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0180",
+    "title": "Keep Settings vocabulary controls from overlapping",
+    "summary": "The Settings tier, category, and tag editors now reserve space for Save and Delete actions, keeping every control separate at desktop widths.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 10:07 AM",
+    "areas": [
+      "Settings",
+      "Recognition controls"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; browser bounding-box verification at desktop width"
+  },
+  {
     "id": "DEV-0179",
     "title": "Match the user menu to every site theme",
     "summary": "The user selector's option list now uses the active theme's color palette, keeping the menu readable instead of opening as a bright unthemed surface.",
