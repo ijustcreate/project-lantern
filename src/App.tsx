@@ -4527,7 +4527,12 @@ const liveSourceLabel = (source: LanternState["live"]["source"]) => source === "
     ? "Screen share"
     : source === "recording"
       ? "Recording"
-      : "Camera";
+    : "Camera";
+
+function liveCompositionForDisplay(live: LanternState["live"], screenId: ScreenId): LanternState["live"] {
+  const layout = live.displayLayouts?.[screenId];
+  return layout ? { ...live, ...layout, frame: layout.frame ?? live.frame } : live;
+}
 
 function DirectLiveStage({
   state,
@@ -4566,7 +4571,8 @@ function DirectLiveStage({
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [confirmPolygonReset, setConfirmPolygonReset] = useState(false);
   const [controlHeld, setControlHeld] = useState(false);
-  const composedLive = normalizeBroadcastComposition(frameDraft ? { ...live, frame: frameDraft } : live);
+  const displayLive = liveCompositionForDisplay(live, screen.id);
+  const composedLive = normalizeBroadcastComposition(frameDraft ? { ...displayLive, frame: frameDraft } : displayLive);
   const activeCostume = state.effectStudio.costumes.find((costume) => costume.id === composedLive.effects.costumeId);
   const activeCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === composedLive.effects.calibrationProfileId);
   const trackedCostumeRenderer = useMemo(() => composedLive.effects.costumeEnabled && activeCostume
@@ -4706,12 +4712,12 @@ function DirectLiveStage({
       setConfirmPolygonReset(true);
       return;
     }
-    onFrameChange({ ...live.frame, polygonPoints: polygonPoints.filter((_, pointIndex) => pointIndex !== index) });
+    onFrameChange({ ...composedLive.frame, polygonPoints: polygonPoints.filter((_, pointIndex) => pointIndex !== index) });
     setSelectedPoint(null);
   };
 
   useEffect(() => {
-    if (selectedPoint === null || live.frame.maskShape !== "polygon") return;
+    if (selectedPoint === null || composedLive.frame.maskShape !== "polygon") return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       event.preventDefault();
@@ -4740,7 +4746,7 @@ function DirectLiveStage({
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      position: kind === "title" ? live.titlePosition : live.lowerThirdPosition
+      position: kind === "title" ? composedLive.titlePosition : composedLive.lowerThirdPosition
     };
   };
 
@@ -4872,8 +4878,8 @@ function DirectLiveStage({
           </div>}
           {interactive && <span className="direct-frame-size">{Math.round(composedLive.frame.width)} × {Math.round(composedLive.frame.height)}</span>}
         </div>
-        <div className="direct-broadcast-text direct-broadcast-title" aria-label={interactive ? "Move broadcast title" : "Broadcast title"} style={{ left: `${live.titlePosition.x}%`, top: `${live.titlePosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "title") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><strong>{live.title}</strong></div>
-        <div className="direct-broadcast-text direct-broadcast-lower-third" aria-label={interactive ? "Move broadcast lower third" : "Broadcast lower third"} style={{ left: `${live.lowerThirdPosition.x}%`, top: `${live.lowerThirdPosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "lower-third") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><span>{live.lowerThird}</span></div>
+        <div className="direct-broadcast-text direct-broadcast-title" aria-label={interactive ? "Move broadcast title" : "Broadcast title"} style={{ left: `${composedLive.titlePosition.x}%`, top: `${composedLive.titlePosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "title") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><strong>{composedLive.title}</strong></div>
+        <div className="direct-broadcast-text direct-broadcast-lower-third" aria-label={interactive ? "Move broadcast lower third" : "Broadcast lower third"} style={{ left: `${composedLive.lowerThirdPosition.x}%`, top: `${composedLive.lowerThirdPosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "lower-third") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><span>{composedLive.lowerThird}</span></div>
       </div>
       {confirmPolygonReset && <LanternConfirmDialog
         eyebrow="Custom camera mask"
@@ -5169,6 +5175,9 @@ function LivePreviewPanel({
   const allScreens = Object.values(state.screens);
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
   const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
+  const patchDisplayLayout = (screenId: ScreenId, patch: NonNullable<LanternState["live"]["displayLayouts"]>[string]) => patchLive({
+    displayLayouts: { ...state.live.displayLayouts, [screenId]: { ...state.live.displayLayouts?.[screenId], ...patch } }
+  });
   const selectedPreviewBoardId = previewBoardId === "assigned" ? undefined : previewBoardId;
   const selectedRecordingId = recordings.some((recording) => recording.id === state.live.recordingId)
     ? state.live.recordingId!
@@ -5605,9 +5614,9 @@ function LivePreviewPanel({
               boardProgramId={selectedPreviewBoardId}
               showBoard={popoutMode !== "broadcast"}
               interactive={false}
-              onFrameChange={(frame) => patchLive({ frame })}
-              onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })}
-              onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })}
+              onFrameChange={(frame) => patchDisplayLayout(screen.id, { frame })}
+              onTitlePositionChange={(titlePosition) => patchDisplayLayout(screen.id, { titlePosition })}
+              onLowerThirdPositionChange={(lowerThirdPosition) => patchDisplayLayout(screen.id, { lowerThirdPosition })}
             />)}
           </div>
           <footer className="live-preview-popout-footer"><span>{liveSourceLabel(state.live.source)}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
@@ -5647,7 +5656,7 @@ function LivePreviewPanel({
             </div>
           </div>
         </div>
-        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen, index) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} boardViewMode={boardViewMode} onTrackingStatus={index === 0 ? setTrackingStatus : undefined} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} />)}</div>
+        <div className={`persistent-live-preview ${previewScreens.length > 1 ? "multiple" : "single"}`}>{previewScreens.map((screen, index) => <DirectLiveStage key={screen.id} state={state} screen={screen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} boardViewMode={boardViewMode} onTrackingStatus={index === 0 ? setTrackingStatus : undefined} onFrameChange={(frame) => patchDisplayLayout(screen.id, { frame })} onTitlePositionChange={(titlePosition) => patchDisplayLayout(screen.id, { titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchDisplayLayout(screen.id, { lowerThirdPosition })} />)}</div>
       </section>
       <aside className="live-inspector" aria-label="Broadcast controls">
       <EditorTabs value={liveTab} options={[["setup", "Source"], ["frame", "Frame & crop"], ["effects", "Effects"]]} onChange={(value) => setLiveTab(value as typeof liveTab)} />
@@ -5781,7 +5790,7 @@ function LivePreviewPanel({
       {previewPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>
-        <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchLive({ frame })} onTitlePositionChange={(titlePosition) => patchLive({ titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchLive({ lowerThirdPosition })} /></div>
+        <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchDisplayLayout(previewScreen.id, { frame })} onTitlePositionChange={(titlePosition) => patchDisplayLayout(previewScreen.id, { titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchDisplayLayout(previewScreen.id, { lowerThirdPosition })} /></div>
         <footer><span>{liveSourceLabel(state.live.source)}</span><span>{state.live.active ? "On air" : "Preview"}</span></footer>
       </div>}
       {sourcePromptOpen && <div className="modal-backdrop preview-source-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSourcePromptOpen(false); }}>
@@ -7987,7 +7996,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   }, [fps, screenId, showIdentity, state.live.active, state.live.target]);
 
   const showLive = state.live.active && targetIncludes(state.live.target, screenId);
-  const liveComposition = normalizeBroadcastComposition(state.live);
+  const liveComposition = normalizeBroadcastComposition(liveCompositionForDisplay(state.live, screenId));
   const liveCropEdges = normalizeCropEdges(liveComposition.frame.cropEdges);
   const displayCostume = state.effectStudio.costumes.find((costume) => costume.id === liveComposition.effects.costumeId);
   const displayCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === liveComposition.effects.calibrationProfileId);
@@ -8107,8 +8116,8 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
           {!stream && <div className="video-waiting">Waiting for local video signal</div>}
         </div>
       )}
-      {showLive && <div className="live-broadcast-text live-broadcast-title" style={{ left: `${state.live.titlePosition.x}%`, top: `${state.live.titlePosition.y}%` }}><strong>{state.live.title}</strong></div>}
-      {showLive && <div className="live-broadcast-text live-broadcast-lower-third" style={{ left: `${state.live.lowerThirdPosition.x}%`, top: `${state.live.lowerThirdPosition.y}%` }}><span>{state.live.lowerThird}</span></div>}
+      {showLive && <div className="live-broadcast-text live-broadcast-title" style={{ left: `${liveComposition.titlePosition.x}%`, top: `${liveComposition.titlePosition.y}%` }}><strong>{liveComposition.title}</strong></div>}
+      {showLive && <div className="live-broadcast-text live-broadcast-lower-third" style={{ left: `${liveComposition.lowerThirdPosition.x}%`, top: `${liveComposition.lowerThirdPosition.y}%` }}><span>{liveComposition.lowerThird}</span></div>}
       {identify && (
         <div className="identify-flash">
           <Monitor size={44} />

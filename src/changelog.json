@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0201",
+    "title": "Separate broadcast layouts by display",
+    "summary": "Each display now keeps its own broadcast video box and text placement in previews, pop-outs, and live output.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 12:14 PM",
+    "areas": [
+      "Broadcast studio",
+      "Display previews",
+      "Pop-out layouts"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0200",
     "title": "Make broadcast frame dragging responsive",
     "summary": "Broadcast frame manipulation now stays local while dragging and saves once on release.",

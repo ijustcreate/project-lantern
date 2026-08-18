@@ -480,6 +480,13 @@ export interface LiveEffectsSettings {
   calibrationProfileId?: string;
 }
 
+/** Per-display placement overrides for a shared broadcast source and styling. */
+export interface LiveDisplayLayout {
+  frame?: LiveVideoFrame;
+  titlePosition?: { x: number; y: number };
+  lowerThirdPosition?: { x: number; y: number };
+}
+
 export type TrackingAnchorPoint =
   | "left-eye"
   | "right-eye"
@@ -658,6 +665,7 @@ export interface LivePresentation {
   lowerThird: string;
   titlePosition: { x: number; y: number };
   lowerThirdPosition: { x: number; y: number };
+  displayLayouts?: Record<string, LiveDisplayLayout>;
   backgroundMode: BroadcastBackgroundMode;
   backgroundColor: string;
   backgroundImage?: string;
