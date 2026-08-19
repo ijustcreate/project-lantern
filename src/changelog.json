@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0234",
+    "title": "Preview scheduled messages and Blips",
+    "summary": "The Schedule editor now shows a display-aware preview for selected announcements and Blips, matching board event previews without putting content on screen.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 5:08 PM",
+    "areas": [
+      "Schedule",
+      "Announcements",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; Playwright schedule preview checks"
+  },
+  {
     "id": "DEV-0233",
     "title": "Preserve large board saves locally",
     "summary": "Board Editor saves now fall back to IndexedDB when browser local storage is full, so image-rich boards and detailed layouts remain recoverable after reload.",
