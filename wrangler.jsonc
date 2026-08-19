@@ -18,5 +18,13 @@
       "binding": "LANTERN_ASSETS",
       "id": "3d8cc51cb3e443a7a6cc113d790e5ab0"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "LIVE_ROOM", "class_name": "MuseumLiveRoom" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-live-room", "new_sqlite_classes": ["MuseumLiveRoom"] }
   ]
 }

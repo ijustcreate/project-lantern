@@ -115,6 +115,8 @@ import {
   loadIndexedDbLanternState,
   loadLanternState,
   loadSharedLanternState,
+  loadSharedLanternStateSnapshot,
+  localLanternStateUpdatedAt,
   mergeSharedLanternState,
   openDisplayWindows,
   publishState,
@@ -350,8 +352,14 @@ function ControlCenter() {
     void (async () => {
       let loaded = await loadIndexedDbLanternState() ?? loadLanternState();
       try {
-        const shared = await loadSharedLanternState();
-        loaded = shared ? mergeSharedLanternState(loaded, shared) : loaded;
+        const shared = await loadSharedLanternStateSnapshot();
+        if (shared.state) {
+          const localUpdatedAt = localLanternStateUpdatedAt();
+          const localIsNewer = Boolean(localUpdatedAt && shared.updatedAt && Date.parse(localUpdatedAt) > Date.parse(shared.updatedAt));
+          // The shared copy is the default authority. Only a browser save made
+          // after it was written may override the matching server records.
+          loaded = localIsNewer ? mergeSharedLanternState(loaded, shared.state) : mergeSharedLanternState(shared.state, loaded);
+        }
       } catch {
         // The local browser copy remains usable whenever the shared service is unavailable.
       }
@@ -2078,6 +2086,8 @@ function Dashboard({
   const displays = Object.values(state.screens);
   const [preview3d, setPreview3d] = useState<Record<string, boolean>>({});
   const [previewReset, setPreviewReset] = useState<Record<string, number>>({});
+  const [phoneBlipId, setPhoneBlipId] = useState(() => state.savedBlips[0]?.id ?? "");
+  const [phoneBlipTarget, setPhoneBlipTarget] = useState<TargetScreen>("all");
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     if (!state.activeBlip.active) return;
@@ -2089,9 +2099,29 @@ function Dashboard({
     : displays.length === 2
       ? "pair"
       : "multiple";
+  const phoneBlip = state.savedBlips.find((blip) => blip.id === phoneBlipId) ?? state.savedBlips[0];
+  const runPhoneBlip = () => {
+    if (!phoneBlip) return;
+    updateState((current) => ({
+      ...current,
+      activeBlip: {
+        ...phoneBlip,
+        target: phoneBlipTarget,
+        targets: phoneBlipTarget === "all" ? Object.keys(current.screens) : [phoneBlipTarget],
+        active: true,
+        startedAt: new Date().toISOString()
+      }
+    }));
+  };
 
   return (
     <section className="dashboard-grid">
+      <section className="dashboard-phone-blips" aria-label="Send a Blip from your phone">
+        <div><Sparkles size={17} /><span><strong>Send a Blip</strong><small>Instantly appears on the selected museum display.</small></span></div>
+        <select value={phoneBlip?.id ?? ""} onChange={(event) => setPhoneBlipId(event.target.value)}>{state.savedBlips.map((blip) => <option key={blip.id} value={blip.id}>{blip.name}</option>)}</select>
+        <select value={phoneBlipTarget} onChange={(event) => setPhoneBlipTarget(event.target.value as TargetScreen)}><option value="all">All displays</option>{displays.map((screen) => <option key={screen.id} value={screen.id}>{screen.label}</option>)}</select>
+        <button type="button" className={state.activeBlip.active ? "command-button secondary compact" : "command-button primary compact"} disabled={!phoneBlip} onClick={state.activeBlip.active ? () => updateState((current) => ({ ...current, activeBlip: { ...current.activeBlip, active: false } })) : runPhoneBlip}>{state.activeBlip.active ? <Square size={15} /> : <Play size={15} />}{state.activeBlip.active ? "End Blip" : "Send"}</button>
+      </section>
       <div className="workband">
         <div className="preview-stage">
           <div className={`dashboard-display-grid ${previewGridClass}`} data-display-count={displays.length}>
@@ -3132,7 +3162,7 @@ function ThemeStudio({
   const [boardSearch, setBoardSearch] = useState("");
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const [boardEditorPan, setBoardEditorPan] = useState({ x: 0, y: 0 });
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "local" | "error">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "local" | "sync-error" | "error">("idle");
   const [pendingProgramDeleteId, setPendingProgramDeleteId] = useState<string | null>(null);
   const [pendingPanelDelete, setPendingPanelDelete] = useState<{ programId: string; ids: string[]; removed: Array<{ panel: BoardPanel; index: number }>; x: number; y: number } | null>(null);
   const [lastDeletedPanels, setLastDeletedPanels] = useState<{ programId: string; removed: Array<{ panel: BoardPanel; index: number }> } | null>(null);
@@ -3442,10 +3472,9 @@ function ThemeStudio({
       await saveSharedLanternState(state);
       setSaveStatus("saved");
     } catch (error) {
-      // The local save already succeeded, so keep the operator's edit safe and
-      // accurately report that only the optional shared sync needs a retry.
+      // The local save already succeeded. Do not imply the server received it.
       console.warn("Project Lantern saved this board locally but could not sync it.", error);
-      setSaveStatus("local");
+      setSaveStatus("sync-error");
     }
     window.setTimeout(() => setSaveStatus("idle"), 2600);
   };
@@ -3503,7 +3532,7 @@ function ThemeStudio({
         </div>
         <div className="board-save-cluster">
           <button type="button" className="command-button primary compact" disabled={saveStatus === "saving"} onClick={() => void saveBoard()}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : "Save board"}</button>
-          <span className={`board-save-status ${saveStatus}`} role="status">{saveStatus === "saved" ? "Saved for everyone" : saveStatus === "local" ? "Saved on this device" : saveStatus === "error" ? "Could not save locally — check browser storage" : ""}</span>
+          <span className={`board-save-status ${saveStatus}`} role="status">{saveStatus === "saved" ? "Saved for everyone" : saveStatus === "local" ? "Saved on this device (server unavailable)" : saveStatus === "sync-error" ? "Saved locally — server sync failed; retry" : saveStatus === "error" ? "Could not save locally — check browser storage" : ""}</span>
         </div>
       </div>
 
@@ -3895,7 +3924,7 @@ function DirectBoardCanvas({
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
-        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
+        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "supporters-heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
@@ -3971,12 +4000,15 @@ function DirectStarDonorName({ donor, fallbackName, imageUrl, fontFamily, fontSi
   </div>;
 }
 
-function AutoFitBoardContent({ className, children, fitOneLine = false }: { className: string; children: React.ReactNode; fitOneLine?: boolean }) {
+function AutoFitBoardContent({ className, children, fitOneLine = false, fontSize }: { className: string; children: React.ReactNode; fitOneLine?: boolean; fontSize?: number }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const element = ref.current;
-    if (!element) return;
+    if (!element || !fitOneLine) {
+      element?.style.removeProperty("--panel-font-size");
+      return;
+    }
     let frame = 0;
     const fit = () => {
       cancelAnimationFrame(frame);
@@ -4003,7 +4035,7 @@ function AutoFitBoardContent({ className, children, fitOneLine = false }: { clas
     mutationObserver.observe(element, { childList: true, characterData: true, subtree: true });
     fit();
     return () => { cancelAnimationFrame(frame); resizeObserver.disconnect(); mutationObserver.disconnect(); };
-  }, [fitOneLine]);
+  }, [fitOneLine, fontSize]);
 
   return <div ref={ref} className={`${className}${fitOneLine ? " fit-one-line" : ""}`}>{children}</div>;
 }
@@ -5319,6 +5351,7 @@ function LivePreviewPanel({
   const [previewWindow, setPreviewWindow] = useState<Window | null>(null);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [phoneMode, setPhoneMode] = useState(false);
+  const [phoneSettingsOpen, setPhoneSettingsOpen] = useState(false);
   const [sourcePromptOpen, setSourcePromptOpen] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -5896,6 +5929,7 @@ function LivePreviewPanel({
         handProp: "none"
       }
     });
+    setPhoneSettingsOpen(false);
     setPhoneMode(true);
   };
 
@@ -5934,20 +5968,24 @@ function LivePreviewPanel({
     <div className="form-panel live-setup-panel">
       {phoneMode ? <section className="phone-broadcast" aria-label="Phone broadcast controls">
         <header className="phone-broadcast-head">
-          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><div><strong>{state.live.active ? "LIVE" : "Phone broadcast"}</strong><small>{state.live.active ? `Broadcasting to ${labelForTarget(state.live.target)}` : "Quick camera setup"}</small></div></div>
-          <button type="button" className="command-button secondary compact" onClick={() => setPhoneMode(false)}>Full studio</button>
+          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><div><strong>{state.live.active ? "LIVE" : "Ready to broadcast"}</strong><small>{state.live.active ? `Live to ${labelForTarget(state.live.target)}` : "Museum Donor Board Control Center"}</small></div></div>
+          <button type="button" className="phone-frame-button" onClick={() => setPhoneMode(false)}>Studio</button>
         </header>
-        <div className="phone-broadcast-preview"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode="frame" previewError={previewError} interactive={false} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchDisplayLayout(previewScreen.id, { frame })} onTitlePositionChange={(titlePosition) => patchDisplayLayout(previewScreen.id, { titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchDisplayLayout(previewScreen.id, { lowerThirdPosition })} /></div>
-        <div className="phone-broadcast-fields">
+        <div className="phone-camera-stage">
+          {previewStream ? <MediaStreamVideo stream={previewStream} muted className="phone-camera-video" /> : <div className="phone-camera-empty"><Camera size={42} /><strong>Your camera preview</strong><span>Turn on your camera to frame your broadcast.</span></div>}
+          <div className="phone-camera-frame"><span>LIVE CAMERA</span><span>{previewScreen?.label ?? "No display selected"}</span></div>
+          {previewError && <p className="phone-broadcast-error">{previewError}</p>}
+        </div>
+        {phoneSettingsOpen && <div className="phone-broadcast-fields">
           <LabeledInput label="Your name" value={state.live.title} onChange={(title) => patchLive({ title })} />
           <LabeledInput label="Message" value={state.live.lowerThird} onChange={(lowerThird) => patchLive({ lowerThird })} />
           <LabeledSelect label="Broadcast to" value={state.live.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => patchLive({ target: target as TargetScreen })} />
           <label className="switch-row phone-background-removal"><input type="checkbox" checked={backgroundRemoval.enabled} onChange={(event) => setBackgroundRemovalEnabled(event.target.checked)} /><span>Remove background</span></label>
-        </div>
-        {previewError && <p className="phone-broadcast-error">{previewError}</p>}
+        </div>}
         <footer className="phone-broadcast-actions">
-          <button type="button" className={previewStream ? "command-button secondary" : "command-button primary"} disabled={previewBusy} onClick={previewStream ? () => stopPreviewStream() : () => void startPreview("camera")}><Camera size={17} />{previewStream ? "Camera on" : previewBusy ? "Opening camera…" : "Turn on camera"}</button>
-          <button type="button" className={state.live.active ? "command-button danger" : "command-button primary"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>{state.live.active ? <Square size={17} /> : <Radio size={17} />}{state.live.active ? "End live" : "Broadcast"}</button>
+          <button type="button" className="phone-round-control" onClick={() => setPhoneSettingsOpen((open) => !open)} title="Broadcast settings"><Settings2 size={20} /><span>Settings</span></button>
+          <button type="button" className={previewStream ? "phone-round-control active" : "phone-round-control"} disabled={previewBusy} onClick={previewStream ? () => stopPreviewStream() : () => void startPreview("camera")}><Camera size={21} /><span>{previewStream ? "Camera" : "Start camera"}</span></button>
+          <button type="button" className={state.live.active ? "phone-end-live" : "phone-go-live"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>{state.live.active ? <Square size={20} /> : <Radio size={20} />}{state.live.active ? "End" : "Go live"}</button>
         </footer>
       </section> : <>
       <div className="live-panel-heading">
@@ -8924,12 +8962,24 @@ function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, no
 }
 
 function TypographyNumberField({ label, info, value, min, max, step = 1, suffix, onChange }: { label: string; info?: string; value: number; min: number; max: number; step?: number; suffix: string; onChange: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  const editingRef = useRef(false);
+  useEffect(() => {
+    if (!editingRef.current) setDraft(String(value));
+  }, [value]);
+  const normalize = (raw: string) => {
+    const parsed = Number(raw);
+    const next = Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : value;
+    setDraft(String(next));
+    onChange(next);
+  };
   const adjust = (direction: -1 | 1) => {
     const precision = step < 1 ? Math.max(0, String(step).split(".")[1]?.length ?? 0) : 0;
     const next = Math.max(min, Math.min(max, Number((value + direction * step).toFixed(precision))));
+    setDraft(String(next));
     onChange(next);
   };
-  return <label className="field typography-number-field"><span>{label}{info && <InfoDot text={info} />}</span><div><button type="button" className="typography-stepper" aria-label={`Decrease ${label}`} title={`Decrease ${label}`} disabled={value <= min} onClick={() => adjust(-1)}><Minus size={12} /></button><input type="number" aria-label={label} min={min} max={max} step={step} value={value} onChange={(event) => { const next = event.currentTarget.valueAsNumber; if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next))); }} /><b>{suffix}</b><button type="button" className="typography-stepper" aria-label={`Increase ${label}`} title={`Increase ${label}`} disabled={value >= max} onClick={() => adjust(1)}><Plus size={12} /></button></div></label>;
+  return <label className="field typography-number-field"><span>{label}{info && <InfoDot text={info} />}</span><div><button type="button" className="typography-stepper" aria-label={`Decrease ${label}`} title={`Decrease ${label}`} disabled={value <= min} onClick={() => adjust(-1)}><Minus size={12} /></button><input type="number" aria-label={label} min={min} max={max} step={step} value={draft} onFocus={() => { editingRef.current = true; }} onChange={(event) => { const nextDraft = event.currentTarget.value; setDraft(nextDraft); const next = Number(nextDraft); if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next))); }} onBlur={() => { editingRef.current = false; normalize(draft); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /><b>{suffix}</b><button type="button" className="typography-stepper" aria-label={`Increase ${label}`} title={`Increase ${label}`} disabled={value >= max} onClick={() => adjust(1)}><Plus size={12} /></button></div></label>;
 }
 
 function resolveNextScheduledContent(state: LanternState, screenId: ScreenId, now = new Date()) {

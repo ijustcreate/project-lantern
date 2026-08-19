@@ -1,5 +1,73 @@
 [
   {
+    "id": "DEV-0246",
+    "title": "Relay broadcasts across devices",
+    "summary": "Added a Cloudflare Durable Object relay and STUN configuration so live broadcast signaling can reach remote displays.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:29 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Hosting"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src/host/videoBridge.ts",
+      "worker/bugs.ts",
+      "wrangler.jsonc"
+    ],
+    "tests": "npm run build;npm run build:worker"
+  },
+  {
+    "id": "DEV-0245",
+    "title": "Add mobile broadcast controls",
+    "summary": "Added a phone-friendly Dashboard Blip launcher and a focused camera-first broadcast experience for mobile operators.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:29 PM",
+    "areas": [
+      "Dashboard",
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0244",
+    "title": "Relay broadcasts across devices",
+    "summary": "Added a Cloudflare Durable Object relay and STUN configuration so live broadcast signaling can reach remote displays.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:26 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Hosting"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src/host/videoBridge.ts",
+      "worker/bugs.ts",
+      "wrangler.jsonc"
+    ],
+    "tests": "npm run build;npm run build:worker"
+  },
+  {
+    "id": "DEV-0243",
+    "title": "Add mobile broadcast controls",
+    "summary": "Added a phone-friendly Dashboard Blip launcher and a focused camera-first broadcast experience for mobile operators.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:26 PM",
+    "areas": [
+      "Dashboard",
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0242",
     "title": "Keep boards visible behind Blips",
     "summary": "Changed Blips from a full-display backdrop to a compact card overlay so the active board remains visible.",

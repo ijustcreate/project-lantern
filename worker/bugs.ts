@@ -1,6 +1,7 @@
 interface Env {
   BUGS_DB: D1Database;
   LANTERN_ASSETS: KVNamespace;
+  LIVE_ROOM: DurableObjectNamespace;
 }
 
 type BugEvidence = { name: string; dataUrl?: string; path?: string; mimeType?: string };
@@ -98,6 +99,25 @@ function json(request: Request, value: unknown, status = 200) {
       "cache-control": "no-store"
     }
   });
+}
+
+/** A hibernating, metadata-only WebSocket room. WebRTC media never passes through it. */
+export class MuseumLiveRoom {
+  constructor(private state: DurableObjectState) {}
+
+  async fetch(request: Request): Promise<Response> {
+    if (request.headers.get("Upgrade") !== "websocket") return new Response("WebSocket required", { status: 426 });
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.state.acceptWebSocket(server);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(sender: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (typeof message !== "string" || message.length > 250_000) return;
+    // SDP and ICE candidates are tiny; relay only signaling, never camera media.
+    for (const socket of this.state.getWebSockets()) if (socket !== sender) socket.send(message);
+  }
 }
 
 function safeBugId(value: unknown) {
@@ -229,6 +249,10 @@ export default {
     try {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
       const pathname = new URL(request.url).pathname;
+      if (request.method === "GET" && pathname === "/live") {
+        const room = env.LIVE_ROOM.get(env.LIVE_ROOM.idFromName("museum"));
+        return room.fetch(request);
+      }
       if (request.method === "GET" && pathname === "/state") return await readSharedState(request, env);
       if (request.method === "PUT" && pathname === "/state") return await saveSharedState(request, env);
       if (request.method === "POST" && pathname === "/assets") return await saveAsset(request, env);

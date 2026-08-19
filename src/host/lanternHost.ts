@@ -8,6 +8,7 @@ import { normalizeEffectStudioState, normalizePhase4LiveEffects, PHASE4_CONTENT_
 
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
+const LANTERN_LOCAL_STATE_UPDATED_AT_KEY = "project-lantern-state-updated-at-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
 const DEMO_DATA_VERSION = "8";
 const LANTERN_PROTECTED_SNAPSHOTS_KEY = "project-lantern-protected-snapshots-v1";
@@ -31,6 +32,55 @@ let sharedPersistenceEnabled = false;
 let sharedSaveTimer: number | undefined;
 
 type Listener = (message: HostMessage) => void;
+type RealtimeEnvelope = { sender: string; message: HostMessage };
+const realtimeClientId = crypto.randomUUID();
+const realtimeListeners = new Set<Listener>();
+let realtimeSocket: WebSocket | null = null;
+let realtimeReconnectTimer: number | undefined;
+const pendingRealtimeMessages: HostMessage[] = [];
+
+function realtimeSocketUrl() {
+  if (!LANTERN_WRITE_SERVICE_ROOT) return "";
+  const url = new URL(`${LANTERN_WRITE_SERVICE_ROOT}/live`);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
+
+function ensureRealtimeSocket() {
+  const url = realtimeSocketUrl();
+  if (!url || realtimeSocket || !realtimeListeners.size) return;
+  const socket = new WebSocket(url);
+  realtimeSocket = socket;
+  socket.addEventListener("open", () => {
+    while (pendingRealtimeMessages.length && socket.readyState === WebSocket.OPEN) {
+      const message = pendingRealtimeMessages.shift()!;
+      socket.send(JSON.stringify({ sender: realtimeClientId, message } satisfies RealtimeEnvelope));
+    }
+  });
+  socket.addEventListener("message", (event) => {
+    try {
+      const envelope = JSON.parse(String(event.data)) as RealtimeEnvelope;
+      if (envelope.sender !== realtimeClientId) realtimeListeners.forEach((listener) => listener(envelope.message));
+    } catch { /* Ignore malformed remote signaling. */ }
+  });
+  socket.addEventListener("close", () => {
+    if (realtimeSocket === socket) realtimeSocket = null;
+    if (realtimeListeners.size) realtimeReconnectTimer = window.setTimeout(ensureRealtimeSocket, 1200);
+  });
+  socket.addEventListener("error", () => socket.close());
+}
+
+function postRealtime(message: HostMessage) {
+  if (!LANTERN_WRITE_SERVICE_ROOT) return;
+  if (realtimeSocket?.readyState === WebSocket.OPEN) {
+    realtimeSocket.send(JSON.stringify({ sender: realtimeClientId, message } satisfies RealtimeEnvelope));
+    return;
+  }
+  // Preserve immediate actions (Blips/live starts) while the socket finishes opening.
+  pendingRealtimeMessages.push(message);
+  if (pendingRealtimeMessages.length > 24) pendingRealtimeMessages.shift();
+  ensureRealtimeSocket();
+}
 
 export interface DataProtectionReport {
   at: string;
@@ -113,6 +163,7 @@ export function saveLanternState(state: LanternState) {
   const serializable = serializableLocalState(state);
   try {
     window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
+    window.localStorage.setItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY, new Date().toISOString());
     void deleteIndexedDbLanternState();
     return true;
   } catch (error) {
@@ -140,12 +191,14 @@ export async function saveLanternStateDurably(state: LanternState): Promise<"loc
   const serializable = serializableLocalState(state);
   try {
     window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
+    window.localStorage.setItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY, new Date().toISOString());
     void deleteIndexedDbLanternState();
     return "local-storage";
   } catch (error) {
     console.warn("Project Lantern is using IndexedDB because local storage is full.", error);
     try {
       await saveIndexedDbLanternState(serializable);
+      try { window.localStorage.setItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY, new Date().toISOString()); } catch { /* IndexedDB copy is still safe. */ }
       return "indexed-db";
     } catch (fallbackError) {
       console.warn("Project Lantern could not persist the current state in IndexedDB.", fallbackError);
@@ -205,11 +258,25 @@ function serializableSharedState(state: LanternState): LanternState {
 }
 
 export async function loadSharedLanternState(): Promise<LanternState | null> {
-  if (!LANTERN_READ_SERVICE_ROOT) return null;
+  return (await loadSharedLanternStateSnapshot()).state;
+}
+
+export type SharedLanternStateSnapshot = { state: LanternState | null; updatedAt: string | null };
+
+/** Load the shared copy together with its write time so startup can avoid replacing newer work. */
+export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternStateSnapshot> {
+  if (!LANTERN_READ_SERVICE_ROOT) return { state: null, updatedAt: null };
   const response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, { headers: { "Accept": "application/json" } });
   if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
-  const body = await response.json() as { state?: LanternState | null };
-  return body.state ? normalizeState({ ...initialState, ...body.state, contentVersion: body.state.contentVersion ?? 0 }) : null;
+  const body = await response.json() as { state?: LanternState | null; updatedAt?: string | null };
+  return {
+    state: body.state ? normalizeState({ ...initialState, ...body.state, contentVersion: body.state.contentVersion ?? 0 }) : null,
+    updatedAt: body.updatedAt ?? null
+  };
+}
+
+export function localLanternStateUpdatedAt() {
+  try { return window.localStorage.getItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY); } catch { return null; }
 }
 
 export function enableSharedStatePersistence() {
@@ -395,13 +462,22 @@ export function createHostChannel(listener: Listener) {
   channel.addEventListener("message", (event: MessageEvent<HostMessage>) => {
     listener(event.data);
   });
+  realtimeListeners.add(listener);
+  ensureRealtimeSocket();
 
   return {
     post(message: HostMessage) {
       channel.postMessage(message);
+      postRealtime(message);
     },
     close() {
       channel.close();
+      realtimeListeners.delete(listener);
+      if (!realtimeListeners.size) {
+        window.clearTimeout(realtimeReconnectTimer);
+        realtimeSocket?.close();
+        realtimeSocket = null;
+      }
     }
   };
 }
@@ -418,6 +494,13 @@ export function publishState(state: LanternState, options: { persist?: boolean }
     // Browser privacy settings can block cross-window messaging. The local save
     // remains valid, and the next open display will read that persisted state.
     console.warn("Project Lantern could not notify another window of the update.", error);
+  }
+  try {
+    postRealtime(message);
+  } catch (error) {
+    // Realtime relay is optional; a local save must never be reported as failed
+    // just because a display-sync connection is temporarily unavailable.
+    console.warn("Project Lantern could not relay the update in realtime.", error);
   }
   return savedLocally;
 }

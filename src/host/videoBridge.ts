@@ -1,4 +1,4 @@
-import { LANTERN_CHANNEL, targetIncludes } from "./lanternHost";
+import { createHostChannel, targetIncludes } from "./lanternHost";
 import type { HostMessage, LiveSource, ScreenId, TargetScreen } from "../types";
 
 type DirectorStatus = "idle" | "camera" | "demo" | "connecting" | "live" | "ended";
@@ -10,15 +10,12 @@ interface DemoStream extends MediaStream {
 }
 
 export class DirectorVideoBridge {
-  private channel = new BroadcastChannel(LANTERN_CHANNEL);
+  private channel = createHostChannel((message) => { void this.handleMessage(message); });
   private stream: DemoStream | null = null;
   private peers = new Map<ScreenId, RTCPeerConnection>();
   private activeTarget: TargetScreen = "display-2";
 
   constructor(private onStatus: StatusListener) {
-    this.channel.addEventListener("message", (event: MessageEvent<HostMessage>) => {
-      void this.handleMessage(event.data);
-    });
   }
 
   async start(target: TargetScreen, source: LiveSource = "demo", videoDeviceId?: string, audioDeviceId?: string) {
@@ -45,7 +42,7 @@ export class DirectorVideoBridge {
       return;
     }
 
-    const peer = new RTCPeerConnection({ iceServers: [] });
+    const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
     this.peers.set(screenId, peer);
     this.stream.getTracks().forEach((track) => {
       if (this.stream) {
@@ -54,7 +51,7 @@ export class DirectorVideoBridge {
     });
     peer.addEventListener("icecandidate", (event) => {
       if (event.candidate) {
-        this.channel.postMessage({
+      this.channel.post({
           type: "webrtc-candidate",
           target: screenId,
           source: "control",
@@ -70,7 +67,7 @@ export class DirectorVideoBridge {
 
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    this.channel.postMessage({
+    this.channel.post({
       type: "webrtc-offer",
       target: screenId,
       source: "control",
@@ -79,7 +76,7 @@ export class DirectorVideoBridge {
   }
 
   stop(target: TargetScreen = "all") {
-    this.channel.postMessage({ type: "live-stop", target } satisfies HostMessage);
+    this.channel.post({ type: "live-stop", target } satisfies HostMessage);
     this.clearMedia();
     this.onStatus("ended", "Live video ended.");
   }
@@ -120,33 +117,28 @@ export class DirectorVideoBridge {
 }
 
 export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamListener) {
-  const channel = new BroadcastChannel(LANTERN_CHANNEL);
   let peer: RTCPeerConnection | null = null;
+  let channel: ReturnType<typeof createHostChannel>;
 
   const announcePresence = () => {
-    channel.postMessage({
+    channel.post({
       type: "display-presence",
       screenId,
       timestamp: new Date().toISOString()
     } satisfies HostMessage);
   };
 
-  const presenceTimer = window.setInterval(announcePresence, 1800);
-  announcePresence();
-
-  channel.addEventListener("message", (event: MessageEvent<HostMessage>) => {
-    const message = event.data;
-
+  channel = createHostChannel((message) => {
     if (message.type === "webrtc-offer" && message.target === screenId) {
       void (async () => {
         peer?.close();
-        peer = new RTCPeerConnection({ iceServers: [] });
+        peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
         peer.addEventListener("track", (trackEvent) => {
           onStream(trackEvent.streams[0] ?? null);
         });
         peer.addEventListener("icecandidate", (candidateEvent) => {
           if (candidateEvent.candidate) {
-            channel.postMessage({
+            channel.post({
               type: "webrtc-candidate",
               target: "control",
               source: screenId,
@@ -157,7 +149,7 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
         await peer.setRemoteDescription(message.sdp);
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
-        channel.postMessage({
+        channel.post({
           type: "webrtc-answer",
           target: "control",
           source: screenId,
@@ -176,6 +168,8 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
       onStream(null);
     }
   });
+  const presenceTimer = window.setInterval(announcePresence, 1800);
+  announcePresence();
 
   return () => {
     window.clearInterval(presenceTimer);

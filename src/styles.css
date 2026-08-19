@@ -11057,8 +11057,16 @@ textarea:focus-visible,
 
 /* Broadcast / Stream: never retain the desktop side-by-side editor on a phone. */
 .phone-mode-button { display: none; }
+.dashboard-phone-blips { display: none; }
 
 @media (max-width: 760px) {
+  .dashboard-phone-blips { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 7px; padding: 11px; border: 1px solid rgba(99, 215, 225, .32); border-radius: 14px; background: rgba(12, 24, 58, .84); }
+  .dashboard-phone-blips > div { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; color: #75e2e8; }
+  .dashboard-phone-blips strong,.dashboard-phone-blips small { display: block; }
+  .dashboard-phone-blips strong { color: var(--text); font-size: 12px; }
+  .dashboard-phone-blips small { color: var(--muted); font-size: 8px; }
+  .dashboard-phone-blips select { min-width: 0; min-height: 36px; font-size: 10px; }
+  .dashboard-phone-blips .command-button { min-height: 36px; }
   .phone-mode-button { display: inline-flex; }
 
   .live-setup-panel:has(.phone-broadcast) {
@@ -11071,13 +11079,14 @@ textarea:focus-visible,
 
   .phone-broadcast {
     display: grid;
-    grid-template-rows: auto 112px auto auto;
-    gap: 7px;
-    min-height: 0;
-    padding: 10px;
-    border: 1px solid rgba(116, 141, 205, .3);
-    border-radius: 16px;
-    background: linear-gradient(145deg, rgba(22, 29, 69, .98), rgba(8, 17, 38, .98));
+    grid-template-rows: auto minmax(330px, 54dvh) auto auto;
+    gap: 10px;
+    min-height: calc(100dvh - 150px);
+    padding: 12px;
+    border: 1px solid rgba(113, 214, 229, .45);
+    border-radius: 22px;
+    background: linear-gradient(155deg, #101b3e, #050c1e 70%);
+    box-shadow: inset 0 0 0 4px rgba(126, 93, 218, .14), 0 20px 50px rgba(3, 8, 25, .38);
   }
 
   .phone-broadcast-head,
@@ -11088,23 +11097,30 @@ textarea:focus-visible,
     gap: 9px;
   }
 
-  .phone-broadcast-head { justify-content: space-between; }
+  .phone-broadcast-head { justify-content: space-between; padding: 2px 2px 0; }
   .phone-broadcast-head > div:first-child { min-width: 0; }
   .phone-broadcast-head strong,
   .phone-broadcast-head small { display: block; }
   .phone-broadcast-head strong { color: var(--text); font-size: 14px; }
   .phone-broadcast-head small { margin-top: 2px; color: var(--muted); font-size: 9px; }
-  .phone-broadcast-preview { min-height: 0; overflow: hidden; border: 1px solid rgba(124, 141, 192, .28); border-radius: 11px; background: #07111e; }
-  .phone-broadcast-preview .direct-live-stage-shell { width: 100%; height: 100%; min-height: 0; }
-  .phone-broadcast-preview .direct-live-stage { height: 100%; max-height: none; }
+  .phone-frame-button { min-height: 32px; padding: 0 11px; border: 1px solid rgba(195, 209, 255, .34); border-radius: 999px; color: #eff4ff; background: rgba(255,255,255,.08); font-size: 10px; font-weight: 800; }
+  .phone-camera-stage { position: relative; display: grid; min-height: 0; overflow: hidden; place-items: center; border: 2px solid rgba(103, 218, 229, .75); border-radius: 18px; background: #020712; box-shadow: 0 0 0 4px rgba(95, 82, 202, .24), inset 0 0 55px rgba(30, 104, 167, .24); }
+  .phone-camera-video { width: 100%; height: 100%; object-fit: cover; }
+  .phone-camera-empty { display: grid; max-width: 20ch; gap: 9px; place-items: center; color: #dfe9fc; text-align: center; }
+  .phone-camera-empty span { color: #91a4c7; font-size: 11px; line-height: 1.45; }
+  .phone-camera-frame { position: absolute; inset: 10px; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; }
+  .phone-camera-frame span { padding: 5px 8px; border: 1px solid rgba(226, 247, 255, .34); border-radius: 999px; color: #f4fbff; background: rgba(3, 11, 28, .68); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
   .phone-broadcast-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .phone-broadcast-fields .field { gap: 4px; }
   .phone-broadcast-fields input,
   .phone-broadcast-fields select { min-height: 36px; }
   .phone-background-removal { min-height: 36px; padding: 0 9px; border: 1px solid rgba(124, 141, 192, .28); border-radius: 9px; font-size: 10px; }
   .phone-broadcast-error { margin: -2px 0 0; color: #ff9ca3; font-size: 10px; }
-  .phone-broadcast-actions { justify-content: stretch; }
-  .phone-broadcast-actions .command-button { flex: 1 1 0; min-height: 38px; justify-content: center; }
+  .phone-broadcast-actions { justify-content: center; }
+  .phone-round-control, .phone-go-live, .phone-end-live { display: grid; min-width: 68px; min-height: 58px; padding: 7px 11px; place-items: center; gap: 3px; border: 1px solid rgba(174, 194, 242, .28); border-radius: 16px; color: #eff5ff; background: rgba(255,255,255,.08); font-size: 9px; font-weight: 800; }
+  .phone-round-control.active { color: #061222; border-color: #67e2e7; background: #67e2e7; }
+  .phone-go-live, .phone-end-live { min-width: 100px; color: #fff; border-color: transparent; background: linear-gradient(135deg, #8956ee, #40cde2); }
+  .phone-end-live { background: linear-gradient(135deg, #cc4d69, #8f264a); }
 }
 
 @media (max-width: 760px) {
