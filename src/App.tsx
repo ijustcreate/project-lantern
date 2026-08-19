@@ -2240,7 +2240,6 @@ function DonorsView({
   const [sortOrder, setSortOrder] = useState<"manual" | "az" | "za">(
     () => state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual"
   );
-  const [page, setPage] = useState(0);
   const [editTab, setEditTab] = useState<"profile" | "recognition" | "history" | "displays">("profile");
   const [discardDraftPending, setDiscardDraftPending] = useState(false);
   const discardEditor = () => {
@@ -2269,15 +2268,15 @@ function DonorsView({
   const visibleDonors = donors
     .filter((donor) => (tagFilter === "all" || donor.tags?.includes(tagFilter)) && (groupFilter === "all" || donor.groupId === groupFilter) && (typeFilter === "all" || donor.donationType === typeFilter))
     .sort((a, b) => sortOrder === "manual" ? 0 : a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) * (sortOrder === "az" ? 1 : -1));
-  const pageSize = 12;
-  const pageCount = Math.max(1, Math.ceil(visibleDonors.length / pageSize));
-  const pageDonors = visibleDonors.slice(page * pageSize, page * pageSize + pageSize);
-
-  useEffect(() => setPage(0), [query, tagFilter, groupFilter, typeFilter, sortOrder]);
+  // Kept solely for the legacy footer markup, which is hidden below; rows are no longer paginated.
+  const pageDonors = visibleDonors;
+  const page = 0;
+  const pageSize = Math.max(1, visibleDonors.length);
+  const pageCount = 1;
+  const setPage = () => undefined;
   useEffect(() => {
     setSortOrder(state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual");
   }, [activeUserId, state.userPreferences]);
-  useEffect(() => setPage((current) => Math.min(current, pageCount - 1)), [pageCount]);
   useEffect(() => {
     if (!createdDonorName) return;
     const timer = window.setTimeout(() => setCreatedDonorName(null), 4200);
@@ -2388,15 +2387,15 @@ function DonorsView({
 
   const donorIsOnBoard = (donor: Donor, board: DonorBoardProgram) => donor.boardIds?.includes(board.id) ?? board.donorIds.includes(donor.id);
 
-  const toggleDonorBoard = (donorId: string, boardId: string) => {
+  const addDonorToBoard = (donorId: string, boardId: string) => {
     updateState((current) => {
       const board = current.boardPrograms.find((item) => item.id === boardId);
       if (!board) return current;
-      const isOn = board.donorIds.includes(donorId);
+      const boardIds = current.boardPrograms.filter((item) => item.donorIds.includes(donorId)).map((item) => item.id);
       return {
         ...current,
-        donors: current.donors.map((item) => item.id === donorId ? { ...item, boardIds: isOn ? (item.boardIds ?? []).filter((id) => id !== boardId) : [...new Set([...(item.boardIds ?? []), boardId])] } : item),
-        boardPrograms: current.boardPrograms.map((item) => item.id === boardId ? { ...item, donorIds: isOn ? item.donorIds.filter((id) => id !== donorId) : [...new Set([...item.donorIds, donorId])] } : item)
+        donors: current.donors.map((item) => item.id === donorId ? { ...item, boardIds: [...new Set([...boardIds, boardId])] } : item),
+        boardPrograms: current.boardPrograms.map((item) => item.id === boardId ? { ...item, donorIds: [...new Set([...item.donorIds, donorId])] } : item)
       };
     });
   };
@@ -2433,7 +2432,6 @@ function DonorsView({
     setTagFilter("all");
     setGroupFilter("all");
     setTypeFilter("all");
-    setPage(0);
     setCreatedDonorName(donor.name);
     closeDonorSetup();
   };
@@ -2460,7 +2458,7 @@ function DonorsView({
       {createdDonorName && <div className="donor-created-banner" role="status"><CheckCircle2 size={17} /><span><strong>{createdDonorName}</strong> is set up and ready.</span><button type="button" className="icon-button" onClick={() => setCreatedDonorName(null)} title="Dismiss"><X size={14} /></button></div>}
 
       <div className="donor-card-list">
-        {pageDonors.map((donor) => {
+        {visibleDonors.map((donor) => {
           const activeDraft = editingId === donor.id && draft ? draft : donor;
           const editing = false;
           const assignedBoards = state.boardPrograms.filter((board) => donorIsOnBoard(donor, board));
@@ -2510,10 +2508,7 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong><details className="donor-board-disclosure themed-tooltip" data-tooltip={assignedBoards.length ? `Used on: ${assignedBoards.map((board) => board.name).join(", ")}` : "This donor is not currently used on a board."} onClick={(event) => event.stopPropagation()}><summary aria-label={`${donor.name} board assignments`}><LayoutDashboard size={12} />{assignedBoards.length} board{assignedBoards.length === 1 ? "" : "s"}</summary><div className="donor-display-toggles">{assignedBoards.map((board) => {
-                      const isOn = donorIsOnBoard(donor, board);
-                      return <label className={`screen-toggle-chip${isOn ? " on" : " off"}`} title={`${board.name} · ${isOn ? "Included" : "Not included"}`} key={board.id}><input type="checkbox" aria-label={board.name} checked={isOn} onChange={() => toggleDonorBoard(donor.id, board.id)} /><LayoutDashboard size={11} /><span>{board.name}</span></label>;
-                    })}</div></details></div>
+                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong><label className="donor-board-picker"><LayoutDashboard size={12} /><select aria-label={`Add ${donor.name} to a board`} value="" onChange={(event) => { if (event.target.value) addDonorToBoard(donor.id, event.target.value); }}><option value="" disabled>{assignedBoards.length ? `${assignedBoards.length} board${assignedBoards.length === 1 ? "" : "s"} assigned · Add to board` : "Add to board…"}</option>{state.boardPrograms.filter((board) => !donorIsOnBoard(donor, board)).map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}</select></label></div>
                     <span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span>
                     <small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small>
                     {!!visibleTags.length && <div className="donor-meta-row">{visibleTags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}{hiddenTagCount > 0 && <span className="tag-chip donor-more-tags" title={(donor.tags ?? []).slice(visibleTags.length).join(", ")}>+{hiddenTagCount} more</span>}</div>}
@@ -2532,7 +2527,6 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <span className={`${donor.active ? "state-dot active" : "state-dot"} themed-tooltip`} data-tooltip={donor.active ? "Active donors may appear on every assigned recognition board." : "Draft donors are saved but hidden from recognition boards."}>{donor.active ? "Active" : "Draft"}</span>
                     <button className="icon-button" onClick={() => editDonor(donor)} title="Edit donor">
                       <Pencil size={18} />
                     </button>
@@ -2545,8 +2539,9 @@ function DonorsView({
             </article>
           );
         })}
-        {!pageDonors.length && <div className="empty-inspector"><Search size={28} /><strong>No matching donors</strong><span>Try changing the search or filter controls.</span></div>}
+        {!visibleDonors.length && <div className="empty-inspector"><Search size={28} /><strong>No matching donors</strong><span>Try changing the search or filter controls.</span></div>}
       </div>
+      <div className="donor-filter-count">Showing all {visibleDonors.length} matching donor{visibleDonors.length === 1 ? "" : "s"}</div>
       <div className="collection-footer"><span>Showing {pageDonors.length ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, visibleDonors.length)} of {visibleDonors.length}</span><Pager page={page} pageCount={pageCount} onChange={setPage} /></div>
 
       {draft && editingId && createPortal(<div className="modal-backdrop donor-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeEditor(); }}>
@@ -3253,7 +3248,6 @@ function ThemeStudio({
       };
     });
   };
-
   const addPanel = (type = newPanelType, position?: { x: number; y: number }) => {
     const panel = createBoardPanel(type, position);
     patchProgram({ panels: [...panels, panel] });
@@ -3757,6 +3751,7 @@ function DirectBoardCanvas({
   const canvasRef = useRef<HTMLDivElement>(null);
   const manipulationRef = useRef<{ pointerId: number; moved: boolean; pending: Map<string, Partial<BoardPanel>> } | null>(null);
   const suppressPanelClickRef = useRef(false);
+  const fittedFontFamilyRef = useRef(new Map<string, string>());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -3782,6 +3777,31 @@ function DirectBoardCanvas({
     && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
   );
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });
+  const commitFittedFontSize = (panel: BoardPanel) => {
+    if (panel.type !== "text" || panel.textFlow !== "fit-one-line") return;
+    // Auto-fit runs after the resized DOM box is painted. Read its resulting
+    // size only after release so the inspector mirrors the panel without
+    // writing state during every pointer move.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const content = canvasRef.current?.querySelector<HTMLElement>(`[data-panel-id="${panel.id}"] .direct-single-text-content`);
+      const fittedSize = Number.parseFloat(content ? getComputedStyle(content).getPropertyValue("--panel-font-size") : "");
+      if (!Number.isFinite(fittedSize)) return;
+      const fontSize = Math.round(fittedSize * 10) / 10;
+      if (fontSize !== panel.fontSize) onPatch(panel.id, { fontSize });
+    }));
+  };
+  useEffect(() => {
+    const panelIds = new Set(panels.map((panel) => panel.id));
+    panels.forEach((panel) => {
+      const fontFamily = panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat";
+      const previousFontFamily = fittedFontFamilyRef.current.get(panel.id);
+      fittedFontFamilyRef.current.set(panel.id, fontFamily);
+      if (previousFontFamily !== undefined && previousFontFamily !== fontFamily) commitFittedFontSize(panel);
+    });
+    fittedFontFamilyRef.current.forEach((_, panelId) => {
+      if (!panelIds.has(panelId)) fittedFontFamilyRef.current.delete(panelId);
+    });
+  }, [panels, program.fontFamily, display.fontFamily]);
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -3835,6 +3855,7 @@ function DirectBoardCanvas({
       window.removeEventListener("pointercancel", stop);
       if (moved) {
         pending.forEach((patch, panelId) => onPatch(panelId, patch));
+        if (mode === "resize") commitFittedFontSize(panel);
         suppressPanelClickRef.current = true;
         window.setTimeout(() => { suppressPanelClickRef.current = false; }, 0);
       }
@@ -3924,7 +3945,7 @@ function DirectBoardCanvas({
         <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
         <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
         {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
-        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
+        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize} fontFamily={panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "supporters-heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
@@ -4000,7 +4021,7 @@ function DirectStarDonorName({ donor, fallbackName, imageUrl, fontFamily, fontSi
   </div>;
 }
 
-function AutoFitBoardContent({ className, children, fitOneLine = false, fontSize }: { className: string; children: React.ReactNode; fitOneLine?: boolean; fontSize?: number }) {
+function AutoFitBoardContent({ className, children, fitOneLine = false, fontSize, fontFamily }: { className: string; children: React.ReactNode; fitOneLine?: boolean; fontSize?: number; fontFamily?: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -4035,14 +4056,22 @@ function AutoFitBoardContent({ className, children, fitOneLine = false, fontSize
     mutationObserver.observe(element, { childList: true, characterData: true, subtree: true });
     fit();
     return () => { cancelAnimationFrame(frame); resizeObserver.disconnect(); mutationObserver.disconnect(); };
-  }, [fitOneLine, fontSize]);
+  }, [fitOneLine, fontSize, fontFamily]);
 
   return <div ref={ref} className={`${className}${fitOneLine ? " fit-one-line" : ""}`}>{children}</div>;
 }
 
 function EditableBoardText({ value, onCommit, className = "", animation, multiline = false }: { value: string; onCommit: (value: string) => void; className?: string; animation?: BoardDonorPresentation["animation"]; multiline?: boolean }) {
-  const lines = multiline ? splitDonorNameLines(value) : [value];
-  return <div className={`editable-board-text${multiline ? " multiline-donor-name" : ""} ${className}`} contentEditable suppressContentEditableWarning role="textbox" tabIndex={0} onFocus={(event) => { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(event.currentTarget); selection?.removeAllRanges(); selection?.addRange(range); }} onBlur={(event) => { const text = event.currentTarget.innerText.replace(/\u00a0/g, " "); onCommit(multiline ? text.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n") : text.replace(/\s+/g, " ").trim()); }} onKeyDown={(event) => { if (event.key === "Enter" && !multiline) { event.preventDefault(); event.currentTarget.blur(); } }}>{lines.map((line, index) => <Fragment key={`${line}-${index}`}><span className="donor-name-line">{animation ? <AnimatedDonorName name={line} animation={animation} /> : line}</span>{index < lines.length - 1 && <br />}</Fragment>)}</div>;
+  const ref = useRef<HTMLDivElement>(null);
+  const text = multiline ? splitDonorNameLines(value).join("\n") : value;
+  useLayoutEffect(() => {
+    const element = ref.current;
+    // The browser edits contentEditable descendants directly. Keeping React
+    // children out of this node prevents reconciliation from removing or
+    // inserting nodes the browser has already changed while the user types.
+    if (element && document.activeElement !== element && element.textContent !== text) element.textContent = text;
+  }, [text]);
+  return <div ref={ref} className={`editable-board-text${multiline ? " multiline-donor-name" : ""} ${className}`} contentEditable suppressContentEditableWarning role="textbox" tabIndex={0} onFocus={(event) => { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(event.currentTarget); selection?.removeAllRanges(); selection?.addRange(range); }} onBlur={(event) => { const updatedText = event.currentTarget.innerText.replace(/\u00a0/g, " "); onCommit(multiline ? updatedText.split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n") : updatedText.replace(/\s+/g, " ").trim()); }} onKeyDown={(event) => { if (event.key === "Enter" && !multiline) { event.preventDefault(); event.currentTarget.blur(); } }} />;
 }
 
 function LegacyThemeStudio({
@@ -5362,6 +5391,7 @@ function LivePreviewPanel({
   const [chromaSamplerActive, setChromaSamplerActive] = useState(false);
   const [previewBoardId, setPreviewBoardId] = useState("assigned");
   const [popoutMode, setPopoutMode] = useState<"broadcast" | "selected" | "all">("selected");
+  const [popoutBoardVisible, setPopoutBoardVisible] = useState(true);
   const [recordings, setRecordings] = useState<RecordingLibraryRecord[]>([]);
   const [recordingMenuOpen, setRecordingMenuOpen] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<TrackingRuntimeStatus>();
@@ -5939,7 +5969,7 @@ function LivePreviewPanel({
         <div className="live-preview-popout-shell">
           <header className="live-preview-popout-header">
             <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /> <strong>Broadcast / Stream</strong><small>{labelForTarget(state.live.target)}</small></div>
-            <button type="button" className="icon-button" onClick={() => previewWindow.close()} title="Close preview"><X size={18} /></button>
+            <div className="live-preview-popout-actions"><button type="button" className={popoutBoardVisible ? "popout-board-toggle active" : "popout-board-toggle"} aria-pressed={popoutBoardVisible} title={popoutBoardVisible ? "Hide current live board" : "Show current live board"} onClick={() => setPopoutBoardVisible((visible) => !visible)}><Eye size={15} /> <span>{popoutBoardVisible ? "Board on" : "Board off"}</span></button><button type="button" className="icon-button" onClick={() => previewWindow.close()} title="Close preview"><X size={18} /></button></div>
           </header>
           <div className={`live-popout-grid ${popoutScreens.length > 1 ? "multiple" : "single"}`}>
             {popoutScreens.map((screen) => <DirectLiveStage
@@ -5951,7 +5981,7 @@ function LivePreviewPanel({
               mode="frame"
               previewError={previewError}
               boardProgramId={selectedPreviewBoardId}
-              showBoard={popoutMode !== "broadcast"}
+              showBoard={popoutBoardVisible}
               interactive={false}
               onFrameChange={(frame) => patchDisplayLayout(screen.id, { frame })}
               onTitlePositionChange={(titlePosition) => patchDisplayLayout(screen.id, { titlePosition })}
@@ -5992,7 +6022,7 @@ function LivePreviewPanel({
         <div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div>
         <div className="live-heading-actions">
           <button type="button" className="command-button phone-mode-button" onClick={enablePhoneMode}><Smartphone size={16} /> I’m on my phone</button>
-          <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => setPopoutMode(event.target.value as typeof popoutMode)}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
+          <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => { const mode = event.target.value as typeof popoutMode; setPopoutMode(mode); setPopoutBoardVisible(mode !== "broadcast"); }}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
           <button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
           <button className={state.live.active ? "command-button danger compact" : "command-button primary compact"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
             {state.live.active ? <Square size={17} /> : <Play size={17} />}

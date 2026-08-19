@@ -30,6 +30,7 @@ export function RecordingLibrary({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [pendingDelete, setPendingDelete] = useState<RecordingLibraryRecord | null>(null);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   useEffect(() => {
     let changed = false;
@@ -75,7 +76,8 @@ export function RecordingLibrary({
     {recordings.length > 0 && <div className="recording-library__list">
       {recordings.map((recording, index) => {
         const url = urlsRef.current.get(recording.id);
-        return <article className={index === 0 ? "recording-library__item latest" : "recording-library__item"} key={recording.id}>
+        const previewing = previewingId === recording.id;
+        return <article className={`${index === 0 ? "recording-library__item latest" : "recording-library__item"}${previewing ? " previewing" : ""}`} key={recording.id}>
           <div className="recording-library__media">
             {url ? <video src={url} poster={recording.thumbnailDataUrl} controls preload="metadata" aria-label={`Play ${recording.title}`} /> : recording.thumbnailDataUrl ? <img src={recording.thumbnailDataUrl} alt="" /> : <div className="recording-library__media-placeholder"><Play size={20} /></div>}
             {index === 0 && <span>Latest capture</span>}
@@ -97,6 +99,7 @@ export function RecordingLibrary({
             <small>Recorder ready in {recording.timings.clickToRecorderStartMs} ms{recording.timings.clickToFirstDataMs === undefined ? "" : ` · first data ${recording.timings.clickToFirstDataMs} ms`}</small>
           </div>
           <div className="recording-library__actions">
+            <button type="button" className="command-button secondary compact" aria-pressed={previewing} title={previewing ? "Close recording preview" : "Preview recording"} onClick={() => setPreviewingId((current) => current === recording.id ? null : recording.id)}><Play size={14} /> {previewing ? "Close preview" : "Preview"}</button>
             <button type="button" className="command-button primary compact" disabled={sendingId === recording.id} onClick={() => onSend(recording)}><Send size={14} /> {sendingId === recording.id ? "Sending…" : "Send to selected display"}</button>
             <button type="button" className="command-button secondary compact" onClick={() => onDownload(recording)}><Download size={14} /> Save file</button>
             <button type="button" className="icon-button danger-icon" title="Delete recording" onClick={() => setPendingDelete(recording)}><Trash2 size={14} /></button>

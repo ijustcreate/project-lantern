@@ -1,5 +1,97 @@
 [
   {
+    "id": "DEV-0253",
+    "title": "Keep board text edits stable",
+    "summary": "Board text fields no longer let React reconcile browser-edited content, preventing the DOM errors that could blank the Board Editor while typing.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 8:55 PM",
+    "areas": [
+      "Board editor",
+      "Text editing"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
+    "id": "DEV-0252",
+    "title": "Toggle boards in the broadcast pop-out",
+    "summary": "Added a Board on/off toggle in the pop-out preview header so operators can inspect the source with or without the live board for the selected display.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 8:53 PM",
+    "areas": [
+      "Broadcast",
+      "Preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
+    "id": "DEV-0251",
+    "title": "Preview saved local recordings",
+    "summary": "Added a Preview control to the compact recording library so saved clips open with playable native video controls before sending, downloading, or deleting.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 8:52 PM",
+    "areas": [
+      "Broadcast",
+      "Recordings"
+    ],
+    "files": [
+      "src/components/RecordingLibrary.tsx",
+      "src/components/RecordingLibrary.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0250",
+    "title": "Re-fit text when changing fonts",
+    "summary": "Fit-one-line text now recalculates its saved size after you select a new font, so the inspector shows the size used by that typeface.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 8:05 PM",
+    "areas": [
+      "Board editor",
+      "Typography"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
+    "id": "DEV-0249",
+    "title": "Keep font size in sync after panel resize",
+    "summary": "Fit-one-line text panels now save their rendered auto-fit size after resizing so the Typography inspector shows the accurate value.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 8:03 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; npx tsc --noEmit; git diff --check"
+  },
+  {
+    "id": "DEV-0248",
+    "title": "Streamline the donor roster",
+    "summary": "Donor search results now show every matching profile in compact rows, with left-aligned details, no Active pill, and a board-assignment dropdown.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 8:01 PM",
+    "areas": [
+      "Donors"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0247",
     "title": "Protect board saves and direct typography",
     "summary": "Preserved the newest durable board copy during shared-state startup, including IndexedDB fallback saves, and kept board typography values direct instead of silently shrinking normal text.",

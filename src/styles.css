@@ -6935,6 +6935,9 @@ textarea:focus-visible,
 .live-preview-popout-header > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .live-preview-popout-header strong { font-size: 14px; }
 .live-preview-popout-header small { color: #92a5b4; font-size: 10px; }
+.live-preview-popout-actions { display: flex; align-items: center; gap: 7px; }
+.popout-board-toggle { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 9px; border: 1px solid rgba(150, 160, 220, .28); border-radius: 7px; color: #aebed0; background: rgba(255, 255, 255, .04); font: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+.popout-board-toggle.active { border-color: rgba(90, 215, 227, .62); color: #e9fdff; background: rgba(47, 145, 164, .22); }
 .live-indicator { width: 8px; height: 8px; border-radius: 50%; background: #7f8993; }
 .live-indicator.active { background: #ef6666; box-shadow: 0 0 0 4px rgba(239, 102, 102, .13); }
 .live-preview-popout-shell .popout-preview { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
@@ -13277,6 +13280,27 @@ textarea:focus-visible,
 .compact-donors .donor-actions { align-self: center; }
 .compact-donors .donor-board-disclosure > summary { min-height: 23px; padding-inline: 7px; font-size: 8px; }
 
+/* Donor roster: compact rows always show every current filter result. */
+.compact-donors { grid-template-rows: 43px 30px minmax(0, 1fr) auto; }
+.compact-donors .donor-card-list { grid-auto-rows: minmax(44px, max-content); gap: 5px; overflow-y: auto; padding-right: 4px; }
+.compact-donors .donor-card { min-height: 44px; padding: 5px 7px; }
+.compact-donors .donor-main { align-items: center; }
+.compact-donors .donor-title-row { flex: 1 1 260px; justify-content: flex-start; }
+.compact-donors .donor-recognition-summary { flex: 0 1 230px; }
+.compact-donors .donor-giving-summary { flex: 0 1 210px; }
+.compact-donors .donor-meta-row { flex: 0 1 220px; }
+.compact-donors .collection-footer { display: none; }
+.donor-filter-count { padding: 1px 3px 0; color: #737a9f; font-size: 9px; }
+.donor-board-picker { display: inline-flex; min-width: 0; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid rgba(90, 162, 238, .28); border-radius: 7px; color: #5ca7ee; background: rgba(12, 62, 114, .16); }
+.donor-board-picker select { min-width: 0; max-width: 190px; border: 0; color: inherit; background: transparent; font: inherit; font-size: 8px; font-weight: 800; cursor: pointer; }
+.donor-board-picker select:focus { outline: none; }
+
+@media (max-width: 900px) {
+  .compact-donors .donor-card { min-height: 52px; }
+  .compact-donors .donor-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .donor-board-picker select { max-width: 150px; }
+}
+
 /* Board names retain one type size and gain lines instead of shrinking. */
 .direct-donor-name { flex-direction: column; gap: 1px; text-align: center; white-space: normal; }
 .direct-donor-name > .editable-board-text.multiline-donor-name {
@@ -13288,6 +13312,7 @@ textarea:focus-visible,
   text-align: center;
   white-space: normal;
 }
+.editable-board-text.multiline-donor-name { white-space: pre-line; }
 .multiline-donor-name .donor-name-line { display: inline-block; max-width: 100%; white-space: nowrap; }
 
 /* Messages explain durable notices; Blips explain short playful moments. */

@@ -121,11 +121,13 @@
   transform: translateY(-50%);
 }
 .compact-recording-library .recording-library__item:hover .recording-library__media,
-.compact-recording-library .recording-library__item:focus-within .recording-library__media { display: block; }
+.compact-recording-library .recording-library__item:focus-within .recording-library__media,
+.compact-recording-library .recording-library__item.previewing .recording-library__media { display: block; }
+.compact-recording-library .recording-library__item.previewing .recording-library__media { pointer-events: auto; }
 .compact-recording-library .recording-library__details { grid-column: 1; }
 .compact-recording-library .recording-library__metadata span:nth-child(n + 4) { display: none; }
 .compact-recording-library .recording-library__details > small { display: none; }
-.compact-recording-library .recording-library__actions { grid-column: 2; grid-template-columns: repeat(3, 30px); }
+.compact-recording-library .recording-library__actions { grid-column: 2; grid-template-columns: repeat(4, 30px); }
 .compact-recording-library .recording-library__actions .command-button,
 .compact-recording-library .recording-library__actions .icon-button { width: 30px; min-width: 30px; height: 30px; padding: 0; font-size: 0; }
 .compact-recording-library .recording-library__actions svg { width: 14px; height: 14px; }
