@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0237",
+    "title": "Use theme-colored calendar controls",
+    "summary": "Removed the green date picker treatment so calendar icons remain clean and follow the active interface text color.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 5:38 PM",
+    "areas": [
+      "Schedule",
+      "Theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0236",
     "title": "Fit board text on one line",
     "summary": "Added an optional Fit one line text flow that reduces text size only when needed, while preserving wrapping as the default.",
