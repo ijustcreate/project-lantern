@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0260",
+    "title": "Make scheduled board resolution consistent",
+    "summary": "Resolve overlapping board events with one shared priority rule so Schedule, Dashboard, physical displays, and Edit Board all use the same winning board.",
+    "author": "Codex",
+    "createdAt": "Aug 19, 2026, 10:43 AM",
+    "areas": [
+      "Schedule",
+      "Dashboard",
+      "Board Editor",
+      "Displays"
+    ],
+    "files": [
+      "src/scheduleResolution.ts",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; live shared-state overlap verification for Display 1"
+  },
+  {
     "id": "DEV-0259",
     "title": "Unify shared board state across every view",
     "summary": "Use the shared service as the single source of truth for boards, schedules, displays, and theme; fall back to browser storage only offline and prevent stale refresh flashes.",

@@ -148,6 +148,7 @@ import type {
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import codeChangelog from "./changelog.json";
 import { nextVisitorMessage, normalizeVisitorMessageRotation } from "./visitorMessages";
+import { resolveActiveBoardProgram, resolveCurrentBoardSchedule, scheduleMatchesDate } from "./scheduleResolution";
 import { CHROMA_KEY_PRESETS, createBackgroundRemovalPatch, resolveBackgroundRemoval, SCREENLESS_REMOVAL_TECHNOLOGY, type BackgroundRemovalMethod } from "./backgroundRemoval";
 import { frameSurfaceStyle, normalizeBroadcastComposition, normalizeCropEdges } from "./broadcastComposition";
 import { renderCostumeOverlay } from "./costumeRenderer";
@@ -8996,26 +8997,6 @@ interface ResolvedScheduledBroadcast {
   broadcastVideoUrl: string;
 }
 
-function scheduleMatchesDate(entry: ScheduleEntry, now: Date) {
-  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  if (entry.recurrence === "once" && entry.scheduleDate) return entry.scheduleDate === localDate;
-  if (entry.scheduleDate && localDate < entry.scheduleDate) return false;
-  if (entry.scheduleEndDate && localDate > entry.scheduleEndDate) return false;
-  return entry.days.includes(now.getDay());
-}
-
-function resolveCurrentBoardSchedule(state: LanternState, screenId: ScreenId, now = new Date()) {
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return state.schedules?.find((entry) =>
-    (entry.contentType ?? "board") === "board"
-    && entry.active
-    && scheduleMatchesDate(entry, now)
-    && (entry.target === "all" || entry.target === screenId)
-    && time >= entry.startTime
-    && time < entry.endTime
-  );
-}
-
 function TypographyNumberField({ label, info, value, min, max, step = 1, suffix, onChange }: { label: string; info?: string; value: number; min: number; max: number; step?: number; suffix: string; onChange: (value: number) => void }) {
   const [draft, setDraft] = useState(String(value));
   const editingRef = useRef(false);
@@ -9069,18 +9050,6 @@ function IdleDisplayNotice({ upcoming, presentation = false, onAddSchedule }: { 
     <Clock3 size={presentation ? 26 : 18} aria-hidden="true" />
     <div><strong>Nothing scheduled</strong>{upcoming ? <span>Next {type.toLowerCase()}: <b>{upcoming.entry.name}</b><small>{when}</small></span> : <span>No upcoming board or pop-up</span>}{onAddSchedule && <button type="button" className="command-button secondary compact idle-schedule-button" onClick={onAddSchedule}><CalendarDays size={14} /> Add schedule</button>}</div>
   </div>;
-}
-
-function resolveActiveBoardProgram(state: LanternState, screenId: ScreenId, now = new Date()) {
-  const scheduled = resolveCurrentBoardSchedule(state, screenId, now);
-  if (scheduled) {
-    const program = state.boardPrograms.find((candidate) => candidate.id === scheduled.boardId && candidate.active);
-    if (program) return program;
-  }
-  const assignedId = state.screens[screenId]?.boardProgramId;
-  return state.boardPrograms.find((candidate) => candidate.id === assignedId)
-    ?? state.boardPrograms.find((candidate) => candidate.active && candidate.orientation === state.screens[screenId]?.orientation)
-    ?? state.boardPrograms[0];
 }
 
 function resolveDisplayedBoardProgramId(state: LanternState, screenId: ScreenId, now = new Date()) {

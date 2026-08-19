@@ -20,9 +20,10 @@ import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import "@babylonjs/core/Meshes/Builders/tubeBuilder";
-import type { Announcement, BoardDonorAnimation, BoardDonorHighlight, DisplayProfile, Donor, LanternState, RecognitionIcon, ScheduleEntry, ScreenId } from "../types";
+import type { Announcement, BoardDonorAnimation, BoardDonorHighlight, DisplayProfile, Donor, LanternState, RecognitionIcon, ScreenId } from "../types";
 import { boardUsesDonorAnimation, resolveBoardDonorPresentation, type ResolvedBoardDonorPresentation } from "../boardPresentation";
 import { buildDonorNameGridLayout, splitDonorNameLines } from "../donorNameLayout";
+import { resolveActiveBoardProgram } from "../scheduleResolution";
 
 interface BabylonDonorWallProps {
   state: LanternState;
@@ -74,7 +75,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
   }, [previewProgram]);
 
   const activeProgram = useMemo(() => {
-    return previewProgram ?? resolveActiveProgram(state, screenId, new Date(scheduleMinute * 60_000));
+    return previewProgram ?? resolveActiveBoardProgram(state, screenId, new Date(scheduleMinute * 60_000));
   }, [previewProgram, scheduleMinute, screenId, state.boardPrograms, state.schedules, state.screens]);
   const accessibleDonors = (activeProgram?.donorIds ?? [])
     .map((id) => state.donors.find((donor) => donor.id === id))
@@ -1712,27 +1713,6 @@ function drawBoardStars(
 
 function donorSubtextVisible(screen: DisplayProfile | undefined, donorId: string) {
   return screen?.donorSubtextVisibility?.[donorId] ?? screen?.showSubtext ?? false;
-}
-
-function resolveActiveProgram(state: LanternState, screenId: ScreenId, now: Date) {
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const matchesDate = (entry: ScheduleEntry, date: Date) => {
-    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    if (entry.recurrence === "once" && entry.scheduleDate) return entry.scheduleDate === dateKey;
-    if (entry.scheduleDate && dateKey < entry.scheduleDate) return false;
-    if (entry.scheduleEndDate && dateKey > entry.scheduleEndDate) return false;
-    return entry.days.includes(date.getDay());
-  };
-  const schedule = state.schedules?.find((entry) => (entry.contentType ?? "board") === "board" && entry.active && matchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
-  if (schedule) {
-    const program = state.boardPrograms?.find((candidate) => candidate.id === schedule.boardId && candidate.active);
-    if (program) return program;
-  }
-  const assignedProgramId = state.screens[screenId]?.boardProgramId;
-  return state.boardPrograms?.find((program) => program.id === assignedProgramId)
-    ?? state.boardPrograms?.find((program) => program.active && program.orientation === state.screens[screenId]?.orientation)
-    ?? state.boardPrograms?.[0];
 }
 
 function wrapLines(context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number) {
