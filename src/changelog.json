@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0254",
+    "title": "Prevent local storage quota save failures",
+    "summary": "Large board state now moves to IndexedDB after the first quota limit, removes the oversized local copy, and keeps future edits saving without repeated console errors.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 9:21 PM",
+    "areas": [
+      "Data persistence",
+      "Board editor"
+    ],
+    "files": [
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build"
+  },
+  {
     "id": "DEV-0253",
     "title": "Keep board text edits stable",
     "summary": "Board text fields no longer let React reconcile browser-edited content, preventing the DOM errors that could blank the Board Editor while typing.",

@@ -30,6 +30,7 @@ const MAX_AUDIT_HISTORY = 350;
 const MAX_BROADCAST_REMINDER_ACKNOWLEDGEMENTS = 250;
 let sharedPersistenceEnabled = false;
 let sharedSaveTimer: number | undefined;
+let stateUsesIndexedDb = false;
 
 type Listener = (message: HostMessage) => void;
 type RealtimeEnvelope = { sender: string; message: HostMessage };
@@ -161,18 +162,30 @@ function deleteAllLanternMedia() {
 
 export function saveLanternState(state: LanternState) {
   const serializable = serializableLocalState(state);
+  if (stateUsesIndexedDb) {
+    void saveIndexedDbLanternState(serializable).then(clearLocalStateShadow).catch(() => undefined);
+    return true;
+  }
   try {
     window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
     window.localStorage.setItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY, new Date().toISOString());
     void deleteIndexedDbLanternState();
     return true;
   } catch (error) {
-    // Keep automatic updates safe too. Explicit Save awaits this same IndexedDB
-    // fallback and can tell the operator whether it completed.
-    void saveIndexedDbLanternState(serializable).catch(() => undefined);
-    console.warn("Project Lantern could not persist the current state in local storage.", error);
-    return false;
+    // A large board can exceed localStorage's small quota. Switch once to the
+    // durable IndexedDB store so ordinary edits do not keep emitting quota
+    // errors, and remove the oversized local copy after the fallback saves.
+    stateUsesIndexedDb = true;
+    void saveIndexedDbLanternState(serializable).then(clearLocalStateShadow).catch(() => undefined);
+    return true;
   }
+}
+
+function clearLocalStateShadow() {
+  try {
+    window.localStorage.removeItem(LANTERN_STORAGE_KEY);
+    window.localStorage.removeItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY);
+  } catch { /* IndexedDB remains the durable state store. */ }
 }
 
 function serializableLocalState(state: LanternState): LanternState {
@@ -189,16 +202,26 @@ function serializableLocalState(state: LanternState): LanternState {
 /** Save large browser-only boards without relying on the small localStorage quota. */
 export async function saveLanternStateDurably(state: LanternState): Promise<"local-storage" | "indexed-db" | "failed"> {
   const serializable = serializableLocalState(state);
+  if (stateUsesIndexedDb) {
+    try {
+      await saveIndexedDbLanternState(serializable);
+      clearLocalStateShadow();
+      return "indexed-db";
+    } catch (error) {
+      console.warn("Project Lantern could not persist the current state in IndexedDB.", error);
+      return "failed";
+    }
+  }
   try {
     window.localStorage.setItem(LANTERN_STORAGE_KEY, JSON.stringify(serializable));
     window.localStorage.setItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY, new Date().toISOString());
     void deleteIndexedDbLanternState();
     return "local-storage";
   } catch (error) {
-    console.warn("Project Lantern is using IndexedDB because local storage is full.", error);
+    stateUsesIndexedDb = true;
     try {
       await saveIndexedDbLanternState(serializable);
-      try { window.localStorage.setItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY, new Date().toISOString()); } catch { /* IndexedDB copy is still safe. */ }
+      clearLocalStateShadow();
       return "indexed-db";
     } catch (fallbackError) {
       console.warn("Project Lantern could not persist the current state in IndexedDB.", fallbackError);
@@ -219,7 +242,9 @@ export async function loadIndexedDbLanternState(): Promise<LanternState | null> 
     });
     database.close();
     const state = stored && "state" in stored ? stored.state : stored;
-    return state ? normalizeState({ ...initialState, ...state, contentVersion: state.contentVersion ?? 0 } as LanternState) : null;
+    if (!state) return null;
+    stateUsesIndexedDb = true;
+    return normalizeState({ ...initialState, ...state, contentVersion: state.contentVersion ?? 0 } as LanternState);
   } catch {
     return null;
   }
