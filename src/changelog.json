@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0238",
+    "title": "Keep giving program details in view",
+    "summary": "Opening a giving program now scrolls its settings into view and clearly marks the expanded card.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 5:48 PM",
+    "areas": [
+      "Settings",
+      "Giving programs"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; Playwright expand/collapse; git diff --check"
+  },
+  {
     "id": "DEV-0237",
     "title": "Use theme-colored calendar controls",
     "summary": "Removed the green date picker treatment so calendar icons remain clean and follow the active interface text color.",

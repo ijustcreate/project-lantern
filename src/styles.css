@@ -12207,6 +12207,7 @@ textarea:focus-visible,
 .giving-program-settings > header span { color: var(--muted, #8b96b5); font-size: 9px; }
 .giving-program-list { display: grid; gap: 9px; }
 .giving-program-card { overflow: hidden; border: 1px solid var(--border, rgba(120,130,190,.22)); border-radius: 14px; background: var(--surface, #111b30); }
+.giving-program-card:has(.giving-program-expand[aria-expanded="true"]) { border-color: color-mix(in srgb, var(--accent, #79cac6) 58%, var(--border, rgba(120,130,190,.22))); box-shadow: 0 10px 26px rgba(0, 0, 0, .16); }
 .giving-program-card.archived { opacity: .72; }
 .giving-program-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; padding: 9px 12px; }
 .giving-program-expand { display: flex; flex: 1; align-items: center; gap: 8px; border: 0; color: var(--text, #eef2ff); text-align: left; background: transparent; cursor: pointer; }
