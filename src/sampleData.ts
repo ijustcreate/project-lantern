@@ -17,7 +17,8 @@ export const BOARD_TEXT_CONTRAST_CONTENT_VERSION = 13;
 export const LEGACY_STAR_LAYER_CONTENT_VERSION = 14;
 /** Repairs early announcement placements that treated layout X as a left edge. */
 export const ANNOUNCEMENT_LAYOUT_CONTENT_VERSION = 15;
-export const LANTERN_CONTENT_VERSION = ANNOUNCEMENT_LAYOUT_CONTENT_VERSION;
+export const QUESTIONING_TOY_SOLDIER_CONTENT_VERSION = 16;
+export const LANTERN_CONTENT_VERSION = QUESTIONING_TOY_SOLDIER_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -419,7 +420,7 @@ function aboutBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgram {
     showFrame: true,
     panels: portrait ? [
       { id: `${short}-heading`, type: "heading", title: "WHAT IS THE TOY SOLDIER BRIGADE?", size: "feature", x: 7, y: 5, width: 86, height: 9, fontFamily: "Cabin Sketch", fontSize: 33 },
-      { id: `${short}-soldier`, type: "image", title: "Toy Soldier Brigade", imageUrl: "/assets/donor-icons/toy-soldier.png", imageFit: "contain", size: "standard", x: 35, y: 16, width: 30, height: 18 },
+      { id: `${short}-soldier`, type: "image", title: "Toy Soldier Brigade", imageUrl: "/assets/donor-icons/toy-soldier-questioning.png", imageFit: "contain", size: "standard", x: 35, y: 16, width: 30, height: 18 },
       { id: `${short}-story`, type: "message", eyebrow: "PHILANTHROPY WITH PURPOSE", title: "Steady support. More room to imagine.", body: toySoldierProgram.description, size: "feature", x: 8, y: 36, width: 84, height: 25, fontSize: 26 },
       { id: `${short}-explore`, type: "message", eyebrow: "EXPLORE LEVEL", title: "$5,000 each year", body: "A five-year pledge to unrestricted funds.", size: "standard", x: 8, y: 65, width: 40, height: 17, fontSize: 20 },
       { id: `${short}-play`, type: "message", eyebrow: "PLAY LEVEL", title: "$1,000 each year", body: "A five-year pledge to unrestricted funds.", size: "standard", x: 52, y: 65, width: 40, height: 17, fontSize: 20 },

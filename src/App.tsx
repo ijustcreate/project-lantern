@@ -2087,10 +2087,9 @@ function Dashboard({
   const [phoneBlipTarget, setPhoneBlipTarget] = useState<TargetScreen>("all");
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    if (!state.activeBlip.active) return;
-    const timer = window.setInterval(() => setNow(new Date()), 500);
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
-  }, [state.activeBlip.active]);
+  }, []);
   const previewGridClass = displays.length === 1
     ? "single"
     : displays.length === 2
@@ -2123,13 +2122,11 @@ function Dashboard({
         <div className="preview-stage">
           <div className={`dashboard-display-grid ${previewGridClass}`} data-display-count={displays.length}>
             {displays.map((screen) => {
-              const activeSchedule = resolveCurrentBoardSchedule(state, screen.id);
-              const activeBoard = activeSchedule
-                ? state.boardPrograms.find((program) => program.id === activeSchedule.boardId)
-                : undefined;
-              const assignedBoard = resolveActiveBoardProgram(state, screen.id);
-              const editableBoard = activeBoard ?? assignedBoard;
-              const noScheduledBoard = !activeBoard;
+              const activeSchedule = resolveCurrentBoardSchedule(state, screen.id, now);
+              const activeBoard = resolveActiveBoardProgram(state, screen.id, now);
+              const assignedBoard = state.boardPrograms.find((program) => program.id === screen.boardProgramId);
+              const editableBoard = activeBoard;
+              const noScheduledBoard = !activeSchedule;
               const activeBlip = state.activeBlip;
               const immediateBlipExpiresAt = activeBlip.startedAt && activeBlip.durationMinutes > 0
                 ? Date.parse(activeBlip.startedAt) + activeBlip.durationMinutes * 60_000
@@ -2160,7 +2157,7 @@ function Dashboard({
                 <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}`}>
                   {activeBoard ? <>
                     <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
-                    <BabylonDonorWall state={state} screenId={screen.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
+                    <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={activeBoard?.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
                     <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
                   </> : !displayBlip && <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
                   {displayBlip && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}

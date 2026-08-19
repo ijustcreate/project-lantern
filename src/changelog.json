@@ -1,5 +1,27 @@
 [
   {
+    "id": "DEV-0258",
+    "title": "Align board previews and scope Toy Soldier art",
+    "summary": "Dashboard now renders and edits the same resolved board as the schedule, panel-board text keeps its authored display size, and the questioning Toy Soldier appears only on the intended portrait board.",
+    "author": "Codex",
+    "createdAt": "Aug 19, 2026, 10:13 AM",
+    "areas": [
+      "Dashboard",
+      "Schedule",
+      "Display output",
+      "Board artwork"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/host/lanternHost.ts",
+      "src/sampleData.ts",
+      "public/assets/donor-icons/toy-soldier.png",
+      "public/assets/donor-icons/toy-soldier-questioning.png"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; git diff --check"
+  },
+  {
     "id": "DEV-0257",
     "title": "Streamline display setup and text wrapping",
     "summary": "Display creation now lives in Settings, and wrapped text fills the selected text panel before breaking onto a new line.",

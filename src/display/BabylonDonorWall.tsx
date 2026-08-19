@@ -476,7 +476,10 @@ function drawMuseumBoard(
   const teal = palette.secondary;
   const gold = palette.accent;
   const coral = "#f27e60";
-  const scale = layoutScale / 100;
+  // Panel-based boards already store their own authored positions and type
+  // sizes. Applying a legacy display-level scale to them can shrink every
+  // label to near-invisible text in Dashboard and Calendar previews.
+  const scale = activeProgram?.panels?.length ? 1 : layoutScale / 100;
 
   const chalkboard = state.board.visualStyle === "chalkboard" || state.board.visualStyle === "chalkboard-minimal";
   const galleryPlaque = state.board.visualStyle === "gallery-plaque";

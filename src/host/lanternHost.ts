@@ -1,4 +1,4 @@
-import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION, QUESTIONING_TOY_SOLDIER_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -1245,6 +1245,7 @@ export function normalizeState(state: LanternState): LanternState {
   const needsBoardTextContrastMigration = incomingContentVersion < BOARD_TEXT_CONTRAST_CONTENT_VERSION;
   const needsLegacyStarLayerMigration = incomingContentVersion < LEGACY_STAR_LAYER_CONTENT_VERSION;
   const needsAnnouncementLayoutMigration = incomingContentVersion < ANNOUNCEMENT_LAYOUT_CONTENT_VERSION;
+  const needsQuestioningToySoldierMigration = incomingContentVersion < QUESTIONING_TOY_SOLDIER_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -1349,11 +1350,18 @@ export function normalizeState(state: LanternState): LanternState {
   // The dark brass outline was previously applied to a shipped board treatment.
   // Replace it once for all current saved boards, without touching their content,
   // panel layout, or donor/schedule assignments.
-  const boardPrograms = needsBoardTextContrastMigration
+  const boardProgramsBeforeToySoldierMigration = needsBoardTextContrastMigration
     ? boardProgramsBeforeTextContrastMigration.map((program) => program.textFinish === "cut-brass"
       ? { ...program, textFinish: "flat" as const }
       : program)
     : boardProgramsBeforeTextContrastMigration;
+  const boardPrograms = needsQuestioningToySoldierMigration
+    ? boardProgramsBeforeToySoldierMigration.map((program) => program.id === "board-toy-about-portrait"
+      ? { ...program, panels: program.panels?.map((panel) => panel.id === "about-p-soldier" && panel.imageUrl === "/assets/donor-icons/toy-soldier.png"
+        ? { ...panel, imageUrl: "/assets/donor-icons/toy-soldier-questioning.png" }
+        : panel) }
+      : program)
+    : boardProgramsBeforeToySoldierMigration;
 
   const incomingAnnouncements = state.savedAnnouncements ?? initialState.savedAnnouncements;
   const retiredAnnouncements = needsLegacyContentMigration
