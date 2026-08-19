@@ -10,6 +10,7 @@ import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+import { Logger } from "@babylonjs/core/Misc/logger";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
@@ -40,6 +41,10 @@ interface BabylonDonorWallProps {
 const backgroundMediaCache = new Map<string, HTMLImageElement | HTMLVideoElement>();
 const donorIconImageCache = new Map<string, HTMLImageElement>();
 const boardPanelImageCache = new Map<string, HTMLImageElement>();
+
+// Keep routine renderer startup and shader-compilation messages out of the
+// dashboard console. Rendering failures still surface as Babylon errors.
+Logger.LogLevels = Logger.ErrorLogLevel;
 
 export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), onFps }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -874,9 +879,10 @@ function drawComposableBoard(
 
 function prepareBoardPanelImages(state: LanternState, onReady: () => void) {
   state.boardPrograms.flatMap((program) => program.panels ?? []).forEach((panel) => {
-    const source = panel.type === "image" || panel.type === "donor-star"
+    const rawSource = panel.type === "image" || panel.type === "donor-star"
       ? panel.imageUrl ?? (panel.type === "donor-star" ? "/assets/donor-icons/legacy-star-flat.svg" : undefined)
       : undefined;
+    const source = resolveBoardAssetUrl(rawSource);
     if (!source) return;
     const cached = boardPanelImageCache.get(source);
     if (cached) {
@@ -902,7 +908,9 @@ function drawBoardPanelImage(
   fit: "cover" | "contain"
 ) {
   if (!source) return;
-  const image = boardPanelImageCache.get(source);
+  const resolvedSource = resolveBoardAssetUrl(source);
+  if (!resolvedSource) return;
+  const image = boardPanelImageCache.get(resolvedSource);
   if (!image?.complete || image.naturalWidth <= 0 || image.naturalHeight <= 0) return;
   const scale = fit === "cover"
     ? Math.max(width / image.naturalWidth, height / image.naturalHeight)
@@ -1354,6 +1362,11 @@ function drawBoardDonorName(
 
   drawLines();
   context.restore();
+}
+
+function resolveBoardAssetUrl(source: string | undefined) {
+  if (!source || !source.startsWith("/")) return source;
+  return `${import.meta.env.BASE_URL}${source.slice(1)}`;
 }
 
 function fitStarDonorFontSize(

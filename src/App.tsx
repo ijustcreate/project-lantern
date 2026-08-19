@@ -927,9 +927,6 @@ function ControlCenter() {
               <button className="header-operation-button dashboard-brigade-entry" onClick={() => setView("brigade")} title="Open the Toy Soldier Brigade hub">
                 <Star size={16} /><span>Toy Soldier Brigade</span>
               </button>
-              <button className="header-operation-button" onClick={addDisplay} title="Add a recognition display">
-                <Plus size={16} /><span>Add display</span>
-              </button>
               </>
             )}
             <label className="header-user-control">
@@ -1102,7 +1099,7 @@ function ControlCenter() {
           setBugLauncherVisible(visible);
           localStorage.setItem("project-lantern-bug-launcher-visible", String(visible));
         }} />}
-        {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} />}
+        {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} onAddDisplay={addDisplay} />}
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
       </main>
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
@@ -3587,6 +3584,14 @@ function ThemeStudio({
               </section>
               {selectedPanel.type === "donors" && <>
                 <div className="field"><span>Names in each row</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as BoardPanel["columns"] })} /></div>
+                <details className="inspector-details" open>
+                  <summary>Scrolling credits</summary>
+                  <div className="inspector-block">
+                    <label className="switch-row"><input type="checkbox" checked={selectedProgram.donorScrollEnabled ?? false} onChange={(event) => patchProgram({ donorScrollEnabled: event.target.checked })} /><span>Scroll this board's donor credits</span></label>
+                    {(selectedProgram.donorScrollEnabled ?? false) && <><div className="field"><span>Scroll direction</span><SegmentedControl value={selectedProgram.donorScrollDirection ?? "vertical"} options={[["vertical", "Vertical"], ["horizontal", "Horizontal"]]} onChange={(value) => patchProgram({ donorScrollDirection: value as DonorBoardProgram["donorScrollDirection"] })} /></div><Slider label="Scroll speed" info="Controls the continuous donor-credit pace on the display." value={selectedProgram.donorScrollSpeed ?? 4} min={1} max={10} onChange={(donorScrollSpeed) => patchProgram({ donorScrollSpeed })} /></>}
+                    <p className="field-note">Board-wide credits controls are available here whenever a donor-list element is selected.</p>
+                  </div>
+                </details>
                 <div className="field panel-tier-filter"><span>Show recognition levels <InfoDot text="Level filters update automatically when a donor's pledge level changes." /></span><div><button type="button" className={!selectedPanel.donorTierFilter?.length ? "selected" : ""} aria-pressed={!selectedPanel.donorTierFilter?.length} onClick={() => patchPanel(selectedPanel.id, { donorTierFilter: undefined })}>All levels</button>{state.recognitionSettings.tiers.map((tier) => { const selected = selectedPanel.donorTierFilter?.includes(tier) ?? false; return <button type="button" className={selected ? "selected" : ""} aria-pressed={selected} key={tier} onClick={() => { const current = selectedPanel.donorTierFilter ?? []; const next = selected ? current.filter((item) => item !== tier) : [...current, tier]; patchPanel(selectedPanel.id, { donorTierFilter: next.length ? next : undefined }); }}>{tier}</button>; })}</div></div>
                 <details className="inspector-details roster-details">
                   <summary>Choose board roster <span>{selectedProgram.donorIds.length} selected</span></summary>
@@ -3824,12 +3829,13 @@ function DirectBoardCanvas({
       if (Math.abs(pointer.clientX - startX) > 2 || Math.abs(pointer.clientY - startY) > 2) manipulationRef.current.moved = true;
       const previewPatch = (item: BoardPanel, patch: Partial<BoardPanel>) => {
         manipulationRef.current?.pending.set(item.id, patch);
-        const element = canvasRef.current?.querySelector<HTMLElement>(`[data-panel-id="${item.id}"]`);
-        if (!element) return;
-        if (patch.x !== undefined) element.style.left = `${patch.x}%`;
-        if (patch.y !== undefined) element.style.top = `${patch.y}%`;
-        if (patch.width !== undefined) element.style.width = `${patch.width}%`;
-        if (patch.height !== undefined) element.style.height = `${patch.height}%`;
+        const elements = canvasRef.current?.querySelectorAll<HTMLElement>(`[data-panel-id="${item.id}"]`) ?? [];
+        elements.forEach((element) => {
+          if (patch.x !== undefined) element.style.left = `${patch.x}%`;
+          if (patch.y !== undefined) element.style.top = `${patch.y}%`;
+          if (patch.width !== undefined) element.style.width = `${patch.width}%`;
+          if (patch.height !== undefined) element.style.height = `${patch.height}%`;
+        });
       };
       if (mode === "move") {
         groupedPanels.forEach((item) => {
@@ -3875,6 +3881,12 @@ function DirectBoardCanvas({
   const particleCount = display.particleCount ?? 34;
   const shadowRadians = (program.textShadowAngle ?? display.textShadowAngle ?? 135) * Math.PI / 180;
   const shadowDistance = program.textShadowDistance ?? display.textShadowDistance ?? 5;
+  const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
+  const selectedPanelToolTop = selectedPanel
+    ? (selectedPanel.y ?? 5) < 8
+      ? (selectedPanel.y ?? 5) + (selectedPanel.height ?? 18) + 1
+      : (selectedPanel.y ?? 5) - 7
+    : 0;
   const prioritizeMoveHandle = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as Element).closest(".panel-move-handle")) return;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -3942,9 +3954,6 @@ function DirectBoardCanvas({
         "--donor-divider-thickness": `${panel.donorDividerThickness ?? 1}px`,
         "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
       } as React.CSSProperties} onClick={(event) => { if (suppressPanelClickRef.current) { event.preventDefault(); event.stopPropagation(); suppressPanelClickRef.current = false; return; } event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
-        <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, panel, "move")}><Move size={16} /></button>
-        <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(panel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
-        {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, panel, "resize", edge)} />)}
         {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize} fontFamily={panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "supporters-heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
@@ -3956,6 +3965,15 @@ function DirectBoardCanvas({
         {panel.type === "footer" && <div className={`direct-footer-line icons-${panel.footerIconPlacement ?? "left"}`}><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />{panel.footerIconPlacement === "both" && <span className="footer-heart">♡</span>}<span /></div>}
       </section>)}
     </div>
+    {selectedPanel && <div className="direct-board-selection-layer">
+      <div data-panel-id={selectedPanel.id} className="direct-board-selection-outline" style={{ left: `${selectedPanel.x ?? 5}%`, top: `${selectedPanel.y ?? 5}%`, width: `${selectedPanel.width ?? 90}%`, height: `${selectedPanel.height ?? 18}%` }}>
+        {["n", "ne", "e", "se", "s", "sw", "w", "nw"].map((edge) => <span key={edge} className={`panel-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, selectedPanel, "resize", edge)} />)}
+      </div>
+      <div className="direct-board-selection-actions" style={{ left: `clamp(4px, ${selectedPanel.x ?? 5}%, calc(100% - 52px))`, top: `clamp(4px, ${selectedPanelToolTop}%, calc(100% - 26px))` }}>
+        <button type="button" className="panel-move-handle" title="Drag to move panel" aria-label="Drag to move panel" onPointerDown={(event) => beginManipulation(event, selectedPanel, "move")}><Move size={16} /></button>
+        <button type="button" className="panel-remove-handle" title="Remove panel" aria-label="Remove panel" disabled={panels.length === 1} onClick={(event) => { event.stopPropagation(); onRemove(selectedPanel.id, { x: event.clientX, y: event.clientY }); }}><Trash2 size={15} /></button>
+      </div>
+    </div>}
     {placingPanelType && <div className="placement-hint"><Plus size={14} /> Click where the {boardPanelLabel(placingPanelType).toLowerCase()} should go</div>}
     {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}{widgets.map((widget) => <button key={widget.id} type="button" onClick={() => { onAddWidget?.(widget); setContextMenu(null); }}>{widget.name}</button>)}{selectedPanelIds.length > 1 && <button type="button" onClick={() => { setWidgetNamePromptOpen(true); setContextMenu(null); }}>Save selection as widget</button>}</div>}
     {widgetNamePromptOpen && <LanternTextPromptDialog eyebrow="Reusable board content" title="Save selection as a widget" description="The selected panels are copied into a reusable widget. The panels already on this board remain unchanged." label="Widget name" initialValue="Saved widget" submitLabel="Save widget" onCancel={() => setWidgetNamePromptOpen(false)} onSubmit={(name) => { onSaveWidget?.(name); setWidgetNamePromptOpen(false); }} />}
@@ -7967,7 +7985,7 @@ function entryOccursOnDate(entry: ScheduleEntry, date: Date) {
 function scheduleTargetsConflict(left: TargetScreen, right: TargetScreen) { return left === "all" || right === "all" || left === right; }
 function clamp(value: number, min: number, max: number) { return Math.min(max, Math.max(min, value)); }
 
-function RecognitionSettingsView({ state, updateState }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void }) {
+function RecognitionSettingsView({ state, updateState, onAddDisplay }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void; onAddDisplay: () => void }) {
   const changeVocabulary = (kind: "tiers" | "categories" | "tags", next: string[], previous?: string, replacement?: string) => {
     updateState((current) => ({
       ...current,
@@ -8010,6 +8028,14 @@ function RecognitionSettingsView({ state, updateState }: { state: LanternState; 
             <option value="sparkle">Sparkle Unicorn — Neon rainbow magic</option>
           </select>
         </label>
+      </section>
+      <section className="appearance-settings" aria-labelledby="display-setup-heading">
+        <div>
+          <p className="eyebrow">Display setup</p>
+          <h2 id="display-setup-heading">Add a recognition display</h2>
+          <span>Create a new display here when the museum adds or replaces a physical screen.</span>
+        </div>
+        <button type="button" className="command-button primary" onClick={onAddDisplay}><Plus size={16} /> Add display</button>
       </section>
       <div className="settings-intro">
         <div>

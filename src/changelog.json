@@ -1,5 +1,57 @@
 [
   {
+    "id": "DEV-0257",
+    "title": "Streamline display setup and text wrapping",
+    "summary": "Display creation now lives in Settings, and wrapped text fills the selected text panel before breaking onto a new line.",
+    "author": "Codex",
+    "createdAt": "Aug 19, 2026, 9:57 AM",
+    "areas": [
+      "Dashboard",
+      "Settings",
+      "Board editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; git diff --check"
+  },
+  {
+    "id": "DEV-0256",
+    "title": "Keep board panels editable and dashboard diagnostics clear",
+    "summary": "Selected panel outlines and controls now remain available when content crosses board bounds, while panel contents stay clipped. Routine Babylon startup logging no longer buries genuine dashboard errors.",
+    "author": "Codex",
+    "createdAt": "Aug 19, 2026, 9:57 AM",
+    "areas": [
+      "Board editor",
+      "Dashboard"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; git diff --check"
+  },
+  {
+    "id": "DEV-0255",
+    "title": "Align board credits and display artwork",
+    "summary": "Donor-list scrolling controls are now available while editing a donor panel, WebGL display assets honor the GitHub Pages base path, and the Toy Soldier board art uses the supplied questioning character.",
+    "author": "Codex",
+    "createdAt": "Aug 19, 2026, 9:47 AM",
+    "areas": [
+      "Board editor",
+      "Display output",
+      "Artwork"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "public/assets/donor-icons/toy-soldier.png"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; git diff --check"
+  },
+  {
     "id": "DEV-0254",
     "title": "Prevent local storage quota save failures",
     "summary": "Large board state now moves to IndexedDB after the first quota limit, removes the oversized local copy, and keeps future edits saving without repeated console errors.",
