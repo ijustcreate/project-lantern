@@ -15,7 +15,9 @@ export const LEGACY_DONOR_TAGS_CONTENT_VERSION = 12;
 export const BOARD_TEXT_CONTRAST_CONTENT_VERSION = 13;
 /** Makes legacy recognition stars independent image and text layers. */
 export const LEGACY_STAR_LAYER_CONTENT_VERSION = 14;
-export const LANTERN_CONTENT_VERSION = LEGACY_STAR_LAYER_CONTENT_VERSION;
+/** Repairs early announcement placements that treated layout X as a left edge. */
+export const ANNOUNCEMENT_LAYOUT_CONTENT_VERSION = 15;
+export const LANTERN_CONTENT_VERSION = ANNOUNCEMENT_LAYOUT_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",

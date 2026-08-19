@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0239",
+    "title": "Keep announcement panels on screen",
+    "summary": "Repaired invalid seeded message placement, constrained editable message layouts to the display, and gave message panels drag priority over canvas panning.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 6:10 PM",
+    "areas": [
+      "Announcements",
+      "Display preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/phase3Schedule.ts",
+      "src/sampleData.ts",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; Playwright portrait and landscape preview; npm run build"
+  },
+  {
     "id": "DEV-0238",
     "title": "Keep giving program details in view",
     "summary": "Opening a giving program now scrolls its settings into view and clearly marks the expanded card.",

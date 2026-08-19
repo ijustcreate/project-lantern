@@ -6177,6 +6177,9 @@ function AnnouncementMonitorSurface({
     resetView();
   };
   const beginViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Physical announcement editing owns pointer input. The display camera must
+    // never pan or orbit while the operator is placing a message element.
+    if (editing) return;
     if ((event.target as Element).closest(".monitor-view-controls, .announcement-edit-handle, [contenteditable='true'], .announcement-image.editable")) return;
     // Clicking the display background clears the physical-editing chrome so the
     // user can inspect the actual board without handles and resize edges.
@@ -6303,6 +6306,9 @@ function AnnouncementLayer({
   const styleClass = announcement.style.toLowerCase().replace(/\s/g, "-");
   const defaultLayoutY = announcement.style === "Temporary Card" ? 50 : isTicker ? 91 : 88;
   const defaultLayoutWidth = isTicker ? 96 : announcement.style === "Ribbon" ? 90 : 78;
+  const layoutWidth = clamp(announcement.layoutWidth ?? defaultLayoutWidth, 20, 96);
+  const layoutX = clamp(announcement.layoutX ?? 50, layoutWidth / 2 + 2, 100 - layoutWidth / 2 - 2);
+  const layoutY = clamp(announcement.layoutY ?? defaultLayoutY, 8, 92);
   const hasCustomLayout = announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
   const queuePatch = (patch: Partial<LanternState["announcement"]>) => {
     if (!onPatch) return;
@@ -6322,11 +6328,11 @@ function AnnouncementLayer({
     color: announcement.textColor ?? undefined,
     background: announcement.backgroundColor ?? undefined,
     ...(hasCustomLayout ? {
-      top: `${announcement.layoutY ?? defaultLayoutY}%`,
-      left: `${announcement.layoutX ?? 50}%`,
+      top: `${layoutY}%`,
+      left: `${layoutX}%`,
       right: "auto",
       bottom: "auto",
-      width: `${announcement.layoutWidth ?? defaultLayoutWidth}%`,
+      width: `${layoutWidth}%`,
       transform: "translate(-50%, -50%)"
     } : {})
   } as React.CSSProperties;
@@ -6341,9 +6347,9 @@ function AnnouncementLayer({
       edge,
       pointerX: event.clientX,
       pointerY: event.clientY,
-      x: kind === "layout" ? announcement.layoutX ?? 50 : announcement.imageX ?? 72,
-      y: kind === "layout" ? announcement.layoutY ?? defaultLayoutY : announcement.imageY ?? 50,
-      width: kind === "layout" ? announcement.layoutWidth ?? defaultLayoutWidth : announcement.imageWidth ?? 22
+      x: kind === "layout" ? layoutX : announcement.imageX ?? 72,
+      y: kind === "layout" ? layoutY : announcement.imageY ?? 50,
+      width: kind === "layout" ? layoutWidth : announcement.imageWidth ?? 22
     };
   };
   const moveManipulation = (event: React.PointerEvent<HTMLElement>) => {
@@ -6355,7 +6361,7 @@ function AnnouncementLayer({
     const dy = (event.clientY - drag.pointerY) / bounds.height * 100;
     if (drag.edge === "move") {
       queuePatch(drag.kind === "layout"
-        ? { layoutX: clamp(drag.x + dx, 0, 100), layoutY: clamp(drag.y + dy, 0, 100) }
+        ? { layoutX: clamp(drag.x + dx, drag.width / 2 + 2, 100 - drag.width / 2 - 2), layoutY: clamp(drag.y + dy, 8, 92) }
         : { imageX: clamp(drag.x + dx, 0, 100), imageY: clamp(drag.y + dy, 0, 100) });
       return;
     }
@@ -6363,7 +6369,7 @@ function AnnouncementLayer({
     const width = clamp(drag.width + horizontal, drag.kind === "layout" ? 20 : 5, drag.kind === "layout" ? 96 : 70);
     const centerShift = drag.edge.includes("e") ? horizontal / 2 : drag.edge.includes("w") ? -horizontal / 2 : 0;
     queuePatch(drag.kind === "layout"
-      ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, 0, 100) }
+      ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, width / 2 + 2, 100 - width / 2 - 2) }
       : { imageWidth: width, imageX: clamp(drag.x + centerShift, 0, 100) });
   };
   const endManipulation = (event: React.PointerEvent<HTMLElement>) => {
@@ -6384,7 +6390,10 @@ function AnnouncementLayer({
   const tickerDirection = announcement.tickerDirection ?? "left";
 
   return <>
-    <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}${hasCustomLayout ? " custom-position" : ""}${editing ? " announcement-editable-element" : ""}`} style={overlayStyle} role={isTicker ? "status" : undefined} aria-atomic={isTicker ? "true" : undefined}>
+    <div className={`${overlayClass} ${styleClass}${timerInAnnouncement ? " has-timer" : ""}${hasCustomLayout ? " custom-position" : ""}${editing ? " announcement-editable-element" : ""}`} style={overlayStyle} role={isTicker ? "status" : undefined} aria-atomic={isTicker ? "true" : undefined} onPointerDown={(event) => {
+      if (!editing || (event.target as Element).closest("[contenteditable='true'], .announcement-edit-handle, .announcement-resize-handle")) return;
+      beginManipulation(event, "layout", "move");
+    }} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}>
       {editing && <><button type="button" className="announcement-edit-handle text-handle" title="Drag announcement text box" onPointerDown={(event) => beginManipulation(event, "layout", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("layout")}</>}
       {isTicker ? <>
         <span className="sr-only">{tickerLabel}</span>

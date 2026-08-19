@@ -5492,7 +5492,8 @@ textarea:focus-visible,
 .announcement-edit-handle.text-handle,
 .announcement-edit-handle.image-handle { bottom: 4px; left: 4px; }
 .announcement-edit-handle.timer-handle { right: 4px; bottom: 4px; }
-.announcement-editable-element { outline: 3px solid rgba(117, 224, 223, .9); outline-offset: 3px; overflow: visible; }
+.announcement-editable-element { outline: 3px solid rgba(117, 224, 223, .9); outline-offset: 3px; overflow: visible; touch-action: none; }
+.announcement-display-overlay.announcement-editable-element { cursor: move; }
 .announcement-editable-element [contenteditable="true"] { min-width: 1em; border-radius: 3px; outline: 2px dashed rgba(7, 17, 30, .4); outline-offset: 3px; cursor: text; }
 .announcement-editable-element [contenteditable="true"]:focus { outline-style: solid; background: rgba(255, 255, 255, .2); }
 .announcement-resize-handle { z-index: 34; }

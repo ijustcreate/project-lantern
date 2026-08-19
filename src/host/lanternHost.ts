@@ -1,4 +1,4 @@
-import { BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
+import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -1044,6 +1044,41 @@ function normalizeBroadcastReminderAcknowledgements(
   return [...latestByOccurrence.values()].slice(0, MAX_BROADCAST_REMINDER_ACKNOWLEDGEMENTS);
 }
 
+function clampAnnouncementCoordinate(value: number, size: number, inset = 2) {
+  return Math.min(100 - size / 2 - inset, Math.max(size / 2 + inset, value));
+}
+
+function normalizeAnnouncementPlacement<T extends Pick<Announcement, "layoutWidth" | "layoutX" | "layoutY" | "imageWidth" | "imageX" | "imageY" | "timerX" | "timerY">>(announcement: T): T {
+  const layoutWidth = announcement.layoutWidth === undefined ? undefined : Math.min(96, Math.max(20, announcement.layoutWidth));
+  const imageWidth = announcement.imageWidth === undefined ? undefined : Math.min(70, Math.max(5, announcement.imageWidth));
+  return {
+    ...announcement,
+    ...(layoutWidth === undefined ? {} : {
+      layoutWidth,
+      layoutX: announcement.layoutX === undefined ? undefined : clampAnnouncementCoordinate(announcement.layoutX, layoutWidth),
+      layoutY: announcement.layoutY === undefined ? undefined : Math.min(92, Math.max(8, announcement.layoutY))
+    }),
+    ...(imageWidth === undefined ? {} : {
+      imageWidth,
+      imageX: announcement.imageX === undefined ? undefined : clampAnnouncementCoordinate(announcement.imageX, imageWidth),
+      imageY: announcement.imageY === undefined ? undefined : Math.min(92, Math.max(8, announcement.imageY))
+    }),
+    ...(announcement.timerX === undefined ? {} : { timerX: Math.min(92, Math.max(8, announcement.timerX)) }),
+    ...(announcement.timerY === undefined ? {} : { timerY: Math.min(92, Math.max(8, announcement.timerY)) })
+  } as T;
+}
+
+function repairSeededAnnouncementPlacement<T extends Pick<Announcement, "id" | "layoutWidth" | "layoutX" | "layoutY" | "imageWidth" | "imageX" | "imageY">>(announcement: T): T {
+  const hasLegacyOffCanvasLayout = announcement.layoutX === 8 && announcement.layoutY === 13 && announcement.layoutWidth === 72;
+  if (announcement.id === "art-center-countdown" && hasLegacyOffCanvasLayout) {
+    return { ...announcement, layoutX: 36, layoutY: 20, layoutWidth: 58, imageX: 78, imageY: 22, imageWidth: 20 };
+  }
+  if ((announcement.id === "art-center-open" || announcement.id === "museum-closing-preview") && hasLegacyOffCanvasLayout) {
+    return { ...announcement, layoutX: undefined, layoutY: undefined, layoutWidth: undefined };
+  }
+  return announcement;
+}
+
 export function normalizeState(state: LanternState): LanternState {
   const legacyScreens = state.screens as LanternState["screens"] & {
     portrait?: LanternState["screens"][string];
@@ -1081,6 +1116,7 @@ export function normalizeState(state: LanternState): LanternState {
   const needsLegacyDonorTagsMigration = incomingContentVersion < LEGACY_DONOR_TAGS_CONTENT_VERSION;
   const needsBoardTextContrastMigration = incomingContentVersion < BOARD_TEXT_CONTRAST_CONTENT_VERSION;
   const needsLegacyStarLayerMigration = incomingContentVersion < LEGACY_STAR_LAYER_CONTENT_VERSION;
+  const needsAnnouncementLayoutMigration = incomingContentVersion < ANNOUNCEMENT_LAYOUT_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -1203,9 +1239,12 @@ export function normalizeState(state: LanternState): LanternState {
   const legacyMigratedAnnouncements = needsLegacyContentMigration && incomingAnnouncements.length
     ? appendMissingById(retainedAnnouncements, brigadeAnnouncements)
     : retainedAnnouncements;
-  const savedAnnouncements = needsPhase3ContentMigration
+  const savedAnnouncementsBeforeLayoutMigration = needsPhase3ContentMigration
     ? appendMissingPhase3Content(legacyMigratedAnnouncements, phase3Announcements)
     : legacyMigratedAnnouncements;
+  const savedAnnouncements = needsAnnouncementLayoutMigration
+    ? savedAnnouncementsBeforeLayoutMigration.map((announcement) => normalizeAnnouncementPlacement(repairSeededAnnouncementPlacement(announcement)))
+    : savedAnnouncementsBeforeLayoutMigration;
 
   const incomingBlips = state.savedBlips ?? initialState.savedBlips;
   const savedBlips = needsLegacyContentMigration && incomingBlips.length
@@ -1417,12 +1456,19 @@ export function normalizeState(state: LanternState): LanternState {
     },
     announcement: needsLegacyContentMigration && state.announcement && isKnownDemoAnnouncement(state.announcement)
       ? { ...initialState.announcement, active: false }
-      : {
+      : normalizeAnnouncementPlacement(needsAnnouncementLayoutMigration
+        ? repairSeededAnnouncementPlacement({
           ...initialState.announcement,
           ...state.announcement,
           character: state.announcement?.character ?? "off",
           target: normalizeTarget(state.announcement?.target)
-        },
+        })
+        : {
+            ...initialState.announcement,
+            ...state.announcement,
+            character: state.announcement?.character ?? "off",
+            target: normalizeTarget(state.announcement?.target)
+          }),
     activeBlip: {
       ...initialState.activeBlip,
       ...state.activeBlip,
