@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0236",
+    "title": "Fit board text on one line",
+    "summary": "Added an optional Fit one line text flow that reduces text size only when needed, while preserving wrapping as the default.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 5:30 PM",
+    "areas": [
+      "Board Editor",
+      "Typography"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npx tsc --noEmit; Playwright Board Editor control toggle; console error check"
+  },
+  {
     "id": "DEV-0235",
     "title": "Add gentle Toy Soldier motion",
     "summary": "Toy Soldier artwork now uses gentle swaying and arm motion, including a friendly wave from the yellow soldier, while respecting reduced-motion settings.",
@@ -86,6 +103,27 @@
       "src/styles.css"
     ],
     "tests": "git diff --check; npx tsc --noEmit --pretty false; npm run build; local Chrome legacy-star visual smoke test"
+  },
+  {
+    "id": "DEV-0230",
+    "title": "Realtime phone broadcast foundation",
+    "summary": "Added a camera-first mobile broadcaster and Cloudflare WebRTC signaling foundation for cross-device display delivery.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 4:06 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Mobile",
+      "Realtime"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/host/lanternHost.ts",
+      "src/host/videoBridge.ts",
+      "worker/bugs.ts",
+      "wrangler.jsonc"
+    ],
+    "tests": "npm run build; npm run build:worker; Cloudflare Worker deployment; Playwright mobile viewport check"
   },
   {
     "id": "DEV-0229",

@@ -311,6 +311,8 @@ export interface BoardPanel {
   strikethrough?: boolean;
   /** Horizontal alignment for text inside the panel's own bounds. */
   textAlign?: "left" | "center" | "right";
+  /** Wrap by default; optional one-line mode reduces type to stay inside the panel. */
+  textFlow?: "wrap" | "fit-one-line";
   textDirection?: "horizontal" | "vertical";
   textArc?: "none" | "up" | "down";
   /** Preserved only to migrate boards created before the supporters heading was its own panel. */

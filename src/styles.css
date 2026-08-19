@@ -7366,6 +7366,11 @@ textarea:focus-visible,
 .direct-board-panel[data-text-align="left"] .editable-board-text { text-align: left; }
 .direct-board-panel[data-text-align="center"] .editable-board-text { text-align: center; }
 .direct-board-panel[data-text-align="right"] .editable-board-text { text-align: right; }
+.direct-board-panel[data-text-flow="fit-one-line"] .direct-single-text-content .editable-board-text {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
 .board-section-title, .board-message-title { color: #d9a657; font-size: calc(var(--panel-font-size) * .62); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .direct-board-panel .board-title,
 .direct-board-panel .board-section-title,
