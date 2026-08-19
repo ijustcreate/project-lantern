@@ -452,7 +452,9 @@ function drawTextureContent(
       drawMuseumBoard(context, width, height, state, donors, isPortrait, screen.layoutScale, displayProgram, renderScreen, animationTime);
     }
 
-    applyBrightness(context, width, height, screen.brightness);
+    // Composable boards are authored with exact colors in the board editor.
+    // Legacy display layouts retain their output-level brightness control.
+    if (!activeProgram?.panels?.length) applyBrightness(context, width, height, screen.brightness);
     context.restore();
   };
 

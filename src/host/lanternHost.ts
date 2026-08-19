@@ -289,6 +289,12 @@ export async function loadSharedLanternState(): Promise<LanternState | null> {
 
 export type SharedLanternStateSnapshot = { state: LanternState | null; updatedAt: string | null };
 
+export type AuthoritativeLanternState = {
+  state: LanternState;
+  source: "shared" | "local";
+  sharedServiceReachable: boolean;
+};
+
 /** Load the shared copy together with its write time so startup can avoid replacing newer work. */
 export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternStateSnapshot> {
   if (!LANTERN_READ_SERVICE_ROOT) return { state: null, updatedAt: null };
@@ -299,6 +305,24 @@ export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternSta
     state: body.state ? normalizeState({ ...initialState, ...body.state, contentVersion: body.state.contentVersion ?? 0 }) : null,
     updatedAt: body.updatedAt ?? null
   };
+}
+
+/** Load one authoritative startup state for every app surface. */
+export async function loadAuthoritativeLanternState(): Promise<AuthoritativeLanternState> {
+  const local = await loadIndexedDbLanternState() ?? loadLanternState();
+  if (!LANTERN_READ_SERVICE_ROOT) {
+    return { state: await hydrateLanternMedia(local), source: "local", sharedServiceReachable: false };
+  }
+  try {
+    const shared = await loadSharedLanternState();
+    return {
+      state: await hydrateLanternMedia(shared ?? local),
+      source: shared ? "shared" : "local",
+      sharedServiceReachable: true
+    };
+  } catch {
+    return { state: await hydrateLanternMedia(local), source: "local", sharedServiceReachable: false };
+  }
 }
 
 export function localLanternStateUpdatedAt() {

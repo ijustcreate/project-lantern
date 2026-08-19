@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0259",
+    "title": "Unify shared board state across every view",
+    "summary": "Use the shared service as the single source of truth for boards, schedules, displays, and theme; fall back to browser storage only offline and prevent stale refresh flashes.",
+    "author": "Codex",
+    "createdAt": "Aug 19, 2026, 10:30 AM",
+    "areas": [
+      "State sync",
+      "Dashboard",
+      "Schedule",
+      "Board Editor",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; source audit for legacy merge startup paths"
+  },
+  {
     "id": "DEV-0258",
     "title": "Align board previews and scope Toy Soldier art",
     "summary": "Dashboard now renders and edits the same resolved board as the schedule, panel-board text keeps its authored display size, and the questioning Toy Soldier appears only on the intended portrait board.",

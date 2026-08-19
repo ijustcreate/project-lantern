@@ -111,13 +111,8 @@ import {
   deleteLanternMedia,
   enableSharedStatePersistence,
   fitWarnings,
-  hydrateLanternMedia,
-  loadIndexedDbLanternState,
+  loadAuthoritativeLanternState,
   loadLanternState,
-  loadLanternStateUpdatedAt,
-  loadSharedLanternState,
-  loadSharedLanternStateSnapshot,
-  mergeSharedLanternState,
   openDisplayWindows,
   publishState,
   saveLanternStateDurably,
@@ -350,26 +345,12 @@ function ControlCenter() {
   useEffect(() => {
     let mounted = true;
     void (async () => {
-      let loaded = await loadIndexedDbLanternState() ?? loadLanternState();
-      try {
-        const shared = await loadSharedLanternStateSnapshot();
-        if (shared.state) {
-          const localUpdatedAt = await loadLanternStateUpdatedAt();
-          const localIsNewer = Boolean(localUpdatedAt && shared.updatedAt && Date.parse(localUpdatedAt) > Date.parse(shared.updatedAt));
-          // The shared copy is the default authority. Only a browser save made
-          // after it was written may override the matching server records.
-          loaded = localIsNewer ? mergeSharedLanternState(loaded, shared.state) : mergeSharedLanternState(shared.state, loaded);
-        }
-      } catch {
-        // The local browser copy remains usable whenever the shared service is unavailable.
-      }
-      const hydrated = await hydrateLanternMedia(loaded);
-      const sharedImages = canWriteSharedLanternState() ? await shareLanternImages(hydrated) : hydrated;
+      const loaded = await loadAuthoritativeLanternState();
       if (!mounted) return;
-      setState(sharedImages);
+      setState(loaded.state);
+      publishState(loaded.state);
+      if (canWriteSharedLanternState() && loaded.sharedServiceReachable) enableSharedStatePersistence();
       setStatePersistenceReady(true);
-      if (canWriteSharedLanternState()) enableSharedStatePersistence();
-      publishState(sharedImages);
     })();
     return () => { mounted = false; };
   }, []);
@@ -794,13 +775,14 @@ function ControlCenter() {
   }, [view]);
 
   useEffect(() => {
+    if (!statePersistenceReady) return;
     const appearance = state.recognitionSettings.appearance;
     const classes = ["theme-dark", "theme-light", "theme-ocean", "theme-warm", "theme-contrast", "theme-sparkle", "theme-children"];
     document.body.classList.remove(...classes);
     if (appearance === "warm" || appearance === "sparkle" || appearance === "children") document.body.classList.add("theme-light");
     document.body.classList.add(`theme-${appearance}`);
     return () => document.body.classList.remove(...classes);
-  }, [state.recognitionSettings.appearance]);
+  }, [state.recognitionSettings.appearance, statePersistenceReady]);
 
   useEffect(() => {
     if (state.recognitionSettings.appearance !== "sparkle") return;
@@ -847,6 +829,8 @@ function ControlCenter() {
     event.currentTarget.releasePointerCapture(event.pointerId);
     suppressBugLauncherClick.current = drag.moved;
   };
+
+  if (!statePersistenceReady) return <LanternStateLoading />;
 
   return (
     <div className={`app-shell ${state.recognitionSettings.appearance === "warm" || state.recognitionSettings.appearance === "sparkle" || state.recognitionSettings.appearance === "children" ? "theme-light " : ""}theme-${state.recognitionSettings.appearance}`}>
@@ -8333,8 +8317,15 @@ function BlipComposition({ blip, startedAt, previewElapsedSeconds }: { blip: Lan
   </div>;
 }
 
+function LanternStateLoading() {
+  return <main style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", background: "#080b1e", color: "#75dcf6", fontFamily: "system-ui, sans-serif" }}>
+    <span><Activity size={18} /> Loading shared museum boards…</span>
+  </main>;
+}
+
 function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
+  const [stateReady, setStateReady] = useState(false);
   const [demoStartedAt, setDemoStartedAt] = useState(() => new Date().toISOString());
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
   const patchAnnouncement = (patch: Partial<LanternState["announcement"]>) => {
@@ -8347,13 +8338,11 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
 
   useEffect(() => {
     let mounted = true;
-    void loadSharedLanternState()
-      .catch(() => null)
-      .then((shared) => {
-        const local = loadLanternState();
-        return hydrateLanternMedia(shared ? mergeSharedLanternState(local, shared) : local);
-      })
-      .then((hydrated) => mounted && setState(hydrated));
+    void loadAuthoritativeLanternState().then((loaded) => {
+      if (!mounted) return;
+      setState(loaded.state);
+      setStateReady(true);
+    });
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") setState(message.state);
     });
@@ -8378,9 +8367,20 @@ function AnnouncementDemoApp({ screenId }: { screenId: ScreenId }) {
 }
 
 function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
-  const state = loadLanternState();
+  const [state, setState] = useState<LanternState>(() => loadLanternState());
+  const [stateReady, setStateReady] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    void loadAuthoritativeLanternState().then((loaded) => {
+      if (!mounted) return;
+      setState(loaded.state);
+      setStateReady(true);
+    });
+    return () => { mounted = false; };
+  }, []);
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   const screens = screenIds.map((screenId) => state.screens[screenId]).filter(Boolean);
+  if (!stateReady) return <LanternStateLoading />;
   return <main className={`display-wall-shell count-${screens.length}`}>
     <header>
       <div><strong>Lantern display wall</strong><span>{screens.length} outputs opened together</span></div>
@@ -8397,6 +8397,7 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
 
 function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
+  const [stateReady, setStateReady] = useState(false);
   const [fps, setFps] = useState(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [identify, setIdentify] = useState(false);
@@ -8421,15 +8422,14 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
 
   useEffect(() => {
     let mounted = true;
-    void loadSharedLanternState()
-      .catch(() => null)
-      .then((shared) => {
-        const local = loadLanternState();
-        return hydrateLanternMedia(shared ? mergeSharedLanternState(local, shared) : local);
-      })
+    void loadAuthoritativeLanternState()
       // A display can receive a live update before its shared-state bootstrap
       // finishes. Never let that older bootstrap result roll the display back.
-      .then((hydrated) => mounted && !receivedStateUpdateRef.current && setState(hydrated));
+      .then((loaded) => {
+        if (!mounted) return;
+        if (!receivedStateUpdateRef.current) setState(loaded.state);
+        setStateReady(true);
+      });
     return () => {
       mounted = false;
       if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
@@ -8555,6 +8555,8 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       setDisplayMenu(null);
     }
   };
+
+  if (!stateReady) return <LanternStateLoading />;
 
   return (
     <div
