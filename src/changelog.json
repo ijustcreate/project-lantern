@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0242",
+    "title": "Keep boards visible behind Blips",
+    "summary": "Changed Blips from a full-display backdrop to a compact card overlay so the active board remains visible.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:13 PM",
+    "areas": [
+      "Dashboard",
+      "Announcements",
+      "Blips"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; Playwright dashboard Blip run"
+  },
+  {
     "id": "DEV-0241",
     "title": "Add adjustable joke and quiz timelines",
     "summary": "Focused the Blip timeline on jokes and quizzes, with scrub controls and a persisted reveal-time field.",
