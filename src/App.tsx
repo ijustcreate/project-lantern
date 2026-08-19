@@ -5259,14 +5259,14 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
           <label className="field"><span>{selected.kind === "celebration" ? "Message" : "Question / setup"}</span><textarea value={selected.prompt} onChange={(event) => patchBlip({ prompt: event.target.value })} /></label>
           {selected.kind !== "celebration" && <label className="field"><span>Answer / punchline</span><textarea value={selected.answer ?? ""} onChange={(event) => patchBlip({ answer: event.target.value })} /></label>}
           <LabeledInput label="Subtext (optional)" value={selected.subtext ?? ""} onChange={(subtext) => patchBlip({ subtext })} />
-          <div className="two-col"><LabeledInput label="Countdown seconds" type="number" value={String(selected.countdownSeconds)} onChange={(value) => patchBlip({ countdownSeconds: Math.max(0, Number(value) || 0) })} /><LabeledInput label="Default run minutes" type="number" value={String(selected.durationMinutes)} onChange={(value) => patchBlip({ durationMinutes: Math.max(1, Number(value) || 1) })} /></div>
+          <div className="two-col"><LabeledInput label={selected.kind === "celebration" ? "Countdown seconds" : "Answer reveals after (seconds)"} type="number" value={String(selected.countdownSeconds)} onChange={(value) => patchBlip({ countdownSeconds: Math.max(0, Number(value) || 0) })} /><LabeledInput label="Default run minutes" type="number" value={String(selected.durationMinutes)} onChange={(value) => patchBlip({ durationMinutes: Math.max(1, Number(value) || 1) })} /></div>
           <div className="blip-switches"><label><input type="checkbox" checked={selected.showCountdown} onChange={(event) => patchBlip({ showCountdown: event.target.checked })} /> Show countdown</label><label><input type="checkbox" checked={selected.ticking} onChange={(event) => patchBlip({ ticking: event.target.checked })} /> Ticking countdown</label></div>
           <div className="two-col"><LabeledSelect label="Opening SFX" value={selected.startSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(startSfx) => patchBlip({ startSfx: startSfx as typeof selected.startSfx })} /><LabeledSelect label="Reveal SFX" value={selected.revealSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(revealSfx) => patchBlip({ revealSfx: revealSfx as typeof selected.revealSfx })} /></div>
           <div className="blip-upload-row"><label className="command-button secondary compact"><Upload size={14} /> Custom opening sound<input type="file" accept="audio/*" onChange={(event) => void upload(event.target.files?.[0], "startSoundUrl")} /></label><label className="command-button secondary compact"><Upload size={14} /> Custom reveal sound<input type="file" accept="audio/*" onChange={(event) => void upload(event.target.files?.[0], "revealSoundUrl")} /></label></div>
           <div className="two-col"><label className="field"><span>Background</span><input type="color" value={selected.backgroundColor} onChange={(event) => patchBlip({ backgroundColor: event.target.value })} /></label><label className="field"><span>Accent</span><input type="color" value={selected.accentColor} onChange={(event) => patchBlip({ accentColor: event.target.value })} /></label></div>
           <div className="two-col"><LabeledSelect label="Motion" value={selected.motion} options={["slide", "pop", "gentle"]} optionLabels={{ slide: "Slide in/out", pop: "Playful pop", gentle: "Gentle fade" }} onChange={(motion) => patchBlip({ motion: motion as typeof selected.motion })} /><div className="blip-image-manager"><span className="field-label">Blip image</span>{selected.imageUrl && <div className="blip-image-current"><img src={selected.imageUrl} alt="Selected Blip asset" /><span><strong>Image selected</strong><small>Shown in the preview and when this Blip runs.</small></span><button type="button" className="icon-button" onClick={() => patchBlip({ imageUrl: undefined })} title="Remove image" aria-label="Remove image"><X size={15} /></button></div>}<div className="blip-image-actions">{imageLibrary.length > 0 && <label className="field"><span>Image library</span><select value={selected.imageUrl ?? ""} onChange={(event) => patchBlip({ imageUrl: event.target.value || undefined })}><option value="">No image</option>{imageLibrary.map((image) => <option value={image.imageUrl} key={image.imageUrl}>{image.name} image</option>)}</select></label>}<label className="image-upload command-button secondary compact"><ImagePlus size={14} /><span>{selected.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/*" onChange={(event) => void upload(event.target.files?.[0], "imageUrl")} /></label></div></div></div>
         </div>
-        <div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} previewElapsedSeconds={previewElapsedSeconds} /></div><BlipPreviewTimeline blip={selected} orientation={orientationClass(previewScreen)} elapsedSeconds={previewElapsedSeconds} durationSeconds={previewDurationSeconds} onChange={setPreviewElapsedSeconds} /><p>{selected.kind === "celebration" ? "Preview the celebration moment before it goes live." : "Scrub the timeline to inspect the setup, countdown, and answer reveal."}</p></div>
+        <div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} previewElapsedSeconds={previewElapsedSeconds} /></div>{selected.kind !== "celebration" && <BlipPreviewTimeline blip={selected} orientation={orientationClass(previewScreen)} elapsedSeconds={previewElapsedSeconds} durationSeconds={previewDurationSeconds} onChange={setPreviewElapsedSeconds} onRevealChange={(seconds) => patchBlip({ countdownSeconds: seconds })} />}<p>{selected.kind === "celebration" ? "Celebrations stay on one screen. Jokes and quizzes include an adjustable reveal timeline." : "Scrub the timeline to inspect the setup, countdown, and answer reveal. Changing reveal timing saves to this Blip."}</p></div>
       </div>
       <footer>{draftBlip ? <p className="field-note blip-draft-note">Save this draft before scheduling or running it.</p> : <><button className="command-button secondary" onClick={() => { setScheduleTarget(selected.target); setScheduleOpen(true); }}><CalendarDays size={16} /> Schedule</button>{state.activeBlip.active && state.activeBlip.id === selected.id && <button className="command-button secondary" onClick={() => updateState((current) => ({ ...current, activeBlip: { ...current.activeBlip, active: false } }))}><Square size={15} /> Stop</button>}<button className="command-button primary" onClick={openRun}><Play size={16} /> Run now</button></>}</footer>
     </main>
@@ -5276,30 +5276,23 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
   </section>;
 }
 
-function BlipPreviewTimeline({ blip, orientation, elapsedSeconds, durationSeconds, onChange }: {
+function BlipPreviewTimeline({ blip, orientation, elapsedSeconds, durationSeconds, onChange, onRevealChange }: {
   blip: LanternState["savedBlips"][number];
   orientation: string;
   elapsedSeconds: number;
   durationSeconds: number;
   onChange: (seconds: number) => void;
+  onRevealChange: (seconds: number) => void;
 }) {
-  const hasReveal = blip.kind !== "celebration";
   const revealAt = Math.max(0, blip.countdownSeconds);
-  const stage = !hasReveal
-    ? "Celebration moment"
-    : elapsedSeconds >= revealAt
-      ? "Reveal"
-      : elapsedSeconds <= .05
-        ? "Opening"
-        : "Countdown";
-  const stageButtons = hasReveal
-    ? [["Opening", 0], ["Countdown", Math.max(.1, revealAt / 2)], ["Reveal", Math.min(durationSeconds, revealAt + .1)]] as const
-    : [["Moment", 0], ["Hold", Math.min(durationSeconds, 1.5)]] as const;
+  const stage = elapsedSeconds >= revealAt ? "Reveal" : elapsedSeconds <= .05 ? "Opening" : "Countdown";
+  const stageButtons = [["Opening", 0], ["Countdown", Math.max(.1, revealAt / 2)], ["Reveal", Math.min(durationSeconds, revealAt + .1)]] as const;
   return <section className={`blip-preview-timeline ${orientation}`} aria-label="Blip preview timeline">
     <header><span>Preview timeline</span><strong>{stage} · +{elapsedSeconds.toFixed(1)}s</strong></header>
+    <div className="blip-preview-timeline-controls"><label><span>Preview at</span><input type="number" min="0" max={durationSeconds} step="0.1" value={elapsedSeconds.toFixed(1)} onChange={(event) => onChange(Math.max(0, Math.min(durationSeconds, Number(event.target.value) || 0)))} /></label><label><span>Reveal at</span><input type="number" min="0" max="120" step="0.5" value={revealAt} onChange={(event) => onRevealChange(Math.max(0, Number(event.target.value) || 0))} /><small>seconds</small></label></div>
     <input type="range" min="0" max={durationSeconds} step="0.1" value={elapsedSeconds} onChange={(event) => onChange(Number(event.target.value))} aria-label="Preview point in the Blip timeline" />
-    <div className="blip-preview-beats">{stageButtons.map(([label, second]) => <button type="button" key={label} className={stage === (label === "Moment" || label === "Hold" ? "Celebration moment" : label) ? "active" : ""} onClick={() => onChange(second)}><span>{label}</span><small>+{second.toFixed(second % 1 ? 1 : 0)}s</small></button>)}</div>
-    {hasReveal && <p>Answer appears at +{revealAt}s, then remains visible for the rest of the Blip.</p>}
+    <div className="blip-preview-beats">{stageButtons.map(([label, second]) => <button type="button" key={label} className={stage === label ? "active" : ""} onClick={() => onChange(second)}><span>{label}</span><small>+{second.toFixed(second % 1 ? 1 : 0)}s</small></button>)}</div>
+    <p>Answer appears at +{revealAt}s, then remains visible for the rest of the Blip.</p>
   </section>;
 }
 

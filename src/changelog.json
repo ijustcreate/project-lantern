@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0241",
+    "title": "Add adjustable joke and quiz timelines",
+    "summary": "Focused the Blip timeline on jokes and quizzes, with scrub controls and a persisted reveal-time field.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:01 PM",
+    "areas": [
+      "Announcements",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; Playwright timeline adjustment and reveal preview"
+  },
+  {
     "id": "DEV-0240",
     "title": "Compact Blip bank controls",
     "summary": "Moved creation controls into the saved-bank header, made the filter chips compact, and kept saved Blips flowing from the top.",

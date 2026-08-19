@@ -94,6 +94,10 @@ body {
 .blip-preview-timeline.portrait { width: min(48%, 310px); }
 .blip-preview-timeline header { display: flex; justify-content: space-between; gap: 8px; color: #93a0c0; font: 800 8px/1 Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; }
 .blip-preview-timeline header strong { color: #dbe6ff; font-size: 8px; letter-spacing: .04em; }
+.blip-preview-timeline-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.blip-preview-timeline-controls label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 5px; min-width: 0; padding: 5px 6px; border: 1px solid rgba(128, 151, 204, .18); border-radius: 7px; color: #aebbd7; background: rgba(255,255,255,.025); font: 750 8px/1 Inter, sans-serif; }
+.blip-preview-timeline-controls input { width: 100%; min-width: 0; padding: 2px 3px; border: 0; border-radius: 4px; color: #f2f7ff; background: rgba(8, 16, 34, .8); font: 800 9px/1 Inter, sans-serif; }
+.blip-preview-timeline-controls small { color: #8291b2; font: 700 7px/1 Inter, sans-serif; }
 .blip-preview-timeline input[type="range"] { width: 100%; accent-color: #73dfe5; cursor: pointer; }
 .blip-preview-beats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .blip-preview-beats button { display: grid; gap: 3px; min-width: 0; padding: 6px; border: 1px solid rgba(128, 151, 204, .18); border-radius: 7px; color: #b8c5df; background: rgba(255,255,255,.035); font: 800 8px/1 Inter, sans-serif; text-align: left; cursor: pointer; }
