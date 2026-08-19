@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0247",
+    "title": "Protect board saves and direct typography",
+    "summary": "Preserved the newest durable board copy during shared-state startup, including IndexedDB fallback saves, and kept board typography values direct instead of silently shrinking normal text.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 7:35 PM",
+    "areas": [
+      "Board Editor",
+      "Shared persistence",
+      "Typography"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build; shared-state CORS preflight verification"
+  },
+  {
     "id": "DEV-0246",
     "title": "Relay broadcasts across devices",
     "summary": "Added a Cloudflare Durable Object relay and STUN configuration so live broadcast signaling can reach remote displays.",

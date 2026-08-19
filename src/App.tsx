@@ -114,9 +114,9 @@ import {
   hydrateLanternMedia,
   loadIndexedDbLanternState,
   loadLanternState,
+  loadLanternStateUpdatedAt,
   loadSharedLanternState,
   loadSharedLanternStateSnapshot,
-  localLanternStateUpdatedAt,
   mergeSharedLanternState,
   openDisplayWindows,
   publishState,
@@ -354,7 +354,7 @@ function ControlCenter() {
       try {
         const shared = await loadSharedLanternStateSnapshot();
         if (shared.state) {
-          const localUpdatedAt = localLanternStateUpdatedAt();
+          const localUpdatedAt = await loadLanternStateUpdatedAt();
           const localIsNewer = Boolean(localUpdatedAt && shared.updatedAt && Date.parse(localUpdatedAt) > Date.parse(shared.updatedAt));
           // The shared copy is the default authority. Only a browser save made
           // after it was written may override the matching server records.

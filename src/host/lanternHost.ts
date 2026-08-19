@@ -211,14 +211,15 @@ export async function saveLanternStateDurably(state: LanternState): Promise<"loc
 export async function loadIndexedDbLanternState(): Promise<LanternState | null> {
   try {
     const database = await openMediaDatabase();
-    const stored = await new Promise<Partial<LanternState> | undefined>((resolve, reject) => {
+    const stored = await new Promise<Partial<LanternState> | { state: Partial<LanternState>; updatedAt: string } | undefined>((resolve, reject) => {
       const transaction = database.transaction(LANTERN_STATE_STORE, "readonly");
       const request = transaction.objectStore(LANTERN_STATE_STORE).get(LANTERN_STATE_RECORD_KEY);
-      request.onsuccess = () => resolve(request.result as Partial<LanternState> | undefined);
+      request.onsuccess = () => resolve(request.result as Partial<LanternState> | { state: Partial<LanternState>; updatedAt: string } | undefined);
       request.onerror = () => reject(request.error);
     });
     database.close();
-    return stored ? normalizeState({ ...initialState, ...stored, contentVersion: stored.contentVersion ?? 0 } as LanternState) : null;
+    const state = stored && "state" in stored ? stored.state : stored;
+    return state ? normalizeState({ ...initialState, ...state, contentVersion: state.contentVersion ?? 0 } as LanternState) : null;
   } catch {
     return null;
   }
@@ -228,7 +229,7 @@ async function saveIndexedDbLanternState(state: LanternState) {
   const database = await openMediaDatabase();
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(LANTERN_STATE_STORE, "readwrite");
-    transaction.objectStore(LANTERN_STATE_STORE).put(state, LANTERN_STATE_RECORD_KEY);
+    transaction.objectStore(LANTERN_STATE_STORE).put({ state, updatedAt: new Date().toISOString() }, LANTERN_STATE_RECORD_KEY);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
@@ -277,6 +278,25 @@ export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternSta
 
 export function localLanternStateUpdatedAt() {
   try { return window.localStorage.getItem(LANTERN_LOCAL_STATE_UPDATED_AT_KEY); } catch { return null; }
+}
+
+/** IndexedDB may be the only durable copy when browser local storage is full. */
+export async function loadLanternStateUpdatedAt() {
+  const localTimestamp = localLanternStateUpdatedAt();
+  if (localTimestamp) return localTimestamp;
+  try {
+    const database = await openMediaDatabase();
+    const stored = await new Promise<{ updatedAt?: string } | undefined>((resolve, reject) => {
+      const transaction = database.transaction(LANTERN_STATE_STORE, "readonly");
+      const request = transaction.objectStore(LANTERN_STATE_STORE).get(LANTERN_STATE_RECORD_KEY);
+      request.onsuccess = () => resolve(request.result as { updatedAt?: string } | undefined);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return stored?.updatedAt ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function enableSharedStatePersistence() {
