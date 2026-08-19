@@ -48,22 +48,28 @@ body {
 .announcement-mode-tabs button.active { color: #f5f7ff; background: linear-gradient(135deg, rgba(63, 113, 213, .88), rgba(99, 71, 191, .88)); box-shadow: 0 6px 18px rgba(39, 57, 131, .28); }
 .blips-workspace { min-height: 0; display: grid; grid-template-columns: minmax(210px, 250px) minmax(0, 1fr); gap: 12px; }
 .blip-bank, .blip-editor { min-height: 0; border: 1px solid rgba(119, 141, 191, .18); border-radius: 16px; background: rgba(8, 14, 29, .86); box-shadow: 0 18px 48px rgba(0, 0, 0, .2); overflow: hidden; }
-.blip-bank { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
-.blip-bank > header, .blip-editor > header { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid rgba(127, 145, 193, .13); }
+.blip-bank { display: grid; grid-template-rows: auto auto minmax(0, 1fr); align-content: start; }
+.blip-bank > header, .blip-editor > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid rgba(127, 145, 193, .13); }
 .blip-bank h2, .blip-editor h2 { margin: 2px 0 0; color: #f2f5ff; font-size: 18px; }
 .blip-bank > header > span { min-width: 26px; padding: 5px 8px; border-radius: 999px; color: #8ee9ea; background: rgba(58, 202, 203, .1); text-align: center; font: 800 10px Inter, sans-serif; }
-.blip-create-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 10px; }
-.blip-create-row button { min-width: 0; padding: 8px 3px; border: 1px solid rgba(127, 145, 193, .17); border-radius: 8px; color: #b7c0d9; background: rgba(255,255,255,.025); font: 700 9px Inter, sans-serif; cursor: pointer; }
-.blip-bank-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 0 10px 9px; }
-.blip-bank-filters button { min-width: 0; padding: 6px 3px; border: 1px solid rgba(127, 145, 193, .16); border-radius: 7px; color: #8f9abb; background: rgba(255,255,255,.02); font: 750 8px/1 Inter, sans-serif; cursor: pointer; }
+.blip-bank-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.blip-bank-header-actions > span { flex: 0 0 auto; min-width: 26px; padding: 5px 8px; border-radius: 999px; color: #8ee9ea; background: rgba(58, 202, 203, .1); text-align: center; font: 800 10px Inter, sans-serif; }
+.blip-create-row { display: flex; gap: 5px; min-width: 0; }
+.blip-create-row button { min-width: 0; padding: 7px 8px; border: 1px solid rgba(127, 145, 193, .17); border-radius: 8px; color: #b7c0d9; background: rgba(255,255,255,.025); font: 700 9px Inter, sans-serif; white-space: nowrap; cursor: pointer; }
+.blip-bank-filters { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid rgba(127, 145, 193, .1); }
+.blip-bank-filters button { flex: 0 0 auto; min-width: 0; padding: 5px 8px; border: 1px solid rgba(127, 145, 193, .16); border-radius: 999px; color: #8f9abb; background: rgba(255,255,255,.02); font: 750 8px/1 Inter, sans-serif; cursor: pointer; }
 .blip-bank-filters button:hover, .blip-bank-filters button.active { border-color: rgba(96, 219, 226, .44); color: #e7ffff; background: rgba(58, 172, 181, .14); }
-.blip-bank-list { min-height: 0; display: flex; flex-direction: column; gap: 5px; padding: 0 10px 12px; overflow: auto; }
+.blip-bank-list { min-height: 0; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; gap: 5px; padding: 10px; overflow: auto; }
 .blip-bank-list > button { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 1px solid transparent; border-radius: 10px; color: #d9deee; background: rgba(255,255,255,.025); text-align: left; cursor: pointer; }
 .blip-bank-list > button:hover, .blip-bank-list > button.selected { border-color: rgba(84, 211, 220, .32); background: rgba(61, 157, 175, .1); }
 .blip-bank-list i { width: 4px; height: 30px; border-radius: 4px; }
 .blip-bank-list span, .blip-bank-list strong, .blip-bank-list small { min-width: 0; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .blip-bank-list strong { font-size: 11px; }.blip-bank-list small { margin-top: 4px; color: #7f8aa9; font-size: 9px; text-transform: capitalize; }
 .blip-bank-empty { margin: 14px 4px; color: #7f8aa9; font-size: 9px; text-align: center; }
+@media (max-width: 1600px) {
+  .blip-bank > header { flex-wrap: wrap; align-items: flex-start; }
+  .blip-bank-header-actions { width: 100%; justify-content: space-between; }
+}
 .blip-editor { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 .blip-editor > header > div:last-child, .blip-editor > footer { display: flex; align-items: center; gap: 8px; }
 .blip-editor-body { min-height: 0; display: grid; grid-template-columns: minmax(280px, .88fr) minmax(300px, 1.12fr); overflow: hidden; }

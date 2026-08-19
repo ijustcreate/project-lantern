@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0240",
+    "title": "Compact Blip bank controls",
+    "summary": "Moved creation controls into the saved-bank header, made the filter chips compact, and kept saved Blips flowing from the top.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 6:31 PM",
+    "areas": [
+      "Announcements",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; Playwright Blips bank layout and Quiz filter"
+  },
+  {
     "id": "DEV-0239",
     "title": "Keep announcement panels on screen",
     "summary": "Repaired invalid seeded message placement, constrained editable message layouts to the display, and gave message panels drag priority over canvas panning.",
