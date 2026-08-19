@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0235",
+    "title": "Add gentle Toy Soldier motion",
+    "summary": "Toy Soldier artwork now uses gentle swaying and arm motion, including a friendly wave from the yellow soldier, while respecting reduced-motion settings.",
+    "author": "Codex",
+    "createdAt": "Aug 18, 2026, 5:18 PM",
+    "areas": [
+      "Toy Soldier Brigade",
+      "Visual design",
+      "Accessibility"
+    ],
+    "files": [
+      "public/assets/brigade/soldier-red.svg",
+      "public/assets/brigade/soldier-blue.svg",
+      "public/assets/brigade/soldier-yellow.svg",
+      "public/assets/brigade/group-hangout.svg",
+      "public/assets/brigade/group-guard.svg"
+    ],
+    "tests": "git diff --check; npx tsc --noEmit --pretty false; Playwright Brigade page smoke test"
+  },
+  {
     "id": "DEV-0234",
     "title": "Preview scheduled messages and Blips",
     "summary": "The Schedule editor now shows a display-aware preview for selected announcements and Blips, matching board event previews without putting content on screen.",

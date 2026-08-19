@@ -1,8 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 300" role="img" aria-labelledby="title">
   <title id="title">Child-drawn full-body yellow toy soldier</title>
+  <style>
+    .arm { transform-box: fill-box; transform-origin: 50% 0%; }
+    .arm.left { animation: arm-lift 3.6s ease-in-out infinite; }
+    .arm.right { animation: wave 2.25s ease-in-out infinite; }
+    @keyframes arm-lift { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-3deg); } }
+    @keyframes wave { 0%, 100% { transform: rotate(0deg); } 32% { transform: rotate(-24deg); } 55% { transform: rotate(-13deg); } 76% { transform: rotate(-24deg); } }
+    @media (prefers-reduced-motion: reduce) { .arm { animation: none; } }
+  </style>
   <path d="M49 49c8-25 68-33 82 1l-3 37H52z" fill="#f3c64f" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/><path d="M46 75c30-7 60-5 89 2" fill="none" stroke="#c74b3d" stroke-width="8" stroke-linecap="round"/>
   <path d="M62 83c-1 36 11 50 30 51 22 0 32-18 29-51" fill="#efb58b" stroke="#173f61" stroke-width="7"/><circle cx="77" cy="102" r="4" fill="#173f61"/><circle cx="105" cy="102" r="4" fill="#173f61"/><path d="M80 120c8 5 16 5 24 0" fill="none" stroke="#173f61" stroke-width="5" stroke-linecap="round"/>
-  <path d="M48 144l-25 51 17 8 29-45M124 145l28 49-17 10-29-46" fill="#267da7" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/>
+  <g class="arm left"><path d="M48 144l-25 51 17 8 29-45" fill="#267da7" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/></g><g class="arm right"><path d="M124 145l28 49-17 10-29-46" fill="#267da7" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/></g>
   <path d="M59 137l62-1 15 73-91 1z" fill="#f3c64f" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/><path d="M90 139l1 68M65 158l52 1M69 178l43 2" fill="none" stroke="#c74b3d" stroke-width="6" stroke-linecap="round"/><circle cx="91" cy="151" r="4" fill="#173f61"/><circle cx="91" cy="171" r="4" fill="#173f61"/>
   <path d="M63 211l-9 67 23 1 14-57 12 57 24-1-10-68" fill="#267da7" stroke="#173f61" stroke-width="7" stroke-linejoin="round"/><path d="M48 279l30 1M102 279l28-1" fill="none" stroke="#173f61" stroke-width="9" stroke-linecap="round"/>
 </svg>
