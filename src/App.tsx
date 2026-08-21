@@ -261,6 +261,7 @@ export function App() {
 function ControlCenter() {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
   const [statePersistenceReady, setStatePersistenceReady] = useState(false);
+  const statePersistenceReadyRef = useRef(false);
   const [view, setView] = useHashView();
   const [query, setQuery] = useState("");
   const [selectedDisplayId, setSelectedDisplayId] = useState<ScreenId>(() => firstDisplayId(loadLanternState()));
@@ -272,6 +273,7 @@ function ControlCenter() {
   const [bugCapture, setBugCapture] = useState<BugAttachment[]>([]);
   const [bugCaptureStatus, setBugCaptureStatus] = useState("");
   const [activeUserId, setActiveUserId] = useState(() => readActiveLanternUserId(loadLanternState()));
+  const activeUserIdRef = useRef(activeUserId);
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [bugLauncherVisible, setBugLauncherVisible] = useState(() => localStorage.getItem("project-lantern-bug-launcher-visible") !== "false");
@@ -293,6 +295,7 @@ function ControlCenter() {
   const activeUser = state.users.find((user) => user.id === activeUserId) ?? state.users[0];
   const activeUserName = activeUser?.name ?? currentBugUser();
   const activePreferences = state.userPreferences.find((preferences) => preferences.userId === activeUser?.id);
+  const portalAppearance = activePreferences?.theme ?? state.recognitionSettings.appearance;
   const activeVisitorMessage = state.visitorMessages.find((message) => message.id === state.visitorMessageRotation.currentId)
     ?? state.visitorMessages.find((message) => message.active);
 
@@ -314,6 +317,10 @@ function ControlCenter() {
     const timer = window.setInterval(check, 15_000);
     return () => window.clearInterval(timer);
   }, [state.broadcastReminderAcknowledgements, state.schedules]);
+
+  useEffect(() => {
+    activeUserIdRef.current = activeUserId;
+  }, [activeUserId]);
 
   useEffect(() => {
     if (!activeUser) return;
@@ -348,12 +355,18 @@ function ControlCenter() {
     void (async () => {
       const loaded = await loadAuthoritativeLanternState();
       if (!mounted) return;
+      statePersistenceReadyRef.current = true;
       setState(loaded.state);
-      publishState(loaded.state);
+      // A local fallback can be older than the shared museum state. Never relay
+      // it during bootstrap; later operator edits are published after hydration.
+      if (loaded.source === "shared") publishState(loaded.state);
       if (canWriteSharedLanternState() && loaded.sharedServiceReachable) enableSharedStatePersistence();
       setStatePersistenceReady(true);
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      statePersistenceReadyRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -365,7 +378,22 @@ function ControlCenter() {
 
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") {
-        setState(message.state);
+        setState((current) => {
+          const operatorId = activeUserIdRef.current;
+          const localTheme = current.userPreferences.find((preferences) => preferences.userId === operatorId)?.theme;
+          if (!localTheme) return message.state;
+          const localPreferences = current.userPreferences.find((preferences) => preferences.userId === operatorId);
+          const incomingPreferences = message.state.userPreferences.some((preferences) => preferences.userId === operatorId)
+            ? message.state.userPreferences.map((preferences) => preferences.userId === operatorId ? { ...preferences, theme: localTheme } : preferences)
+            : localPreferences
+              ? [...message.state.userPreferences, { ...localPreferences, theme: localTheme }]
+              : message.state.userPreferences;
+          return {
+            ...message.state,
+            recognitionSettings: { ...message.state.recognitionSettings, appearance: localTheme },
+            userPreferences: incomingPreferences
+          };
+        });
       }
 
       if (message.type === "display-heartbeat") {
@@ -427,6 +455,7 @@ function ControlCenter() {
 
   const updateState = useCallback((updater: (current: LanternState) => LanternState) => {
     setState((current) => {
+      if (!statePersistenceReadyRef.current) return current;
       const next = updater(current);
       if (next === current) return current;
       const actor = current.users.find((user) => user.id === activeUserId) ?? current.users[0] ?? {
@@ -438,6 +467,16 @@ function ControlCenter() {
       return audited;
     });
   }, [activeUserId]);
+
+  const changePortalAppearance = useCallback((appearance: LanternState["recognitionSettings"]["appearance"]) => {
+    updateState((current) => ({
+      ...current,
+      recognitionSettings: { ...current.recognitionSettings, appearance },
+      userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUserIdRef.current
+        ? { ...preferences, theme: appearance }
+        : preferences)
+    }));
+  }, [updateState]);
 
   const advanceVisitorMessage = useCallback(() => {
     updateState((current) => {
@@ -529,6 +568,7 @@ function ControlCenter() {
   }, [setView, updateState]);
 
   useEffect(() => {
+    if (!statePersistenceReady) return;
     if (view !== "dashboard") {
       visitorPageEntryRef.current = null;
       return;
@@ -536,9 +576,10 @@ function ControlCenter() {
     if (visitorPageEntryRef.current === view) return;
     visitorPageEntryRef.current = view;
     advanceVisitorMessage();
-  }, [advanceVisitorMessage, view]);
+  }, [advanceVisitorMessage, statePersistenceReady, view]);
 
   useEffect(() => {
+    if (!statePersistenceReady) return;
     const legacyNames = readBugUsers();
     const missing = legacyNames.filter((name) => !state.users.some((user) => user.name.localeCompare(name, undefined, { sensitivity: "base" }) === 0));
     if (!missing.length) return;
@@ -560,9 +601,10 @@ function ControlCenter() {
         ]
       };
     });
-  }, [state.users, updateState]);
+  }, [state.users, statePersistenceReady, updateState]);
 
   useEffect(() => {
+    if (!statePersistenceReady) return;
     if (!activeUser || activePreferences?.lastDisplayId === selectedDisplayId) return;
     updateState((current) => ({
       ...current,
@@ -570,7 +612,7 @@ function ControlCenter() {
         ? { ...preferences, lastDisplayId: selectedDisplayId }
         : preferences)
     }));
-  }, [activePreferences?.lastDisplayId, activeUser, selectedDisplayId, updateState]);
+  }, [activePreferences?.lastDisplayId, activeUser, selectedDisplayId, statePersistenceReady, updateState]);
 
   const selectActiveUser = (userId: string) => {
     const user = state.users.find((candidate) => candidate.id === userId);
@@ -579,12 +621,6 @@ function ControlCenter() {
     setActiveUserId(user.id);
     localStorage.setItem(ACTIVE_LANTERN_USER_KEY, user.id);
     if (preferences?.lastDisplayId && state.screens[preferences.lastDisplayId]) setSelectedDisplayId(preferences.lastDisplayId);
-    if (preferences?.theme && preferences.theme !== state.recognitionSettings.appearance) {
-      updateState((current) => ({
-        ...current,
-        recognitionSettings: { ...current.recognitionSettings, appearance: preferences.theme }
-      }));
-    }
   };
 
   const createLocalUser = () => {
@@ -777,16 +813,16 @@ function ControlCenter() {
 
   useEffect(() => {
     if (!statePersistenceReady) return;
-    const appearance = state.recognitionSettings.appearance;
+    const appearance = portalAppearance;
     const classes = ["theme-dark", "theme-light", "theme-ocean", "theme-warm", "theme-contrast", "theme-sparkle", "theme-children"];
     document.body.classList.remove(...classes);
     if (appearance === "warm" || appearance === "sparkle" || appearance === "children") document.body.classList.add("theme-light");
     document.body.classList.add(`theme-${appearance}`);
     return () => document.body.classList.remove(...classes);
-  }, [state.recognitionSettings.appearance, statePersistenceReady]);
+  }, [portalAppearance, statePersistenceReady]);
 
   useEffect(() => {
-    if (state.recognitionSettings.appearance !== "sparkle") return;
+    if (portalAppearance !== "sparkle") return;
     const sparkleAt = (event: PointerEvent) => {
       const burst = document.createElement("i");
       burst.className = "sparkle-click-burst";
@@ -798,7 +834,7 @@ function ControlCenter() {
     };
     window.addEventListener("pointerdown", sparkleAt);
     return () => window.removeEventListener("pointerdown", sparkleAt);
-  }, [state.recognitionSettings.appearance]);
+  }, [portalAppearance]);
 
   const openBugReport = async () => {
     setBugReportOpen(true);
@@ -834,7 +870,7 @@ function ControlCenter() {
   if (!statePersistenceReady) return <LanternStateLoading />;
 
   return (
-    <div className={`app-shell ${state.recognitionSettings.appearance === "warm" || state.recognitionSettings.appearance === "sparkle" || state.recognitionSettings.appearance === "children" ? "theme-light " : ""}theme-${state.recognitionSettings.appearance}`}>
+    <div className={`app-shell ${portalAppearance === "warm" || portalAppearance === "sparkle" || portalAppearance === "children" ? "theme-light " : ""}theme-${portalAppearance}`}>
       <aside className="sidebar">
         <div className="sidebar-aurora" aria-hidden="true" />
         <button className="brand-lockup" onClick={() => setView("dashboard")} title="Return to Dashboard" aria-label="Children's Museum of Stockton — return to Dashboard">
@@ -855,17 +891,8 @@ function ControlCenter() {
           <span><Palette size={15} /> Site theme</span>
           <select
             aria-label="Site theme"
-            value={state.recognitionSettings.appearance}
-            onChange={(event) => {
-              const appearance = event.target.value as LanternState["recognitionSettings"]["appearance"];
-              updateState((current) => ({
-                ...current,
-                recognitionSettings: { ...current.recognitionSettings, appearance },
-                userPreferences: current.userPreferences.map((preferences) => preferences.userId === activeUser?.id
-                  ? { ...preferences, theme: appearance }
-                  : preferences)
-              }));
-            }}
+            value={portalAppearance}
+            onChange={(event) => changePortalAppearance(event.target.value as LanternState["recognitionSettings"]["appearance"])}
           >
             <option value="dark">Dark</option>
             <option value="light">Light</option>
@@ -1084,7 +1111,7 @@ function ControlCenter() {
           setBugLauncherVisible(visible);
           localStorage.setItem("project-lantern-bug-launcher-visible", String(visible));
         }} />}
-        {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} onAddDisplay={addDisplay} />}
+        {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} appearance={portalAppearance} onAppearanceChange={changePortalAppearance} onAddDisplay={addDisplay} />}
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
       </main>
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
@@ -7992,7 +8019,13 @@ function entryOccursOnDate(entry: ScheduleEntry, date: Date) {
 function scheduleTargetsConflict(left: TargetScreen, right: TargetScreen) { return left === "all" || right === "all" || left === right; }
 function clamp(value: number, min: number, max: number) { return Math.min(max, Math.max(min, value)); }
 
-function RecognitionSettingsView({ state, updateState, onAddDisplay }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void; onAddDisplay: () => void }) {
+function RecognitionSettingsView({ state, updateState, appearance, onAppearanceChange, onAddDisplay }: {
+  state: LanternState;
+  updateState: (updater: (current: LanternState) => LanternState) => void;
+  appearance: LanternState["recognitionSettings"]["appearance"];
+  onAppearanceChange: (appearance: LanternState["recognitionSettings"]["appearance"]) => void;
+  onAddDisplay: () => void;
+}) {
   const changeVocabulary = (kind: "tiers" | "categories" | "tags", next: string[], previous?: string, replacement?: string) => {
     updateState((current) => ({
       ...current,
@@ -8018,14 +8051,8 @@ function RecognitionSettingsView({ state, updateState, onAddDisplay }: { state: 
           <span>Control portal theme</span>
           <select
             aria-label="Control portal theme"
-            value={state.recognitionSettings.appearance}
-            onChange={(event) => updateState((current) => ({
-              ...current,
-              recognitionSettings: {
-                ...current.recognitionSettings,
-                appearance: event.target.value as LanternState["recognitionSettings"]["appearance"]
-              }
-            }))}
+            value={appearance}
+            onChange={(event) => onAppearanceChange(event.target.value as LanternState["recognitionSettings"]["appearance"])}
           >
             <option value="dark">Dark — Low-glare classic</option>
             <option value="light">Light — Bright and familiar</option>

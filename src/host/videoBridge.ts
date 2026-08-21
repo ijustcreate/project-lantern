@@ -13,6 +13,8 @@ export class DirectorVideoBridge {
   private channel = createHostChannel((message) => { void this.handleMessage(message); });
   private stream: DemoStream | null = null;
   private peers = new Map<ScreenId, RTCPeerConnection>();
+  private pendingRemoteCandidates = new Map<ScreenId, RTCIceCandidateInit[]>();
+  private reconnectTimers = new Map<ScreenId, number>();
   private activeTarget: TargetScreen = "display-2";
 
   constructor(private onStatus: StatusListener) {
@@ -38,12 +40,21 @@ export class DirectorVideoBridge {
   }
 
   async connect(screenId: ScreenId) {
-    if (!this.stream || !targetIncludes(this.activeTarget, screenId) || this.peers.has(screenId)) {
+    const existingPeer = this.peers.get(screenId);
+    if (existingPeer && existingPeer.connectionState !== "failed" && existingPeer.connectionState !== "closed") {
+      return;
+    }
+    if (existingPeer) {
+      existingPeer.close();
+      this.peers.delete(screenId);
+    }
+    if (!this.stream || !targetIncludes(this.activeTarget, screenId)) {
       return;
     }
 
     const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
     this.peers.set(screenId, peer);
+    this.pendingRemoteCandidates.set(screenId, []);
     this.stream.getTracks().forEach((track) => {
       if (this.stream) {
         peer.addTrack(track, this.stream);
@@ -61,18 +72,44 @@ export class DirectorVideoBridge {
     });
     peer.addEventListener("connectionstatechange", () => {
       if (peer.connectionState === "connected") {
+        const reconnectTimer = this.reconnectTimers.get(screenId);
+        if (reconnectTimer) window.clearTimeout(reconnectTimer);
+        this.reconnectTimers.delete(screenId);
         this.onStatus("live", `${labelFor(screenId)} video connected.`);
+      } else if (peer.connectionState === "disconnected") {
+        const previousTimer = this.reconnectTimers.get(screenId);
+        if (previousTimer) window.clearTimeout(previousTimer);
+        this.reconnectTimers.set(screenId, window.setTimeout(() => {
+          if (this.peers.get(screenId) !== peer || peer.connectionState !== "disconnected") return;
+          peer.close();
+          this.peers.delete(screenId);
+          this.pendingRemoteCandidates.delete(screenId);
+          void this.connect(screenId);
+        }, 2500));
+      } else if (peer.connectionState === "failed") {
+        if (this.peers.get(screenId) === peer) this.peers.delete(screenId);
+        this.pendingRemoteCandidates.delete(screenId);
+        peer.close();
+        void this.connect(screenId);
       }
     });
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    this.channel.post({
-      type: "webrtc-offer",
-      target: screenId,
-      source: "control",
-      sdp: offer
-    } satisfies HostMessage);
+    try {
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      if (this.peers.get(screenId) !== peer) return;
+      this.channel.post({
+        type: "webrtc-offer",
+        target: screenId,
+        source: "control",
+        sdp: offer
+      } satisfies HostMessage);
+    } catch {
+      if (this.peers.get(screenId) === peer) this.peers.delete(screenId);
+      this.pendingRemoteCandidates.delete(screenId);
+      peer.close();
+      this.onStatus("connecting", `${labelFor(screenId)} video is reconnecting.`);
+    }
   }
 
   stop(target: TargetScreen = "all") {
@@ -82,15 +119,20 @@ export class DirectorVideoBridge {
   }
 
   private clearMedia() {
+    this.reconnectTimers.forEach((timer) => window.clearTimeout(timer));
+    this.reconnectTimers.clear();
     this.peers.forEach((peer) => peer.close());
     this.peers.clear();
+    this.pendingRemoteCandidates.clear();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream?.__cleanup?.();
     this.stream = null;
   }
 
   close() {
-    this.stop("all");
+    // Component teardown (navigation, refresh, StrictMode, or HMR) is not an
+    // operator request to end the museum broadcast. Only stop() sends live-stop.
+    this.clearMedia();
     this.channel.close();
   }
 
@@ -101,8 +143,18 @@ export class DirectorVideoBridge {
 
     if (message.type === "webrtc-answer" && message.target === "control") {
       const peer = this.peers.get(message.source);
-      if (peer) {
-        await peer.setRemoteDescription(message.sdp);
+      if (peer && peer.signalingState !== "closed" && !peer.remoteDescription) {
+        try {
+          await peer.setRemoteDescription(message.sdp);
+          const pending = this.pendingRemoteCandidates.get(message.source) ?? [];
+          this.pendingRemoteCandidates.set(message.source, []);
+          await Promise.all(pending.map((candidate) => addIceCandidateSafely(peer, candidate)));
+        } catch {
+          if (this.peers.get(message.source) === peer) this.peers.delete(message.source);
+          this.pendingRemoteCandidates.delete(message.source);
+          peer.close();
+          void this.connect(message.source);
+        }
       }
     }
 
@@ -110,7 +162,8 @@ export class DirectorVideoBridge {
       const source = message.source === "control" ? undefined : message.source;
       const peer = source ? this.peers.get(source) : undefined;
       if (peer) {
-        await peer.addIceCandidate(message.candidate);
+        if (peer.remoteDescription) await addIceCandidateSafely(peer, message.candidate);
+        else this.pendingRemoteCandidates.set(source!, [...(this.pendingRemoteCandidates.get(source!) ?? []), message.candidate]);
       }
     }
   }
@@ -118,6 +171,8 @@ export class DirectorVideoBridge {
 
 export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamListener) {
   let peer: RTCPeerConnection | null = null;
+  let activeOfferKey = "";
+  let pendingRemoteCandidates: RTCIceCandidateInit[] = [];
   let channel: ReturnType<typeof createHostChannel>;
 
   const announcePresence = () => {
@@ -130,13 +185,19 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
 
   channel = createHostChannel((message) => {
     if (message.type === "webrtc-offer" && message.target === screenId) {
+      const offerKey = `${message.sdp.type ?? "offer"}:${message.sdp.sdp ?? ""}`;
+      if (offerKey === activeOfferKey && peer && peer.signalingState !== "closed") return;
+      activeOfferKey = offerKey;
       void (async () => {
-        peer?.close();
-        peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
-        peer.addEventListener("track", (trackEvent) => {
+        const previousPeer = peer;
+        const nextPeer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+        peer = nextPeer;
+        previousPeer?.close();
+        nextPeer.addEventListener("track", (trackEvent) => {
+          if (peer !== nextPeer) return;
           onStream(trackEvent.streams[0] ?? null);
         });
-        peer.addEventListener("icecandidate", (candidateEvent) => {
+        nextPeer.addEventListener("icecandidate", (candidateEvent) => {
           if (candidateEvent.candidate) {
             channel.post({
               type: "webrtc-candidate",
@@ -146,25 +207,46 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
             } satisfies HostMessage);
           }
         });
-        await peer.setRemoteDescription(message.sdp);
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        channel.post({
-          type: "webrtc-answer",
-          target: "control",
-          source: screenId,
-          sdp: answer
-        } satisfies HostMessage);
+        nextPeer.addEventListener("connectionstatechange", () => {
+          if (peer === nextPeer && nextPeer.connectionState === "failed") onStream(null);
+        });
+        try {
+          await nextPeer.setRemoteDescription(message.sdp);
+          if (peer !== nextPeer) return;
+          const pending = pendingRemoteCandidates;
+          pendingRemoteCandidates = [];
+          await Promise.all(pending.map((candidate) => addIceCandidateSafely(nextPeer, candidate)));
+          if (peer !== nextPeer) return;
+          const answer = await nextPeer.createAnswer();
+          await nextPeer.setLocalDescription(answer);
+          if (peer !== nextPeer) return;
+          channel.post({
+            type: "webrtc-answer",
+            target: "control",
+            source: screenId,
+            sdp: answer
+          } satisfies HostMessage);
+        } catch {
+          if (peer !== nextPeer) return;
+          nextPeer.close();
+          peer = null;
+          activeOfferKey = "";
+          onStream(null);
+          announcePresence();
+        }
       })();
     }
 
-    if (message.type === "webrtc-candidate" && message.target === screenId && peer) {
-      void peer.addIceCandidate(message.candidate);
+    if (message.type === "webrtc-candidate" && message.target === screenId) {
+      if (peer?.remoteDescription) void addIceCandidateSafely(peer, message.candidate);
+      else pendingRemoteCandidates.push(message.candidate);
     }
 
     if (message.type === "live-stop" && targetIncludes(message.target, screenId)) {
       peer?.close();
       peer = null;
+      activeOfferKey = "";
+      pendingRemoteCandidates = [];
       onStream(null);
     }
   });
@@ -176,6 +258,16 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
     peer?.close();
     channel.close();
   };
+}
+
+async function addIceCandidateSafely(peer: RTCPeerConnection, candidate: RTCIceCandidateInit) {
+  if (peer.signalingState === "closed") return;
+  try {
+    await peer.addIceCandidate(candidate);
+  } catch {
+    // A peer can be replaced while ICE is still in flight. Its next presence
+    // heartbeat starts a clean negotiation without surfacing an unhandled error.
+  }
 }
 
 async function getCameraOrDemoStream(onStatus: (status: DirectorStatus) => void, videoDeviceId?: string, audioDeviceId?: string): Promise<DemoStream> {

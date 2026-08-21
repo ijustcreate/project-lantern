@@ -33,12 +33,35 @@ let sharedSaveTimer: number | undefined;
 let stateUsesIndexedDb = false;
 
 type Listener = (message: HostMessage) => void;
-type RealtimeEnvelope = { sender: string; message: HostMessage };
+type WireHostMessage = HostMessage & {
+  __lanternMessageId?: string;
+  __lanternSender?: string;
+};
+type RealtimeEnvelope = { sender: string; message: WireHostMessage };
+type RealtimeListener = (message: WireHostMessage) => void;
 const realtimeClientId = crypto.randomUUID();
-const realtimeListeners = new Set<Listener>();
+const realtimeListeners = new Set<RealtimeListener>();
 let realtimeSocket: WebSocket | null = null;
 let realtimeReconnectTimer: number | undefined;
-const pendingRealtimeMessages: HostMessage[] = [];
+const pendingRealtimeMessages: WireHostMessage[] = [];
+
+function wireHostMessage(message: HostMessage): WireHostMessage {
+  return {
+    ...message,
+    __lanternMessageId: crypto.randomUUID(),
+    __lanternSender: realtimeClientId
+  } as WireHostMessage;
+}
+
+function legacySignalKey(message: HostMessage) {
+  if (message.type === "webrtc-offer" || message.type === "webrtc-answer") {
+    return `legacy:${message.type}:${message.target}:${message.source}:${message.sdp.type ?? ""}:${message.sdp.sdp ?? ""}`;
+  }
+  if (message.type === "webrtc-candidate") {
+    return `legacy:${message.type}:${message.target}:${message.source}:${JSON.stringify(message.candidate)}`;
+  }
+  return "";
+}
 
 function realtimeSocketUrl() {
   if (!LANTERN_WRITE_SERVICE_ROOT) return "";
@@ -71,7 +94,7 @@ function ensureRealtimeSocket() {
   socket.addEventListener("error", () => socket.close());
 }
 
-function postRealtime(message: HostMessage) {
+function postRealtime(message: WireHostMessage) {
   if (!LANTERN_WRITE_SERVICE_ROOT) return;
   if (realtimeSocket?.readyState === WebSocket.OPEN) {
     realtimeSocket.send(JSON.stringify({ sender: realtimeClientId, message } satisfies RealtimeEnvelope));
@@ -528,20 +551,37 @@ function openMediaDatabase() {
 
 export function createHostChannel(listener: Listener) {
   const channel = new BroadcastChannel(LANTERN_CHANNEL);
-  channel.addEventListener("message", (event: MessageEvent<HostMessage>) => {
-    listener(event.data);
+  const recentlyDelivered = new Map<string, number>();
+  const deliver: RealtimeListener = (message) => {
+    const now = Date.now();
+    const messageId = message.__lanternMessageId ?? legacySignalKey(message);
+    if (messageId) {
+      const deliveredAt = recentlyDelivered.get(messageId);
+      if (deliveredAt !== undefined && now - deliveredAt < 30_000) return;
+      recentlyDelivered.set(messageId, now);
+      if (recentlyDelivered.size > 256) {
+        for (const [id, timestamp] of recentlyDelivered) {
+          if (now - timestamp >= 30_000 || recentlyDelivered.size > 256) recentlyDelivered.delete(id);
+        }
+      }
+    }
+    listener(message);
+  };
+  channel.addEventListener("message", (event: MessageEvent<WireHostMessage>) => {
+    deliver(event.data);
   });
-  realtimeListeners.add(listener);
+  realtimeListeners.add(deliver);
   ensureRealtimeSocket();
 
   return {
     post(message: HostMessage) {
-      channel.postMessage(message);
-      postRealtime(message);
+      const wireMessage = wireHostMessage(message);
+      channel.postMessage(wireMessage);
+      postRealtime(wireMessage);
     },
     close() {
       channel.close();
-      realtimeListeners.delete(listener);
+      realtimeListeners.delete(deliver);
       if (!realtimeListeners.size) {
         window.clearTimeout(realtimeReconnectTimer);
         realtimeSocket?.close();
@@ -555,9 +595,10 @@ export function publishState(state: LanternState, options: { persist?: boolean }
   const savedLocally = options.persist === false || saveLanternState(state);
   queueSharedStateSave(state);
   const message = { type: "state-update", state } satisfies HostMessage;
+  const wireMessage = wireHostMessage(message);
   try {
     const channel = new BroadcastChannel(LANTERN_CHANNEL);
-    channel.postMessage(message);
+    channel.postMessage(wireMessage);
     channel.close();
   } catch (error) {
     // Browser privacy settings can block cross-window messaging. The local save
@@ -565,7 +606,7 @@ export function publishState(state: LanternState, options: { persist?: boolean }
     console.warn("Project Lantern could not notify another window of the update.", error);
   }
   try {
-    postRealtime(message);
+    postRealtime(wireMessage);
   } catch (error) {
     // Realtime relay is optional; a local save must never be reported as failed
     // just because a display-sync connection is temporarily unavailable.
@@ -1153,7 +1194,7 @@ function normalizeUserPreferences(
       ...previous,
       ...candidate,
       userId,
-      theme: ["dark", "light", "ocean", "warm", "contrast", "sparkle"].includes(candidate.theme)
+      theme: ["dark", "light", "ocean", "warm", "contrast", "sparkle", "children"].includes(candidate.theme)
         ? candidate.theme
         : previous.theme,
       donorSort: ["manual", "az", "za"].includes(candidate.donorSort)
@@ -1610,7 +1651,7 @@ export function normalizeState(state: LanternState): LanternState {
       tags: uniqueStrings(state.recognitionSettings?.tags, donors.flatMap((donor) => donor.tags ?? []), initialState.recognitionSettings.tags)
         .filter((tag) => tag.trim().toLocaleLowerCase() !== "unrestricted support")
         .sort(),
-      appearance: ["dark", "light", "ocean", "warm", "contrast", "sparkle"].includes(state.recognitionSettings?.appearance ?? "")
+      appearance: ["dark", "light", "ocean", "warm", "contrast", "sparkle", "children"].includes(state.recognitionSettings?.appearance ?? "")
         ? state.recognitionSettings.appearance
         : "dark"
     },

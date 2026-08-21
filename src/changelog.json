@@ -1,5 +1,39 @@
 [
   {
+    "id": "DEV-0266",
+    "title": "Keep each operator's portal theme stable",
+    "summary": "Stopped stale startup or incoming shared state from switching an operator back to Warm. State publishing now waits for hydration, fallback-local bootstrap state is not relayed, and both theme selectors save the active user's preference.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 2:39 PM",
+    "areas": [
+      "Settings",
+      "State persistence",
+      "Realtime"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; Playwright stale-Warm injection test; Settings/sidebar synchronization test with zero console errors"
+  },
+  {
+    "id": "DEV-0265",
+    "title": "Keep live broadcasts connected",
+    "summary": "Prevented duplicate local and relayed WebRTC signaling from replacing a healthy display connection. Display receivers now deduplicate offers, queue ICE safely, recover failed peers, and remain live until the operator explicitly ends the broadcast.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 2:39 PM",
+    "areas": [
+      "Broadcast",
+      "Displays",
+      "Realtime"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src/host/videoBridge.ts"
+    ],
+    "tests": "npm run build; node scripts/test-broadcast-composition.mjs; Playwright two-window duplicate-signaling stress test with synthetic camera and zero console errors"
+  },
+  {
     "id": "DEV-0264",
     "title": "Repair desktop broadcast camera controls",
     "summary": "Made the desktop Broadcast Studio edit the same per-display frame used by direct manipulation and live output, restored working crop and mirror controls, and kept background removal from applying zoom and pan twice.",
