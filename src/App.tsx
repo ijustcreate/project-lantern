@@ -3853,7 +3853,7 @@ function DirectBoardCanvas({
     window.addEventListener("pointercancel", stop);
   };
   const placePanel = (event: React.PointerEvent) => {
-    if (!placingPanelType || !canvasRef.current || (event.target as Element).closest(".direct-board-panel, .board-context-menu")) return;
+    if (!placingPanelType || !canvasRef.current || (event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) return;
     const rect = canvasRef.current.getBoundingClientRect();
     onAdd(placingPanelType, { x: (event.clientX - rect.left) / rect.width * 100, y: (event.clientY - rect.top) / rect.height * 100 });
   };
@@ -3870,7 +3870,8 @@ function DirectBoardCanvas({
       : (selectedPanel.y ?? 5) - 7
     : 0;
   const prioritizeMoveHandle = (event: React.PointerEvent<HTMLDivElement>) => {
-    if ((event.target as Element).closest(".panel-move-handle")) return;
+    const target = event.target as Element;
+    if (target.closest(".direct-board-selection-layer")) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const candidate = [...panels].reverse().find((panel) => {
@@ -3880,7 +3881,7 @@ function DirectBoardCanvas({
       const handleTop = (panel.y ?? 5) < 8 ? bottom + 4 : top - 26;
       return event.clientX >= left && event.clientX <= left + 22 && event.clientY >= handleTop && event.clientY <= handleTop + 22;
     });
-    if (candidate && !(event.target as Element).closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
+    if (candidate && !target.closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
   return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${(program.textFinish ?? display.textFinish) === "cut-brass" ? " finish-cut-brass" : ""}${(program.textShadowEnabled ?? display.textShadowEnabled) ? " text-shadow-enabled" : ""}`} style={{
     fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
@@ -3895,7 +3896,7 @@ function DirectBoardCanvas({
     "--board-text-shadow-y": `${Math.sin(shadowRadians) * shadowDistance}px`,
     "--board-text-shadow-blur": `${1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 28}px`,
     "--board-text-shadow-alpha": Math.min(.62, .1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 165)
-  } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
+  } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
     {boardBackgroundImage && <div className="direct-board-background"><img src={resolveProjectAssetUrl(boardBackgroundImage)} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
