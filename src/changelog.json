@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0262",
+    "title": "Use a clear donor-photo placeholder",
+    "summary": "Replaced the realistic sample portrait with a clearly labeled anonymous placeholder so template boards cannot be mistaken for showing a real donor, while preserving all existing board text and layout.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 1:12 PM",
+    "areas": [
+      "Board Editor",
+      "Dashboard",
+      "Schedule"
+    ],
+    "files": [
+      "public/assets/donor-icons/supporter-spotlight-placeholder.png"
+    ],
+    "tests": "npm run build; Playwright portrait and landscape dashboard visual QA; shared asset reference audit"
+  },
+  {
     "id": "DEV-0261",
     "title": "Match display previews to board text layouts",
     "summary": "Render ordinary text panels on live canvases and stop legacy display scrolling settings from replacing composable board layouts, so Dashboard and Schedule match the Board Editor.",
