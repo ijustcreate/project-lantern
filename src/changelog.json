@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0261",
+    "title": "Match display previews to board text layouts",
+    "summary": "Render ordinary text panels on live canvases and stop legacy display scrolling settings from replacing composable board layouts, so Dashboard and Schedule match the Board Editor.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 12:41 PM",
+    "areas": [
+      "Dashboard",
+      "Schedule",
+      "Board Editor",
+      "Displays"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; Playwright visual comparison of portrait and landscape Supporter Spotlight boards"
+  },
+  {
     "id": "DEV-0260",
     "title": "Make scheduled board resolution consistent",
     "summary": "Resolve overlapping board events with one shared priority rule so Schedule, Dashboard, physical displays, and Edit Board all use the same winning board.",

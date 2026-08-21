@@ -501,7 +501,10 @@ function drawMuseumBoard(
   if (galleryPlaque) drawGraphiteTexture(context, width, height);
   else if (!chalkboard && !["brigade-cream", "brigade-sunshine", "legacy-navy", "legacy-sky"].includes(activeProgram?.palette ?? "")) drawBoardStars(context, width, height, screen, animationTime);
   if (activeProgram?.palette?.startsWith("brigade-")) drawBrigadeAccents(context, width, height, palette);
-  if (activeProgram?.donorScrollEnabled ?? screen?.donorScrollEnabled) {
+  const donorScrollEnabled = activeProgram?.panels?.length
+    ? activeProgram.donorScrollEnabled === true
+    : activeProgram?.donorScrollEnabled ?? screen?.donorScrollEnabled;
+  if (donorScrollEnabled) {
     drawScrollingDonorBoard(context, width, height, donors, state, isPortrait, scale, activeProgram, screen!, animationTime);
     return;
   }
@@ -659,6 +662,9 @@ function drawComposableBoard(
   const muted = palette.muted;
   const teal = palette.secondary;
   const panels = program.panels ?? [];
+  // Panel font sizes are authored in the Board Editor's visual coordinate
+  // system (roughly 720px tall in portrait and 540px in landscape).
+  const authoredCanvasHeight = height > width ? 720 : 540;
 
   if (screen?.showFrame !== false) {
     context.strokeStyle = palette.frame;
@@ -676,7 +682,7 @@ function drawComposableBoard(
     const font = panel.fontFamily ?? screen?.fontFamily ?? "Montserrat";
     const panelTextColor = panel.textColor;
     const requestedSize = panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? screen?.nameSize ?? 28 : 24);
-    const fontUnit = Math.max(8, requestedSize * height / 900);
+    const fontUnit = Math.max(8, requestedSize * height / authoredCanvasHeight);
     context.save();
     context.beginPath();
     context.rect(left, y, contentWidth, panelHeight);
@@ -696,13 +702,17 @@ function drawComposableBoard(
       fitText(context, panel.title, centerX, centerY + fontUnit * 0.36, contentWidth * 0.9, Math.round(fontUnit), 8);
     }
 
+    if (panel.type === "text" && !/^legacy-photo[12]-.+-star-text$/.test(panel.id)) {
+      drawGenericTextPanel(context, panel, left, y, contentWidth, panelHeight, fontUnit, font, panelTextColor ?? ivory);
+    }
+
     if (panel.type === "donors") {
       const panelDonors = donors.filter((donor) =>
         (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
         && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
       );
       const columns = panel.columns ?? program.columns;
-      const nameFontUnit = Math.max(8, requestedSize * height / 900);
+      const nameFontUnit = Math.max(8, requestedSize * height / authoredCanvasHeight);
       const rows = panel.rows ?? Math.max(1, Math.ceil(panelDonors.length / columns));
       const visibleDonors = panelDonors.slice(0, rows * columns);
       const listTop = y;
@@ -787,7 +797,7 @@ function drawComposableBoard(
       // beneath this one, so a long donor name can fit the safe center without
       // changing the image's size or position.
       context.textAlign = "center";
-      const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / 900));
+      const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / authoredCanvasHeight));
       const presentation = resolveBoardDonorPresentation(program, panel.id, {
         fontFamily: panel.fontFamily ?? font,
         nameColor: panelTextColor ?? "#201708",
@@ -847,7 +857,7 @@ function drawComposableBoard(
       );
       context.restore();
       context.textAlign = "center";
-      const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / 900));
+      const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / authoredCanvasHeight));
       const presentation = resolveBoardDonorPresentation(program, donor?.id ?? panel.id, {
         fontFamily: panel.fontFamily ?? font,
         nameColor: panelTextColor ?? "#201708",
@@ -1368,6 +1378,53 @@ function drawBoardDonorName(
 
   drawLines();
   context.restore();
+}
+
+function drawGenericTextPanel(
+  context: CanvasRenderingContext2D,
+  panel: NonNullable<LanternState["boardPrograms"][number]["panels"]>[number],
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  fontSize: number,
+  fontFamily: string,
+  color: string
+) {
+  const padding = Math.max(6, Math.min(14, Math.min(width, height) * .07));
+  const availableWidth = Math.max(1, width - padding * 2);
+  const availableHeight = Math.max(1, height - padding * 2);
+  const lineHeight = fontSize * (panel.lineHeight ?? 1.2);
+  const alignment = panel.textAlign ?? "center";
+  const weight = panel.fontWeight === "bold" ? 700 : 400;
+  const style = panel.fontStyle === "italic" ? "italic " : "";
+  context.fillStyle = color;
+  context.textAlign = alignment;
+  context.textBaseline = "middle";
+  context.font = `${style}${weight} ${Math.round(fontSize)}px "${fontFamily}", Inter, sans-serif`;
+  if ("letterSpacing" in context) (context as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${panel.letterSpacing ?? 0}px`;
+
+  if (panel.textDirection === "vertical") {
+    const characters = Array.from(panel.title.replace(/\s*\n\s*/g, " "));
+    const totalHeight = characters.length * lineHeight;
+    const x = alignment === "left" ? left + padding : alignment === "right" ? left + width - padding : left + width / 2;
+    const startY = top + height / 2 - totalHeight / 2 + lineHeight / 2;
+    characters.forEach((character, index) => context.fillText(character, x, startY + index * lineHeight));
+    return;
+  }
+
+  if (panel.textFlow === "fit-one-line") {
+    const x = alignment === "left" ? left + padding : alignment === "right" ? left + width - padding : left + width / 2;
+    fitText(context, panel.title.replace(/\s*\n\s*/g, " "), x, top + height / 2, availableWidth, Math.round(fontSize), 8);
+    return;
+  }
+
+  const lines = panel.title.split("\n").flatMap((paragraph) => wrapLines(context, paragraph || " ", availableWidth, 100));
+  const visibleLineCount = Math.max(1, Math.floor(availableHeight / lineHeight));
+  const visibleLines = lines.slice(0, visibleLineCount);
+  const x = alignment === "left" ? left + padding : alignment === "right" ? left + width - padding : left + width / 2;
+  const startY = top + height / 2 - (visibleLines.length - 1) * lineHeight / 2;
+  visibleLines.forEach((line, index) => context.fillText(line, x, startY + index * lineHeight));
 }
 
 function resolveBoardAssetUrl(source: string | undefined) {
