@@ -13,7 +13,7 @@
     "files": [
       "src/display/BabylonDonorWall.tsx"
     ],
-    "tests": "npm run build; Playwright Dashboard before/after at 1440x900; standalone display at 540x960; 0 console errors; WebGL mipmap count stable 12 to 12 over 3 idle seconds; 60 fps requestAnimationFrame check"
+    "tests": "npm run build; Playwright Dashboard before/after at 1440x900; standalone display at 540x960; exact production-state replay; 0 console errors; static WebGL mipmap count stable 24 to 24 over 3 idle seconds; animated-particle replay generated 0 mipmaps; 60 fps requestAnimationFrame check"
   },
   {
     "id": "DEV-0267",

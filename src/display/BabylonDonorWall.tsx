@@ -248,8 +248,16 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       ? activeProgram.donorScrollEnabled === true
       : activeProgram?.donorScrollEnabled ?? screen.donorScrollEnabled ?? false;
     const animatedDonors = !reduceMotion && boardUsesDonorAnimation(activeProgram);
+    const boardUsesParticleLayer = screen.style !== "constellation"
+      && state.board.visualStyle !== "chalkboard"
+      && state.board.visualStyle !== "chalkboard-minimal"
+      && state.board.visualStyle !== "gallery-plaque"
+      && !["brigade-cream", "brigade-sunshine", "legacy-navy", "legacy-sky"].includes(activeProgram?.palette ?? "");
+    const animatedParticles = !reduceMotion && boardUsesParticleLayer && Boolean(screen.particleAnimationEnabled);
     const textureNeedsContinuousRedraw = animatedBackground
-      || (!reduceMotion && (donorScrollEnabled || animatedDonors || Boolean(screen.particleAnimationEnabled)));
+      || (!reduceMotion && donorScrollEnabled)
+      || animatedDonors
+      || animatedParticles;
     // A 4K board can be reduced to only a few hundred pixels in dashboard and
     // schedule previews. Static 2D boards get a mip pyramid so thin lettering
     // is properly prefiltered instead of being sampled straight from 4K. Keep
