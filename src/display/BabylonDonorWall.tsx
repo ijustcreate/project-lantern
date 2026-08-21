@@ -240,11 +240,28 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     let initialResizeFrame = 0;
 
     let redrawPanel: (animationTime?: number) => void = () => undefined;
+    let disposed = false;
     prepareBackgroundMedia(screen, () => redrawPanel());
     prepareBoardPanelImages(state, () => redrawPanel());
-    const panelTexture = makePanelTexture(scene, state, screenId, screen, activeProgram?.id);
+    const animatedBackground = screen.backgroundMode === "image" && Boolean(screen.backgroundImage) && (screen.backgroundMediaType === "video" || screen.backgroundMediaAnimated);
+    const donorScrollEnabled = activeProgram?.panels?.length
+      ? activeProgram.donorScrollEnabled === true
+      : activeProgram?.donorScrollEnabled ?? screen.donorScrollEnabled ?? false;
+    const animatedDonors = !reduceMotion && boardUsesDonorAnimation(activeProgram);
+    const textureNeedsContinuousRedraw = animatedBackground
+      || (!reduceMotion && (donorScrollEnabled || animatedDonors || Boolean(screen.particleAnimationEnabled)));
+    // A 4K board can be reduced to only a few hundred pixels in dashboard and
+    // schedule previews. Static 2D boards get a mip pyramid so thin lettering
+    // is properly prefiltered instead of being sampled straight from 4K. Keep
+    // continuously animated textures on the existing path so we never rebuild
+    // a full mip chain at 30 fps. WebGL 1 also requires power-of-two mipmaps.
+    const generateStaticPreviewMipMaps = fitToScreen
+      && viewMode === "2d"
+      && !textureNeedsContinuousRedraw
+      && !engine.needPOTTextures;
+    const panelTexture = makePanelTexture(scene, state, screenId, screen, activeProgram?.id, generateStaticPreviewMipMaps);
     const texture = panelTexture.texture;
-    texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
+    texture.updateSamplingMode(generateStaticPreviewMipMaps ? Texture.LINEAR_LINEAR_MIPNEAREST : Texture.TRILINEAR_SAMPLINGMODE);
     texture.anisotropicFilteringLevel = 16;
     // A standalone plane uses the opposite vertical UV direction from the
     // front face of Babylon's box. Flip only V so the board remains upright
@@ -252,6 +269,12 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     texture.vScale = -1;
     texture.vOffset = 1;
     redrawPanel = panelTexture.redraw;
+    // Canvas text can be baked before a bundled webfont has finished loading.
+    // Redraw once after font readiness so display output never retains fallback
+    // glyphs for the lifetime of the Babylon scene.
+    void renderWindow.document.fonts?.ready.then(() => {
+      if (!disposed) redrawPanel();
+    });
     const panelMaterial = new StandardMaterial("baked-donor-lettering", scene);
     panelMaterial.diffuseTexture = texture;
     panelMaterial.diffuseColor = Color3.White();
@@ -335,9 +358,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     let lastMediaRedraw = 0;
     engine.runRenderLoop(() => {
       const now = performance.now();
-      const animatedBackground = screen.backgroundMode === "image" && screen.backgroundImage && (screen.backgroundMediaType === "video" || screen.backgroundMediaAnimated);
-      const animatedDonors = !reduceMotion && boardUsesDonorAnimation(activeProgram);
-      if ((animatedBackground || (!reduceMotion && screen.donorScrollEnabled) || animatedDonors || (!reduceMotion && screen.particleAnimationEnabled)) && now - lastMediaRedraw > 33) {
+      if (textureNeedsContinuousRedraw && now - lastMediaRedraw > 33) {
         lastMediaRedraw = now;
         redrawPanel(now);
       }
@@ -360,6 +381,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     initialResizeFrame = renderWindow.requestAnimationFrame(resize);
 
     return () => {
+      disposed = true;
       renderWindow.cancelAnimationFrame(resizeFrame);
       renderWindow.cancelAnimationFrame(initialResizeFrame);
       resizeObserver.disconnect();
@@ -382,11 +404,11 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
   </>;
 }
 
-function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, programId?: string) {
+function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, programId?: string, generateMipMaps = false) {
   const isPortrait = screen.orientation === "Portrait";
   const width = isPortrait ? 2160 : 3840;
   const height = isPortrait ? 3840 : 2160;
-  const texture = new DynamicTexture("panel-texture", { width, height }, scene, false);
+  const texture = new DynamicTexture("panel-texture", { width, height }, scene, generateMipMaps);
   const context = texture.getContext() as unknown as CanvasRenderingContext2D;
   (context as StyledTextContext).__lanternTextStyle = {
     finish: screen.textFinish ?? "flat",

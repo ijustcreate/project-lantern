@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0268",
+    "title": "Sharpen scaled display lettering",
+    "summary": "Static straight-on board previews and display output now use proper mipmap filtering when reducing 4K board art, preserving thin text strokes without adding ongoing frame work. Boards also redraw once after bundled fonts load so fallback glyphs are not left baked into the display.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 3:39 PM",
+    "areas": [
+      "Dashboard",
+      "Displays",
+      "Rendering"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; Playwright Dashboard before/after at 1440x900; standalone display at 540x960; 0 console errors; WebGL mipmap count stable 12 to 12 over 3 idle seconds; 60 fps requestAnimationFrame check"
+  },
+  {
     "id": "DEV-0267",
     "title": "Open every display without Chrome popup warnings",
     "summary": "The browser launcher now opens one new display per trusted click and presents an Open next display action for each remaining screen. Existing display windows are reused and focused, while the native app continues opening all windows directly.",
