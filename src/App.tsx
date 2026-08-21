@@ -286,7 +286,7 @@ function ControlCenter() {
   const [displayEditorOpen, setDisplayEditorOpen] = useState(false);
   const [openAssignedRoomCamera, setOpenAssignedRoomCamera] = useState(false);
   const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<{ entry: ScheduleEntry; occurrenceKey: string } | null>(null);
-  const [displayOpenNotice, setDisplayOpenNotice] = useState<string | null>(null);
+  const [displayOpenNotice, setDisplayOpenNotice] = useState<{ message: string; outstanding?: ScreenId[] } | null>(null);
   const [announcementTab, setAnnouncementTab] = useState<"messages" | "blips">("messages");
   const [visitorMessageManagerOpen, setVisitorMessageManagerOpen] = useState(false);
   const visitorPageEntryRef = useRef<View | null>(null);
@@ -333,13 +333,27 @@ function ControlCenter() {
 
   useEffect(() => {
     const handleDisplayOpenResult = (event: Event) => {
-      const detail = (event as CustomEvent<{ opened: string[]; blocked: string[] }>).detail;
-      if (!detail?.blocked?.length) {
-        setDisplayOpenNotice(null);
-        return;
-      }
-      const blockedNames = detail.blocked.map((id) => state.screens[id]?.label ?? id);
-      setDisplayOpenNotice(`The browser blocked ${blockedNames.join(", ")}. Allow pop-ups for this local site, then choose Open displays again.`);
+      const detail = (event as CustomEvent<{ opened: string[]; blocked: string[]; pending?: string[] }>).detail;
+      if (!detail) return;
+      setDisplayOpenNotice((current) => {
+        const opened = new Set(detail.opened ?? []);
+        const outstanding = Array.from(new Set([
+          ...(current?.outstanding ?? []).filter((id) => !opened.has(id)),
+          ...(detail.blocked ?? []),
+          ...(detail.pending ?? [])
+        ]));
+        if (!outstanding.length) return null;
+        const outstandingNames = outstanding.map((id) => state.screens[id]?.label ?? id);
+        const nextLabel = outstandingNames[0] ?? "the next display";
+        const openedNames = (detail.opened ?? []).map((id) => state.screens[id]?.label ?? id);
+        const browserBlocked = (detail.blocked ?? []).length > 0;
+        return {
+          outstanding,
+          message: browserBlocked
+            ? `Chrome blocked ${nextLabel}. Choose Open ${nextLabel} to try again. If it is blocked again, allow pop-ups for this site.`
+            : `${openedNames.join(", ")} opened. Chrome needs another click to open ${nextLabel}.`
+        };
+      });
     };
     window.addEventListener("lantern:display-open-result", handleDisplayOpenResult);
     return () => window.removeEventListener("lantern:display-open-result", handleDisplayOpenResult);
@@ -684,6 +698,18 @@ function ControlCenter() {
     window.setTimeout(() => publishState(state), 700);
   };
 
+  const openNextDisplayWindow = () => {
+    const screenId = displayOpenNotice?.outstanding?.[0];
+    const screen = screenId ? state.screens[screenId] : undefined;
+    if (!screen) {
+      setDisplayOpenNotice(null);
+      return;
+    }
+    publishState(state);
+    void openDisplayWindows([screen]);
+    window.setTimeout(() => publishState(state), 700);
+  };
+
   const scheduleBoardNow = (screenId: ScreenId, boardId: string) => {
     const now = new Date();
     const start = now.getHours() * 60 + now.getMinutes();
@@ -775,7 +801,7 @@ function ControlCenter() {
   const identifyDisplay = (screenId: ScreenId) => {
     const connectedDisplays = Object.values(state.screens).filter((screen) => screen.status !== "offline");
     if (!connectedDisplays.length) {
-      setDisplayOpenNotice("There are no open or connected displays to identify. Open a display window, then try again.");
+      setDisplayOpenNotice({ message: "There are no open or connected displays to identify. Open a display window, then try again." });
       return;
     }
     const channel = new BroadcastChannel("project-lantern-host-v1");
@@ -1117,7 +1143,12 @@ function ControlCenter() {
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
       {createUserOpen && <div className="modal-backdrop local-user-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateUserOpen(false); }}><form className="editor-modal local-user-modal" role="dialog" aria-modal="true" aria-labelledby="local-user-title" onSubmit={(event) => { event.preventDefault(); createLocalUser(); }}><div className="editor-modal-head"><div><p className="eyebrow">Local operator profile</p><h2 id="local-user-title">Create user</h2></div><button type="button" className="icon-button" title="Close" onClick={() => setCreateUserOpen(false)}><X size={18} /></button></div><label className="field"><span>Name</span><input autoFocus value={newUserName} onChange={(event) => setNewUserName(event.target.value)} placeholder="Operator name" maxLength={80} /></label><p className="field-note local-mode-note"><Lock size={14} /> Local mode is passwordless and is intended for trusted operators on this device. It records who made changes; it is not an authentication system.</p><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setCreateUserOpen(false)}>Cancel</button><button type="submit" className="command-button primary" disabled={!newUserName.trim()}><Plus size={15} /> Create user</button></div></form></div>}
       {scheduledBroadcastPrompt && <div className="modal-backdrop scheduled-broadcast-backdrop"><section className="editor-modal scheduled-broadcast-prompt" role="dialog" aria-modal="true" aria-labelledby="scheduled-broadcast-prompt-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled broadcast</p><h2 id="scheduled-broadcast-prompt-title">Scheduled broadcast</h2></div></div><p><strong>{scheduledBroadcastPrompt.entry.name}</strong> is scheduled to start now{scheduledBroadcastPrompt.entry.presenterName ? ` for ${scheduledBroadcastPrompt.entry.presenterName}` : ""}. Do you wish to start?</p><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setReminderStatus("dismissed", 15)}>Not now</button><button type="button" className="command-button primary" onClick={() => { setReminderStatus("acknowledged"); setView("live"); }}>Open Broadcast / Stream</button></div></section></div>}
-      {displayOpenNotice && <LanternNotice message={displayOpenNotice} onDismiss={() => setDisplayOpenNotice(null)} />}
+      {displayOpenNotice && <LanternNotice
+        message={displayOpenNotice.message}
+        actionLabel={displayOpenNotice.outstanding?.length ? `Open ${state.screens[displayOpenNotice.outstanding[0]]?.label ?? "next display"}` : undefined}
+        onAction={displayOpenNotice.outstanding?.length ? openNextDisplayWindow : undefined}
+        onDismiss={() => setDisplayOpenNotice(null)}
+      />}
       {bugLauncherVisible && <button className="bug-report-fab" style={{ left: bugLauncherPosition.x, top: bugLauncherPosition.y }}
         onPointerDown={(event) => { bugLauncherDrag.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bugLauncherPosition.x, originY: bugLauncherPosition.y, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }}
         onPointerMove={moveBugLauncher}

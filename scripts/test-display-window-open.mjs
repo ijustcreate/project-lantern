@@ -3,13 +3,15 @@ import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../src/host/lanternHost.ts", import.meta.url), "utf8");
 const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const dialog = readFileSync(new URL("../src/components/LanternDialog.tsx", import.meta.url), "utf8");
 const openIndex = source.indexOf("const popup = window.open(");
 
 assert.ok(openIndex >= 0, "browser display opening must request a popup");
-assert.ok(source.includes('"lantern-display-wall"'), "multiple browser displays must reuse one wall popup");
-assert.ok(source.includes("result.opened.push(...screens.map"), "the wall popup must report every contained display as opened");
-assert.ok(source.includes("Browsers consume transient user activation after one window.open call"));
-assert.ok(app.includes('className="display-wall-grid"'), "the display wall route must render every requested output");
-assert.ok(app.includes("#/display/${encodeURIComponent(screen.id)}"), "each display-wall tile must host its actual display route");
+assert.ok(source.includes("let requestedNewWindow = false"), "browser display opening must track the one-popup budget for each click");
+assert.ok(source.includes("result.pending.push(screen.id)"), "additional displays must be queued without requesting blocked popups");
+assert.ok(source.includes("knownPopup!.focus()"), "already-open display windows must be focused without consuming another popup request");
+assert.ok(app.includes("openNextDisplayWindow"), "the dashboard must expose a follow-up action for the next display");
+assert.ok(app.includes("void openDisplayWindows([screen])"), "the follow-up action must request only one display window");
+assert.ok(dialog.includes("actionLabel && onAction"), "the display notice must render its explicit follow-up action");
 
-console.log(JSON.stringify({ oneBrowserPopupPerClick: true, allDisplaysContained: true, nativeWindowsPreserved: true }));
+console.log(JSON.stringify({ oneNewBrowserPopupPerClick: true, pendingDisplaysActionable: true, nativeWindowsPreserved: true }));

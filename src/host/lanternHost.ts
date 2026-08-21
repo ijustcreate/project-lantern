@@ -652,6 +652,7 @@ export function nextRevision(state: LanternState, note: string): LanternState {
 export interface DisplayWindowOpenResult {
   opened: string[];
   blocked: string[];
+  pending: string[];
 }
 
 function preserveCollection<T extends { id: string }>(local: readonly T[], shared: readonly T[], label: string, report: DataProtectionReport) {
@@ -712,8 +713,9 @@ const browserDisplayWindows = new Map<string, Window>();
 
 export function openBrowserDisplayWindows(screens = Object.values(loadLanternState().screens)): DisplayWindowOpenResult {
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  const result: DisplayWindowOpenResult = { opened: [], blocked: [] };
+  const result: DisplayWindowOpenResult = { opened: [], blocked: [], pending: [] };
   if (!screens.length) return result;
+  let requestedNewWindow = false;
   screens.forEach((screen, index) => {
     const popupName = `lantern-display-${screen.id}`;
     const knownPopup = browserDisplayWindows.get(screen.id);
@@ -724,6 +726,25 @@ export function openBrowserDisplayWindows(screens = Object.values(loadLanternSta
     const cascade = index * 28;
     const left = window.screenX + Math.round((window.outerWidth - width) / 2) + cascade;
     const top = window.screenY + Math.round((window.outerHeight - height) / 2) + cascade;
+    if (wasAlreadyOpen) {
+      try {
+        knownPopup!.resizeTo(width, height);
+        knownPopup!.moveTo(left, top);
+      } catch {
+        // Browsers may restrict window movement; focus remains a safe fallback.
+      }
+      knownPopup!.focus();
+      result.opened.push(screen.id);
+      return;
+    }
+    // Chrome permits one newly-created popup per trusted click. Queue every
+    // remaining display for its own explicit click instead of triggering the
+    // browser's blocked-popup warning.
+    if (requestedNewWindow) {
+      result.pending.push(screen.id);
+      return;
+    }
+    requestedNewWindow = true;
     const popup = window.open(
       `${appUrl}#/display/${encodeURIComponent(screen.id)}`,
       popupName,
@@ -734,16 +755,6 @@ export function openBrowserDisplayWindows(screens = Object.values(loadLanternSta
       return;
     }
     browserDisplayWindows.set(screen.id, popup);
-    // A named popup keeps its last position. Reopening it deliberately brings it
-    // back to the operator's current monitor and centers it over the control app.
-    if (wasAlreadyOpen) {
-      try {
-        popup.resizeTo(width, height);
-        popup.moveTo(left, top);
-      } catch {
-        // Browsers may restrict window movement; focus remains a safe fallback.
-      }
-    }
     popup.focus();
     result.opened.push(screen.id);
   });
@@ -768,7 +779,7 @@ export async function openDisplayWindows(screens = Object.values(loadLanternStat
         defaultMonitorId: screen.defaultMonitorId
       }))
     });
-    return { opened: screens.map((screen) => screen.id), blocked: [] };
+    return { opened: screens.map((screen) => screen.id), blocked: [], pending: [] };
   } catch {
     return openBrowserDisplayWindows(screens);
   }

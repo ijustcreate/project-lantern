@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0267",
+    "title": "Open every display without Chrome popup warnings",
+    "summary": "The browser launcher now opens one new display per trusted click and presents an Open next display action for each remaining screen. Existing display windows are reused and focused, while the native app continues opening all windows directly.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 3:11 PM",
+    "areas": [
+      "Dashboard",
+      "Displays",
+      "Browser"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/components/LanternDialog.tsx",
+      "src/components/LanternDialog.css",
+      "scripts/test-display-window-open.mjs"
+    ],
+    "tests": "npm run build; npx tsc --noEmit; node scripts/test-display-window-open.mjs; Playwright progressive display-launch test and visual review with zero console errors"
+  },
+  {
     "id": "DEV-0266",
     "title": "Keep each operator's portal theme stable",
     "summary": "Stopped stale startup or incoming shared state from switching an operator back to Warm. State publishing now waits for hydration, fallback-local bootstrap state is not relayed, and both theme selectors save the active user's preference.",

@@ -65,6 +65,8 @@
   line-height: 1.45;
 }
 .lantern-notice > svg { color: #73dddc; }
+.lantern-notice-actions { display: flex; align-items: center; gap: 8px; }
+.lantern-notice-actions .command-button { min-height: 32px; white-space: nowrap; }
 
 @media (max-width: 560px) {
   .lantern-confirm-dialog { grid-template-columns: 1fr; }
@@ -72,4 +74,6 @@
   .lantern-confirm-dialog > .editor-modal-actions { grid-column: 1; }
   .lantern-confirm-dialog .editor-modal-actions,
   .lantern-text-prompt .editor-modal-actions { align-items: stretch; flex-direction: column-reverse; }
+  .lantern-notice { align-items: start; }
+  .lantern-notice-actions { align-items: flex-end; flex-direction: column-reverse; }
 }

@@ -115,12 +115,25 @@ export function LanternTextPromptDialog({
   );
 }
 
-export function LanternNotice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+export function LanternNotice({
+  message,
+  actionLabel,
+  onAction,
+  onDismiss
+}: {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  onDismiss: () => void;
+}) {
   return createPortal(
     <div className="lantern-notice" role="alert" aria-live="assertive">
       <Info size={18} aria-hidden="true" />
       <span>{message}</span>
-      <button type="button" className="icon-button" aria-label="Dismiss notice" title="Dismiss notice" onClick={onDismiss}><X size={16} /></button>
+      <div className="lantern-notice-actions">
+        {actionLabel && onAction && <button type="button" className="command-button primary compact" onClick={onAction}>{actionLabel}</button>}
+        <button type="button" className="icon-button" aria-label="Dismiss notice" title="Dismiss notice" onClick={onDismiss}><X size={16} /></button>
+      </div>
     </div>,
     document.body
   );
