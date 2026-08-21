@@ -354,18 +354,16 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
     const render = (now: number) => {
       if (disposed) return;
       if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
-        const { crop: currentCrop, effects: currentEffects, chromaKey: currentChroma } = settingsRef.current;
+        const { effects: currentEffects, chromaKey: currentChroma } = settingsRef.current;
         const currentRuntimeEffects = currentEffects as RuntimeEffectsSettings;
-        const scale = Math.max(1, currentCrop.scale);
-        const sourceWidth = video.videoWidth / scale;
-        const sourceHeight = video.videoHeight / scale;
-        const sourceX = Math.max(0, Math.min(video.videoWidth - sourceWidth, (video.videoWidth - sourceWidth) / 2 + (currentCrop.x / 100) * video.videoWidth));
-        const sourceY = Math.max(0, Math.min(video.videoHeight - sourceHeight, (video.videoHeight - sourceHeight) / 2 + (currentCrop.y / 100) * video.videoHeight));
 
         sourceContext.globalCompositeOperation = "source-over";
         sourceContext.filter = "none";
         sourceContext.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-        sourceContext.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        // Framing belongs to the shared CSS transform applied to both the raw
+        // video and processed canvas below. Cropping here as well made effects
+        // square the zoom and double the pan whenever processing was enabled.
+        sourceContext.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
         const adaptiveFps = performanceMonitor.getAdaptiveFps();
         const faceNearEdge = Boolean(landmarks && [1, 10, 152, 234, 454].some((index) => {

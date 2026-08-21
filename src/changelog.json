@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0264",
+    "title": "Repair desktop broadcast camera controls",
+    "summary": "Made the desktop Broadcast Studio edit the same per-display frame used by direct manipulation and live output, restored working crop and mirror controls, and kept background removal from applying zoom and pan twice.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 2:06 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Camera effects"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx"
+    ],
+    "tests": "npm run build; node scripts/test-broadcast-composition.mjs; Playwright synthetic camera regression for zoom, pan, edge crop, mirror, flip, All displays, and background-removal framing"
+  },
+  {
     "id": "DEV-0263",
     "title": "Make panel delete controls reliable",
     "summary": "Prevented the Board Editor canvas from intercepting selection-toolbar clicks so the trash button consistently opens its confirmation and removes the selected element, including on crowded overlapping boards.",

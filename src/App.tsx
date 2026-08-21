@@ -5501,9 +5501,13 @@ function LivePreviewPanel({
   const allScreens = Object.values(state.screens);
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
   const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
-  const patchDisplayLayout = (screenId: ScreenId, patch: NonNullable<LanternState["live"]["displayLayouts"]>[string]) => patchLive({
-    displayLayouts: { ...state.live.displayLayouts, [screenId]: { ...state.live.displayLayouts?.[screenId], ...patch } }
-  });
+  const patchDisplayLayout = (screenId: ScreenId, patch: NonNullable<LanternState["live"]["displayLayouts"]>[string]) => updateState((current) => ({
+    ...current,
+    live: {
+      ...current.live,
+      displayLayouts: { ...current.live.displayLayouts, [screenId]: { ...current.live.displayLayouts?.[screenId], ...patch } }
+    }
+  }));
   const selectedPreviewBoardId = previewBoardId === "assigned" ? undefined : previewBoardId;
   const selectedRecordingId = recordings.some((recording) => recording.id === state.live.recordingId)
     ? state.live.recordingId!
@@ -5513,8 +5517,21 @@ function LivePreviewPanel({
     recording.id,
     `${recording.title} · ${formatCountdown(recording.durationSeconds)}`
   ]));
-  const liveComposition = normalizeBroadcastComposition(state.live);
-  const sourceCropEdges = normalizeCropEdges(liveComposition.frame.cropEdges);
+  const selectedFrame = normalizeBroadcastComposition(liveCompositionForDisplay(state.live, previewScreen.id)).frame;
+  const sourceCropEdges = normalizeCropEdges(selectedFrame.cropEdges);
+  const updateTargetFrames = (updater: (frame: LanternState["live"]["frame"]) => LanternState["live"]["frame"]) => updateState((current) => {
+    const targetScreenIds = current.live.target === "all"
+      ? Object.keys(current.screens)
+      : current.screens[current.live.target]
+        ? [current.live.target]
+        : [previewScreen.id];
+    const displayLayouts = { ...current.live.displayLayouts };
+    targetScreenIds.forEach((screenId) => {
+      const frame = normalizeBroadcastComposition(liveCompositionForDisplay(current.live, screenId)).frame;
+      displayLayouts[screenId] = { ...displayLayouts[screenId], frame: updater(frame) };
+    });
+    return { ...current, live: { ...current.live, displayLayouts } };
+  });
   const backgroundRemoval = resolveBackgroundRemoval(state.live);
   const selectedRemovalMethod = backgroundRemoval.enabled ? backgroundRemoval.method : removalMethod;
   const selectedChromaPreset = CHROMA_KEY_PRESETS.find((preset) => preset.color.toLowerCase() === state.live.chromaKey.color.toLowerCase())?.id ?? "custom";
@@ -6084,38 +6101,45 @@ function LivePreviewPanel({
       {liveTab === "frame" && <div className="live-frame-tab live-tab-panel">
         <div className="live-toolbox direct-frame-controls">
           <div className="direct-control-heading"><h3>Direct manipulation</h3><SegmentedControl value={directMode} options={[["frame", "Move & resize"], ["crop", "Pan, zoom & crop"]]} onChange={(value) => setDirectMode(value as typeof directMode)} /></div>
-          <div className="field camera-source-fit"><span>Source fit <InfoDot text="Fill covers the camera panel. Fit keeps the whole camera or shared window visible." /></span><SegmentedControl value={liveComposition.frame.fitMode ?? "fill"} options={[["fill", "Fill frame"], ["fit", "Fit whole source"]]} onChange={(value) => patchLive({ frame: { ...state.live.frame, fitMode: value as "fit" | "fill", crop: { ...state.live.frame.crop, scale: value === "fit" ? Math.min(state.live.frame.crop.scale, 1) : Math.max(state.live.frame.crop.scale, 1) } } })} /></div>
+          <div className="field camera-source-fit"><span>Source fit <InfoDot text="Fill covers the camera panel. Fit keeps the whole camera or shared window visible." /></span><SegmentedControl value={selectedFrame.fitMode ?? "fill"} options={[["fill", "Fill frame"], ["fit", "Fit whole source"]]} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, fitMode: value as "fit" | "fill", crop: { ...frame.crop, scale: value === "fit" ? Math.min(frame.crop.scale, 1) : Math.max(frame.crop.scale, 1) } }))} /></div>
           {directMode === "frame" ? <div className="four-col">
-            <Slider label="Left" info="Video position from the left edge." value={state.live.frame.x} min={0} max={90} onChange={(value) => patchLive({ frame: { ...state.live.frame, x: Math.min(value, 100 - state.live.frame.width) } })} />
-            <Slider label="Top" info="Video position from the top edge." value={state.live.frame.y} min={0} max={90} onChange={(value) => patchLive({ frame: { ...state.live.frame, y: Math.min(value, 100 - state.live.frame.height) } })} />
-            <Slider label="Width" info="Video section width." value={state.live.frame.width} min={10} max={100 - state.live.frame.x} onChange={(value) => patchLive({ frame: { ...state.live.frame, width: value } })} />
-            <Slider label="Height" info="Video section height." value={state.live.frame.height} min={10} max={100 - state.live.frame.y} onChange={(value) => patchLive({ frame: { ...state.live.frame, height: value } })} />
+            <Slider label="Left" info="Video position from the left edge." value={selectedFrame.x} min={0} max={90} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, x: Math.min(value, 100 - frame.width) }))} />
+            <Slider label="Top" info="Video position from the top edge." value={selectedFrame.y} min={0} max={90} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, y: Math.min(value, 100 - frame.height) }))} />
+            <Slider label="Width" info="Video section width." value={selectedFrame.width} min={10} max={100 - selectedFrame.x} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, width: value }))} />
+            <Slider label="Height" info="Video section height." value={selectedFrame.height} min={10} max={100 - selectedFrame.y} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, height: value }))} />
           </div> : <div className="camera-crop-controls">
             <div className="camera-zoom-control">
-              <button type="button" className="icon-button" title="Zoom camera out" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale - .1, liveComposition.frame.fitMode === "fit" ? .5 : 1, 3) } } })}>−</button>
-              <Slider label="Camera zoom" info="Make the camera image larger inside its frame. You can also use the mouse wheel over the preview." value={Math.round(state.live.frame.crop.scale * 100)} min={liveComposition.frame.fitMode === "fit" ? 50 : 100} max={300} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: value / 100 } } })} />
-              <button type="button" className="icon-button" title="Zoom camera in" onClick={() => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, scale: clamp(state.live.frame.crop.scale + .1, 1, 3) } } })}>+</button>
+              <button type="button" className="icon-button" title="Zoom camera out" onClick={() => updateTargetFrames((frame) => ({ ...frame, crop: { ...frame.crop, scale: clamp(frame.crop.scale - .1, frame.fitMode === "fit" ? .5 : 1, 3) } }))}>−</button>
+              <Slider label="Camera zoom" info="Make the camera image larger inside its frame. You can also use the mouse wheel over the preview." value={Math.round(selectedFrame.crop.scale * 100)} min={selectedFrame.fitMode === "fit" ? 50 : 100} max={300} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, crop: { ...frame.crop, scale: value / 100 } }))} />
+              <button type="button" className="icon-button" title="Zoom camera in" onClick={() => updateTargetFrames((frame) => ({ ...frame, crop: { ...frame.crop, scale: clamp(frame.crop.scale + .1, 1, 3) } }))}>+</button>
             </div>
             <div className="two-col">
-              <Slider label="Pan left / right" info="Pan the camera image left or right inside its frame." value={state.live.frame.crop.x} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, x: value } } })} />
-              <Slider label="Pan up / down" info="Pan the camera image vertically inside its frame." value={state.live.frame.crop.y} min={-50} max={50} onChange={(value) => patchLive({ frame: { ...state.live.frame, crop: { ...state.live.frame.crop, y: value } } })} />
+              <Slider label="Pan left / right" info="Pan the camera image left or right inside its frame." value={selectedFrame.crop.x} min={-50} max={50} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, crop: { ...frame.crop, x: value } }))} />
+              <Slider label="Pan up / down" info="Pan the camera image vertically inside its frame." value={selectedFrame.crop.y} min={-50} max={50} onChange={(value) => updateTargetFrames((frame) => ({ ...frame, crop: { ...frame.crop, y: value } }))} />
             </div>
             <div className="four-col camera-edge-crop-controls">
-              <Slider label="Crop top" info="Hide only the top edge of the camera source." value={sourceCropEdges.top} min={0} max={45} onChange={(top) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, top }) } })} />
-              <Slider label="Crop right" info="Hide only the right edge of the camera source." value={sourceCropEdges.right} min={0} max={45} onChange={(right) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, right }) } })} />
-              <Slider label="Crop bottom" info="Hide only the bottom edge of the camera source." value={sourceCropEdges.bottom} min={0} max={45} onChange={(bottom) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, bottom }) } })} />
-              <Slider label="Crop left" info="Hide only the left edge of the camera source." value={sourceCropEdges.left} min={0} max={45} onChange={(left) => patchLive({ frame: { ...state.live.frame, cropEdges: normalizeCropEdges({ ...sourceCropEdges, left }) } })} />
+              <Slider label="Crop top" info="Hide only the top edge of the camera source." value={sourceCropEdges.top} min={0} max={45} onChange={(top) => updateTargetFrames((frame) => ({ ...frame, cropEdges: normalizeCropEdges({ ...normalizeCropEdges(frame.cropEdges), top }) }))} />
+              <Slider label="Crop right" info="Hide only the right edge of the camera source." value={sourceCropEdges.right} min={0} max={45} onChange={(right) => updateTargetFrames((frame) => ({ ...frame, cropEdges: normalizeCropEdges({ ...normalizeCropEdges(frame.cropEdges), right }) }))} />
+              <Slider label="Crop bottom" info="Hide only the bottom edge of the camera source." value={sourceCropEdges.bottom} min={0} max={45} onChange={(bottom) => updateTargetFrames((frame) => ({ ...frame, cropEdges: normalizeCropEdges({ ...normalizeCropEdges(frame.cropEdges), bottom }) }))} />
+              <Slider label="Crop left" info="Hide only the left edge of the camera source." value={sourceCropEdges.left} min={0} max={45} onChange={(left) => updateTargetFrames((frame) => ({ ...frame, cropEdges: normalizeCropEdges({ ...normalizeCropEdges(frame.cropEdges), left }) }))} />
             </div>
-            <button type="button" className="command-button secondary compact reset-edge-crop" disabled={!Object.values(sourceCropEdges).some(Boolean)} onClick={() => patchLive({ frame: { ...state.live.frame, cropEdges: { top: 0, right: 0, bottom: 0, left: 0 } } })}><RotateCcw size={14} /> Reset edge crop</button>
+            <button type="button" className="command-button secondary compact reset-edge-crop" disabled={!Object.values(sourceCropEdges).some(Boolean)} onClick={() => updateTargetFrames((frame) => ({ ...frame, cropEdges: { top: 0, right: 0, bottom: 0, left: 0 } }))}><RotateCcw size={14} /> Reset edge crop</button>
           </div>}
-          <div className="live-transform-controls"><LabeledSelect label="Mask" info="Choose the visible shape of the live source." value={state.live.frame.maskShape ?? "rectangle"} options={["rectangle", "square", "circle", "polygon"]} optionLabels={{ rectangle: "Rectangle", square: "Square", circle: "Circle", polygon: "Custom polygon" }} onChange={(value) => {
-            const maskShape = value as NonNullable<LanternState["live"]["frame"]["maskShape"]>;
-            const size = maskShape === "square" ? Math.min(state.live.frame.width, state.live.frame.height, 100 - state.live.frame.x, 100 - state.live.frame.y) : null;
-            patchLive({ frame: { ...state.live.frame, maskShape, width: size ?? state.live.frame.width, height: size ?? state.live.frame.height, polygonPoints: maskShape === "polygon" ? (state.live.frame.polygonPoints?.length ? state.live.frame.polygonPoints : undefined) : state.live.frame.polygonPoints } });
-          }} /><Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={state.live.frame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => patchLive({ frame: { ...state.live.frame, rotation } })} /><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorX ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorX: event.target.checked } })} /><span>Mirror Camera (Left/Right)</span></label><label className="switch-row"><input type="checkbox" checked={state.live.frame.mirrorY ?? false} onChange={(event) => patchLive({ frame: { ...state.live.frame, mirrorY: event.target.checked } })} /><span>Flip Camera (Up/Down)</span></label></div>
+          <div className="live-transform-controls">
+            <LabeledSelect label="Mask" info="Choose the visible shape of the live source." value={selectedFrame.maskShape ?? "rectangle"} options={["rectangle", "square", "circle", "polygon"]} optionLabels={{ rectangle: "Rectangle", square: "Square", circle: "Circle", polygon: "Custom polygon" }} onChange={(value) => {
+              const maskShape = value as NonNullable<LanternState["live"]["frame"]["maskShape"]>;
+              updateTargetFrames((frame) => {
+                const size = maskShape === "square" ? Math.min(frame.width, frame.height, 100 - frame.x, 100 - frame.y) : null;
+                return { ...frame, maskShape, width: size ?? frame.width, height: size ?? frame.height, polygonPoints: maskShape === "polygon" ? (frame.polygonPoints?.length ? frame.polygonPoints : undefined) : frame.polygonPoints };
+              });
+            }} />
+            <Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={selectedFrame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => updateTargetFrames((frame) => ({ ...frame, rotation }))} />
+            <label className="switch-row"><input type="checkbox" checked={selectedFrame.mirrorX ?? false} onChange={(event) => updateTargetFrames((frame) => ({ ...frame, mirrorX: event.target.checked }))} /><span>Mirror Camera (Left/Right)</span></label>
+            <label className="switch-row"><input type="checkbox" checked={selectedFrame.mirrorY ?? false} onChange={(event) => updateTargetFrames((frame) => ({ ...frame, mirrorY: event.target.checked }))} /><span>Flip Camera (Up/Down)</span></label>
+          </div>
           <label className="field camera-panel-color"><span>Camera panel color <InfoDot text="Visible behind fitted or independently cropped camera edges." /></span><input type="color" value={state.live.panelColor} onChange={(event) => patchLive({ panelColor: event.target.value })} /></label>
           <BroadcastCompositionControls live={state.live} onPatch={patchLive} />
-          {(state.live.frame.maskShape === "circle" || state.live.frame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
+          {(selectedFrame.maskShape === "circle" || selectedFrame.maskShape === "polygon") && <p className="direct-manipulation-hint">Hold Shift while dragging an edge to scale proportionally. Polygon points can be dragged anywhere; hover an edge midpoint to add a point.</p>}
         </div>
       </div>}
       {liveTab === "effects" && <div className="live-toolbox live-tab-panel effects-tab">
