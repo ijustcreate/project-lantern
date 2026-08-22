@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0283",
+    "title": "Keep Broadcast pop-outs fully styled",
+    "summary": "Made the Broadcast / Stream pop-out initialize as a clean document with absolute stylesheet links and a self-contained CSS fallback, preventing intermittent raw HTML previews in about:blank windows.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 8:17 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Pop-out preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "scripts/test-broadcast-popout-layout.mjs"
+    ],
+    "tests": "Focused pop-out fixture; full npm run build; Playwright popup layout and no-console-error check; removed external popup stylesheet links and confirmed inline fallback preserved the styled grid"
+  },
+  {
     "id": "DEV-0282",
     "title": "Assign donors to exact donor lists",
     "summary": "Changed the donor editor checklist to show only donor-list panels with their board names, number multiple lists by top/left position, and save membership to the exact selected lists.",

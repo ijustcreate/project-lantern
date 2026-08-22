@@ -4950,6 +4950,41 @@ const liveSourceLabel = (source: LanternState["live"]["source"]) => source === "
       ? "Recording"
     : "Camera";
 
+function prepareLivePreviewPopup(popup: Window, sourceDocument: Document) {
+  const popupDocument = popup.document;
+  popupDocument.open();
+  popupDocument.write('<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body class="live-preview-popout-body"><div id="lantern-live-preview-root"></div></body></html>');
+  popupDocument.close();
+  popupDocument.title = "Project Lantern Live Preview";
+
+  const base = popupDocument.createElement("base");
+  base.href = sourceDocument.baseURI;
+  popupDocument.head.prepend(base);
+
+  sourceDocument.querySelectorAll<HTMLLinkElement | HTMLStyleElement>('link[rel="stylesheet"], style').forEach((node) => {
+    const clone = node.cloneNode(true) as HTMLLinkElement | HTMLStyleElement;
+    if (node instanceof HTMLLinkElement) clone.setAttribute("href", node.href);
+    popupDocument.head.appendChild(clone);
+  });
+
+  // A browser can occasionally leave a cloned stylesheet link unattached to a
+  // usable sheet in an about:blank popup. Inline the already-loaded CSSOM as a
+  // deterministic fallback so the program preview never degrades to raw HTML.
+  const loadedCss = Array.from(sourceDocument.styleSheets).flatMap((sheet) => {
+    try {
+      return Array.from(sheet.cssRules, (rule) => rule.cssText);
+    } catch {
+      return [];
+    }
+  });
+  if (loadedCss.length) {
+    const fallbackStyle = popupDocument.createElement("style");
+    fallbackStyle.dataset.lanternPopupStyles = "inline-fallback";
+    fallbackStyle.textContent = loadedCss.join("\n");
+    popupDocument.head.appendChild(fallbackStyle);
+  }
+}
+
 function liveCompositionForDisplay(live: LanternState["live"], screenId: ScreenId): LanternState["live"] {
   const layout = live.displayLayouts?.[screenId];
   return layout ? { ...live, ...layout, frame: layout.frame ?? live.frame } : live;
@@ -5861,11 +5896,7 @@ function LivePreviewPanel({
       return null;
     }
     setPopupBlocked(false);
-    popup.document.head.innerHTML = '<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
-    popup.document.title = "Project Lantern Live Preview";
-    document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => popup.document.head.appendChild(node.cloneNode(true)));
-    popup.document.body.className = "live-preview-popout-body";
-    popup.document.body.innerHTML = '<div id="lantern-live-preview-root"></div>';
+    prepareLivePreviewPopup(popup, document);
     popup.addEventListener("beforeunload", () => setPreviewWindow(null), { once: true });
     setPreviewWindow(popup);
     popup.focus();
