@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0271",
+    "title": "Improve Light theme readability",
+    "summary": "Replaced leftover dark-theme text and control colors with readable Light-theme equivalents across Broadcast, Announcements, Board Editor, Settings, donor filters, Revisions, navigation, and system status areas while preserving dark media previews.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 5:35 PM",
+    "areas": [
+      "Themes",
+      "Broadcast",
+      "Announcements",
+      "Board Editor",
+      "Settings",
+      "Donors",
+      "Revisions"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright visual and computed-style checks at 1440x900 across Broadcast, Announcements, Board Editor, Settings, Donors, and Revisions; browser console 0 errors and 0 warnings"
+  },
+  {
     "id": "DEV-0270",
     "title": "Load event sounds from hosted builds",
     "summary": "Blip and announcement sound effects now include the app's deployment base path, preventing missing chime files when Project Lantern is hosted under the GitHub Pages repository URL.",
