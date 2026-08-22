@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0288",
+    "title": "Keep board layouts fixed while the editor resizes",
+    "summary": "The Board Editor now scales a fixed authored canvas to the available workspace, preserving panel positions, typography, wrapping, and spacing at every browser size.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 9:27 PM",
+    "areas": [
+      "Board Editor",
+      "Responsive layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright portrait checks at 1904x982, 1520x829, and 500x900; landscape checks at two desktop sizes; zero console errors"
+  },
+  {
     "id": "DEV-0287",
     "title": "Keep the selected Board Editor board",
     "summary": "Board-opening links now hand the requested board to the editor once, so later shared-state refreshes cannot push the operator back to a previously opened board.",

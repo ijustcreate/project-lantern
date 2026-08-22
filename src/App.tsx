@@ -3883,12 +3883,30 @@ function DirectBoardCanvas({
   widgets?: BoardWidget[]; onAddWidget?: (widget: BoardWidget) => void; onSaveWidget?: (name: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const authoredCanvasSize = display.orientation === "Portrait" ? { width: 405, height: 720 } : { width: 960, height: 540 };
+  const [editorFitScale, setEditorFitScale] = useState(1);
   const manipulationRef = useRef<{ pointerId: number; moved: boolean; pending: Map<string, Partial<BoardPanel>> } | null>(null);
   const suppressPanelClickRef = useRef(false);
   const fittedFontFamilyRef = useRef(new Map<string, string>());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const stage = canvas?.parentElement;
+    if (!canvas || !stage) return;
+    const updateFitScale = () => {
+      const metaHeight = stage.querySelector<HTMLElement>(".board-stage-meta")?.offsetHeight ?? 0;
+      const availableWidth = Math.max(1, stage.clientWidth - 34);
+      const availableHeight = Math.max(1, stage.clientHeight - metaHeight - 24);
+      const nextScale = Math.min(1, availableWidth / authoredCanvasSize.width, availableHeight / authoredCanvasSize.height);
+      setEditorFitScale((current) => Math.abs(current - nextScale) < .001 ? current : nextScale);
+    };
+    const resizeObserver = new ResizeObserver(updateFitScale);
+    resizeObserver.observe(stage);
+    updateFitScale();
+    return () => resizeObserver.disconnect();
+  }, [authoredCanvasSize.height, authoredCanvasSize.width]);
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === "Escape") { setContextMenu(null); onBeginPlace(null); } };
     window.addEventListener("keydown", close);
@@ -4031,8 +4049,10 @@ function DirectBoardCanvas({
     if (candidate && !target.closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
   return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${(program.textFinish ?? display.textFinish) === "cut-brass" ? " finish-cut-brass" : ""}${(program.textShadowEnabled ?? display.textShadowEnabled) ? " text-shadow-enabled" : ""}`} style={{
+    width: `${authoredCanvasSize.width}px`,
+    height: `${authoredCanvasSize.height}px`,
     fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
-    "--board-editor-zoom": editorZoom,
+    "--board-editor-scale": editorFitScale * editorZoom,
     "--board-editor-pan-x": `${editorPan.x}px`,
     "--board-editor-pan-y": `${editorPan.y}px`,
     "--board-palette-text": palette.text,

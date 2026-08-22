@@ -7322,15 +7322,15 @@ textarea:focus-visible,
 .direct-board-canvas {
   position: relative;
   box-sizing: border-box;
-  max-width: calc(100% - 34px);
-  max-height: calc(100% - 24px);
+  max-width: none;
+  max-height: none;
   overflow: visible;
   border: 8px solid #090b0d;
   outline: 1px solid #765a2f;
   background: #151c20;
   color: #f5f2eb;
   box-shadow: 0 15px 30px rgba(0, 0, 0, .32), inset 0 0 0 1px rgba(212, 163, 86, .28);
-  transform: translate(var(--board-editor-pan-x, 0px), var(--board-editor-pan-y, 0px)) scale(var(--board-editor-zoom, 1));
+  transform: translate(var(--board-editor-pan-x, 0px), var(--board-editor-pan-y, 0px)) scale(var(--board-editor-scale, 1));
   transform-origin: 50% 50%;
   transition: transform .16s ease;
 }
@@ -7998,7 +7998,7 @@ textarea:focus-visible,
   .board-select-cluster .command-button { padding-inline: 8px; font-size: 9px; }
   .board-builder-workspace { grid-template-columns: minmax(0, 1fr) 210px; }
   .board-stage-meta span:last-child { display: none; }
-  .direct-board-canvas { max-width: calc(100% - 16px); }
+  .direct-board-canvas { max-width: none; }
 }
 
 /* Guided donor setup */
