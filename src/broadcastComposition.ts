@@ -260,6 +260,13 @@ export function frameSurfaceStyle(live: LivePresentation): CSSProperties {
   };
 }
 
+export function broadcastSourceTransformStyle(live: Pick<LivePresentation, "source" | "frame">): CSSProperties {
+  const mirrorCamera = live.source === "camera";
+  return {
+    transform: `rotate(${live.frame.rotation ?? 0}deg) scale(${mirrorCamera && live.frame.mirrorX ? -1 : 1}, ${mirrorCamera && live.frame.mirrorY ? -1 : 1})`
+  };
+}
+
 export function backgroundLayerStyle(live: LivePresentation): CSSProperties {
   if (live.backgroundMode === "gradient") return { backgroundImage: gradientCss(live.backgroundGradient ?? DEFAULT_BACKGROUND_GRADIENT) };
   if (live.backgroundMode === "color") return { backgroundColor: live.backgroundColor };

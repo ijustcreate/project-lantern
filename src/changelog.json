@@ -1,5 +1,38 @@
 [
   {
+    "id": "DEV-0275",
+    "title": "Keep generated broadcast labels readable",
+    "summary": "Camera mirroring now applies only to live camera sources, so generated test-feed labels, screen shares, and saved recordings are not reversed in the studio or display output.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 6:55 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Display output"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/broadcastComposition.ts",
+      "scripts/test-broadcast-composition.mjs"
+    ],
+    "tests": "node scripts/test-broadcast-composition.mjs; npm run build"
+  },
+  {
+    "id": "DEV-0274",
+    "title": "Keep large board saves synchronized",
+    "summary": "Large museum state saves now bypass unnecessary parse-and-reserialize work in the cloud worker, preventing the 503/CORS failure that left board edits only in the browser.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 6:55 PM",
+    "areas": [
+      "Board Editor",
+      "Shared state",
+      "Cloud worker"
+    ],
+    "files": [
+      "worker/bugs.ts"
+    ],
+    "tests": "Worker dry-run build; production state read returned 200 with valid CORS and parsed 23 boards at revision 19"
+  },
+  {
     "id": "DEV-0273",
     "title": "Stop unscheduled displays from showing legacy boards",
     "summary": "Dashboard display previews now show only the board currently selected by the schedule. When no board event is active, they match the opened display with a clear idle and next-up state instead of silently rendering the display's old Legacy Donor Star Wall assignment.",

@@ -45,15 +45,25 @@ function corsHeaders(request: Request) {
 async function readSharedState(request: Request, env: Env) {
   const row = await env.BUGS_DB.prepare("SELECT state_json, updated_at FROM shared_state WHERE state_id = 'museum'")
     .first<{ state_json: string; updated_at: string }>();
-  return json(request, row ? { state: JSON.parse(row.state_json), updatedAt: row.updated_at } : { state: null });
+  if (!row) return json(request, { state: null });
+
+  // The museum state can approach the worker CPU limit once boards contain
+  // many panels and embedded settings. It is already stored as valid JSON, so
+  // do not parse and stringify the entire document again just to wrap it.
+  return rawJson(request, `{"state":${row.state_json},"updatedAt":${JSON.stringify(row.updated_at)}}`);
 }
 
 async function saveSharedState(request: Request, env: Env) {
   const length = Number(request.headers.get("content-length") ?? "0");
   if (length > maxStateBytes) return json(request, { error: "Project data is too large to save" }, 413);
-  const input = await request.json() as { state?: unknown };
-  if (!input.state || typeof input.state !== "object") return json(request, { error: "Project state is required" }, 400);
-  const stateJson = JSON.stringify(input.state);
+  const body = await request.text();
+  // The app sends one compact JSON envelope: {"state":{...}}. Extract its
+  // already-serialized state instead of parsing and serializing a megabyte of
+  // board data inside the Worker on every save.
+  const prefix = '{"state":';
+  if (!body.startsWith(prefix) || !body.endsWith("}")) return json(request, { error: "Project state is required" }, 400);
+  const stateJson = body.slice(prefix.length, -1);
+  if (!stateJson.startsWith("{") || !stateJson.endsWith("}")) return json(request, { error: "Project state is required" }, 400);
   if (stateJson.length > maxStateBytes) return json(request, { error: "Project data is too large to save" }, 413);
   const updatedAt = new Date().toISOString();
   await env.BUGS_DB.prepare(`
@@ -97,6 +107,17 @@ function json(request: Request, value: unknown, status = 200) {
     headers: {
       ...corsHeaders(request),
       "cache-control": "no-store"
+    }
+  });
+}
+
+function rawJson(request: Request, value: string, status = 200) {
+  return new Response(value, {
+    status,
+    headers: {
+      ...corsHeaders(request),
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=UTF-8"
     }
   });
 }

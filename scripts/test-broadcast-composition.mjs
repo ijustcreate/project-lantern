@@ -74,10 +74,24 @@ assert.equal(composition.resolveBroadcastAssetUrl("blob:https://example.test/123
 assert.equal(composition.resolveBroadcastAssetUrl("https://cdn.example.test/background.webp", "/lantern/"), "https://cdn.example.test/background.webp");
 assert.equal(composition.resolveBroadcastAssetUrl("/api/media/background", "/lantern/"), "/api/media/background");
 
+const mirroredCamera = composition.broadcastSourceTransformStyle({
+  source: "camera",
+  frame: { rotation: -4, mirrorX: true, mirrorY: true }
+});
+assert.equal(mirroredCamera.transform, "rotate(-4deg) scale(-1, -1)", "camera sources honor mirror controls");
+for (const source of ["demo", "screen", "recording"]) {
+  const readableSource = composition.broadcastSourceTransformStyle({
+    source,
+    frame: { rotation: 7, mirrorX: true, mirrorY: true }
+  });
+  assert.equal(readableSource.transform, "rotate(7deg) scale(1, 1)", `${source} sources keep burned-in text readable`);
+}
+
 console.log(JSON.stringify({
   framePresets: composition.BROADCAST_FRAME_PRESETS.length,
   backgroundPresets: composition.BROADCAST_BACKGROUND_PRESETS.length,
   legacyPreserved: true,
   cropEdges: cropped,
-  customUrlsPreserved: true
+  customUrlsPreserved: true,
+  sourceMirroring: "camera-only"
 }));

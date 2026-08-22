@@ -150,7 +150,7 @@ import codeChangelog from "./changelog.json";
 import { nextVisitorMessage, normalizeVisitorMessageRotation } from "./visitorMessages";
 import { resolveActiveBoardProgram, resolveCurrentBoardSchedule, resolveCurrentScheduleEntry, scheduleMatchesDate } from "./scheduleResolution";
 import { CHROMA_KEY_PRESETS, createBackgroundRemovalPatch, resolveBackgroundRemoval, SCREENLESS_REMOVAL_TECHNOLOGY, type BackgroundRemovalMethod } from "./backgroundRemoval";
-import { frameSurfaceStyle, normalizeBroadcastComposition, normalizeCropEdges } from "./broadcastComposition";
+import { broadcastSourceTransformStyle, frameSurfaceStyle, normalizeBroadcastComposition, normalizeCropEdges } from "./broadcastComposition";
 import { renderCostumeOverlay } from "./costumeRenderer";
 import { resolveCalibrationProfile } from "./effectStudio";
 import type { TrackingRuntimeStatus } from "./trackingRuntime";
@@ -5160,7 +5160,7 @@ function DirectLiveStage({
             ...frameSurfaceStyle(composedLive)
           }}>
             <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${cropEdges.top}% ${cropEdges.right}% ${cropEdges.bottom}% ${cropEdges.left}%)` }}>
-              <div className="live-camera-transform" style={{ transform: `rotate(${composedLive.frame.rotation ?? 0}deg) scale(${composedLive.frame.mirrorX ? -1 : 1}, ${composedLive.frame.mirrorY ? -1 : 1})` }}>
+              <div className="live-camera-transform" style={broadcastSourceTransformStyle(composedLive)}>
                 {stream ? <ChromaVideo stream={stream} chromaKey={composedLive.chromaKey} effects={composedLive.effects} crop={composedLive.frame.crop} fitMode={composedLive.frame.fitMode} onTrackingStatus={onTrackingStatus} renderTrackedOverlay={trackedCostumeRenderer} /> : composedLive.source === "demo" ? <div className="live-test-pattern compact"><strong>DIRECTOR LIVE</strong><span>Generated test feed</span></div> : <div className="direct-source-empty">{composedLive.source === "recording" ? <Video size={22} /> : <Camera size={22} />}<span>{previewError ?? "Connect the selected source to preview it here."}</span></div>}
               </div>
             </div>
@@ -6197,8 +6197,8 @@ function LivePreviewPanel({
               });
             }} />
             <Slider label="Camera rotation" info="Rotate only the camera image inside its frame." value={selectedFrame.rotation ?? 0} min={-180} max={180} editableValue onChange={(rotation) => updateTargetFrames((frame) => ({ ...frame, rotation }))} />
-            <label className="switch-row"><input type="checkbox" checked={selectedFrame.mirrorX ?? false} onChange={(event) => updateTargetFrames((frame) => ({ ...frame, mirrorX: event.target.checked }))} /><span>Mirror Camera (Left/Right)</span></label>
-            <label className="switch-row"><input type="checkbox" checked={selectedFrame.mirrorY ?? false} onChange={(event) => updateTargetFrames((frame) => ({ ...frame, mirrorY: event.target.checked }))} /><span>Flip Camera (Up/Down)</span></label>
+            <label className="switch-row"><input type="checkbox" disabled={state.live.source !== "camera"} checked={selectedFrame.mirrorX ?? false} onChange={(event) => updateTargetFrames((frame) => ({ ...frame, mirrorX: event.target.checked }))} /><span>Mirror Camera (Left/Right)</span></label>
+            <label className="switch-row"><input type="checkbox" disabled={state.live.source !== "camera"} checked={selectedFrame.mirrorY ?? false} onChange={(event) => updateTargetFrames((frame) => ({ ...frame, mirrorY: event.target.checked }))} /><span>Flip Camera (Up/Down)</span></label>
           </div>
           <label className="field camera-panel-color"><span>Camera panel color <InfoDot text="Visible behind fitted or independently cropped camera edges." /></span><input type="color" value={state.live.panelColor} onChange={(event) => patchLive({ panelColor: event.target.value })} /></label>
           <BroadcastCompositionControls live={state.live} onPatch={patchLive} />
@@ -8690,7 +8690,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       {showLive && (
         <div className={`live-overlay broadcast-frame-surface mask-${liveComposition.frame.maskShape ?? "rectangle"}`} style={{ left: `${liveComposition.frame.x}%`, top: `${liveComposition.frame.y}%`, width: `${liveComposition.frame.width}%`, height: `${liveComposition.frame.height}%`, clipPath: liveComposition.frame.maskShape === "polygon" ? livePolygonClip(liveComposition.frame) : undefined, ...frameSurfaceStyle(liveComposition) }}>
           <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${liveCropEdges.top}% ${liveCropEdges.right}% ${liveCropEdges.bottom}% ${liveCropEdges.left}%)` }}>
-            <div className="live-camera-transform" style={{ transform: `rotate(${liveComposition.frame.rotation ?? 0}deg) scale(${liveComposition.frame.mirrorX ? -1 : 1}, ${liveComposition.frame.mirrorY ? -1 : 1})` }}>
+            <div className="live-camera-transform" style={broadcastSourceTransformStyle(liveComposition)}>
               <ChromaVideo stream={stream} chromaKey={liveComposition.chromaKey} effects={liveComposition.effects} crop={liveComposition.frame.crop} fitMode={liveComposition.frame.fitMode} renderTrackedOverlay={displayCostumeRenderer} />
             </div>
           </div>
