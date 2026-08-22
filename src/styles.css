@@ -5727,6 +5727,129 @@ textarea:focus-visible,
   overflow-wrap: anywhere;
 }
 
+/* Announcement typography is authored on a fixed display canvas. Give each
+   orientation its own hierarchy instead of squeezing three fields into one
+   horizontal row on portrait screens. */
+.announcement-fixed-canvas .announcement-display-overlay {
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .3);
+}
+
+.announcement-fixed-canvas .announcement-display-overlay > strong {
+  font-family: "DM Sans", sans-serif;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: .98;
+  text-wrap: balance;
+}
+
+.announcement-fixed-canvas .announcement-display-overlay > span {
+  font-family: "DM Sans", sans-serif;
+  font-weight: 550;
+  line-height: 1.28;
+  text-wrap: pretty;
+}
+
+.announcement-fixed-canvas .announcement-display-overlay > .announcement-details {
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding: .8cqi 1.2cqi;
+  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-radius: 999px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 1.25cqi;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: .8;
+}
+
+.announcement-fixed-canvas.landscape .announcement-display-overlay.ribbon,
+.announcement-fixed-canvas.landscape .announcement-display-overlay.lower-third {
+  display: grid;
+  grid-template-columns: minmax(250px, .72fr) minmax(0, 1.55fr);
+  grid-template-rows: auto auto;
+  column-gap: 3cqi;
+  row-gap: .8cqi;
+  min-height: 18%;
+  padding: 2.4cqi 4cqi;
+}
+
+.announcement-fixed-canvas.landscape .announcement-display-overlay.ribbon > strong,
+.announcement-fixed-canvas.landscape .announcement-display-overlay.lower-third > strong {
+  grid-row: 1 / 3;
+  align-self: center;
+  padding-right: 2.5cqi;
+  border-right: 2px solid color-mix(in srgb, currentColor 24%, transparent);
+  font-size: 3.6cqi;
+}
+
+.announcement-fixed-canvas.landscape .announcement-display-overlay.ribbon > span,
+.announcement-fixed-canvas.landscape .announcement-display-overlay.lower-third > span {
+  align-self: end;
+  font-size: 1.85cqi;
+}
+
+.announcement-fixed-canvas.landscape .announcement-display-overlay.ribbon > .announcement-details,
+.announcement-fixed-canvas.landscape .announcement-display-overlay.lower-third > .announcement-details {
+  align-self: start;
+  font-size: 1.15cqi;
+}
+
+.announcement-fixed-canvas.landscape .announcement-display-overlay.lower-third {
+  width: 88%;
+}
+
+.announcement-fixed-canvas.portrait .announcement-display-overlay.ribbon,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.lower-third {
+  right: 6%;
+  left: 6%;
+  width: auto;
+  min-height: 23%;
+  padding: 4.5cqi 5.5cqi;
+  border-radius: 24px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1.6cqi;
+}
+
+.announcement-fixed-canvas.portrait .announcement-display-overlay.ribbon > strong,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.lower-third > strong,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.temporary-card > strong {
+  font-size: 6cqi;
+}
+
+.announcement-fixed-canvas.portrait .announcement-display-overlay.ribbon > span,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.lower-third > span,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.temporary-card > span {
+  font-size: 3.25cqi;
+}
+
+.announcement-fixed-canvas.portrait .announcement-display-overlay.ribbon > .announcement-details,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.lower-third > .announcement-details,
+.announcement-fixed-canvas.portrait .announcement-display-overlay.temporary-card > .announcement-details {
+  margin-top: .8cqi;
+  padding: 1.25cqi 1.8cqi;
+  border-radius: 12px;
+  font-size: 2.15cqi;
+}
+
+.announcement-fixed-canvas.portrait .announcement-display-overlay.temporary-card {
+  width: 84%;
+  min-height: 30%;
+  padding: 6cqi;
+  gap: 2cqi;
+  border-radius: 26px;
+}
+
+.announcement-fixed-canvas.portrait .announcement-display-overlay.news-ticker {
+  min-height: 9%;
+}
+
 .announcement-display-preview .announcement-countdown small {
   font-size: clamp(4px, 1.5cqi, 8px);
 }

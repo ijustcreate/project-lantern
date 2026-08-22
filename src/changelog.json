@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0278",
+    "title": "Make announcements readable on every display",
+    "summary": "Redesigned announcement typography and layout so portrait notices stack into a clear card while landscape notices use a balanced banner hierarchy.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 7:33 PM",
+    "areas": [
+      "Announcements",
+      "Displays"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright portrait temporary card; Playwright portrait and landscape Art Center ribbons; browser console check"
+  },
+  {
     "id": "DEV-0277",
     "title": "Keep board edits saveable and recoverable",
     "summary": "Stopped board edit audit history from copying whole boards, increased the shared-state safety ceiling, and preserve a newer local save on refresh when server sync has not caught up.",
