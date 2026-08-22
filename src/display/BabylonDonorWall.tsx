@@ -738,7 +738,7 @@ function drawComposableBoard(
 
     if (panel.type === "donors") {
       const panelDonors = donors.filter((donor) =>
-        (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
+        (panel.donorIds === undefined || panel.donorIds.includes(donor.id))
         && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
       );
       const columns = panel.columns ?? program.columns;

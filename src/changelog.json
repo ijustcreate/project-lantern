@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0282",
+    "title": "Assign donors to exact donor lists",
+    "summary": "Changed the donor editor checklist to show only donor-list panels with their board names, number multiple lists by top/left position, and save membership to the exact selected lists.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 8:03 PM",
+    "areas": [
+      "Donors",
+      "Board Editor",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; verified exact-list labels, ordering, save mapping, empty-list rendering, and pledge synchronization"
+  },
+  {
     "id": "DEV-0281",
     "title": "Add inspirational quote composer",
     "summary": "Added a donor-page form for saving inspirational quotes and their authors directly into the shared Blip library.",

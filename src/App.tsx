@@ -2272,6 +2272,36 @@ function IdeasDrawer({ page, open, onToggle }: { page: View; open: boolean; onTo
   </aside>;
 }
 
+interface DonorListOption {
+  id: string;
+  boardId: string;
+  label: string;
+  panel: BoardPanel;
+  board: DonorBoardProgram;
+}
+
+function donorListOptions(state: LanternState): DonorListOption[] {
+  return state.boardPrograms.flatMap((board) => {
+    const donorPanels = (board.panels ?? [])
+      .map((panel, sourceIndex) => ({ panel, sourceIndex }))
+      .filter(({ panel }) => panel.type === "donors")
+      .sort((a, b) => (a.panel.y ?? 0) - (b.panel.y ?? 0)
+        || (a.panel.x ?? 0) - (b.panel.x ?? 0)
+        || a.sourceIndex - b.sourceIndex);
+    return donorPanels.map(({ panel }, index) => ({
+      id: `${board.id}::${panel.id}`,
+      boardId: board.id,
+      label: donorPanels.length > 1 ? `Donor list ${index + 1} — ${board.name}` : `Donor list — ${board.name}`,
+      panel,
+      board
+    }));
+  });
+}
+
+function donorListContainsDonor(option: DonorListOption, donorId: string) {
+  return (option.panel.donorIds === undefined ? option.board.donorIds : option.panel.donorIds).includes(donorId);
+}
+
 function DonorsView({
   state,
   activeUserId,
@@ -2309,10 +2339,15 @@ function DonorsView({
   );
   const [editTab, setEditTab] = useState<"profile" | "recognition" | "history" | "displays">("profile");
   const [discardDraftPending, setDiscardDraftPending] = useState(false);
+  const [draftDonorListIds, setDraftDonorListIds] = useState<string[]>([]);
+  const [originalDonorListIds, setOriginalDonorListIds] = useState<string[]>([]);
+  const availableDonorLists = useMemo(() => donorListOptions(state), [state.boardPrograms]);
   const discardEditor = () => {
     setDiscardDraftPending(false);
     setEditingId(null);
     setDraft(null);
+    setDraftDonorListIds([]);
+    setOriginalDonorListIds([]);
   };
   const closeEditor = () => {
     if (draft && editingId) {
@@ -2321,7 +2356,8 @@ function DonorsView({
         ...original,
         boardIds: original.boardIds ?? state.boardPrograms.filter((board) => board.donorIds.includes(original.id)).map((board) => board.id)
       } : null;
-      if (JSON.stringify(draft) !== JSON.stringify(originalWithBoards)) {
+      const listAssignmentsChanged = [...draftDonorListIds].sort().join("|") !== [...originalDonorListIds].sort().join("|");
+      if (JSON.stringify(draft) !== JSON.stringify(originalWithBoards) || listAssignmentsChanged) {
         setDiscardDraftPending(true);
         return;
       }
@@ -2357,8 +2393,11 @@ function DonorsView({
   };
 
   const editDonor = (donor: Donor) => {
+    const assignedListIds = donorListOptions(state).filter((option) => donorListContainsDonor(option, donor.id)).map((option) => option.id);
     setEditingId(donor.id);
     setDraft({ ...donor, boardIds: donor.boardIds ?? state.boardPrograms.filter((board) => board.donorIds.includes(donor.id)).map((board) => board.id) });
+    setDraftDonorListIds(assignedListIds);
+    setOriginalDonorListIds(assignedListIds);
     setEditTab("profile");
   };
 
@@ -2376,22 +2415,45 @@ function DonorsView({
   const saveDonor = () => {
     if (!draft) return;
     updateState((current) => {
-      const boardIds = new Set(draft.boardIds ?? []);
+      const currentListOptions = donorListOptions(current);
+      const selectedListIds = new Set(draftDonorListIds);
+      const listBoardIds = new Set(currentListOptions.map((option) => option.boardId));
+      const selectedBoardIds = new Set(currentListOptions.filter((option) => selectedListIds.has(option.id)).map((option) => option.boardId));
+      const retainedBoardIds = (draft.boardIds ?? []).filter((boardId) => !listBoardIds.has(boardId));
+      const boardIds = new Set([...retainedBoardIds, ...selectedBoardIds]);
       const savedDonor = { ...draft, boardIds: [...boardIds] };
       return {
         ...current,
         donors: current.donors.map((donor) => (donor.id === draft.id ? savedDonor : donor)),
-        boardPrograms: current.boardPrograms.map((board) => ({
-          ...board,
-          donorIds: boardIds.has(board.id)
-            ? [...new Set([...board.donorIds, draft.id])]
-            : board.donorIds.filter((id) => id !== draft.id)
-        })),
+        boardPrograms: current.boardPrograms.map((board) => {
+          const boardLists = currentListOptions.filter((option) => option.boardId === board.id);
+          if (!boardLists.length) return board;
+          const donorIsOnBoard = boardLists.some((option) => selectedListIds.has(option.id));
+          return {
+            ...board,
+            donorIds: donorIsOnBoard
+              ? [...new Set([...board.donorIds, draft.id])]
+              : board.donorIds.filter((id) => id !== draft.id),
+            panels: board.panels?.map((panel) => {
+              if (panel.type !== "donors") return panel;
+              const optionId = `${board.id}::${panel.id}`;
+              const inheritedRoster = panel.donorIds === undefined ? board.donorIds : panel.donorIds;
+              return {
+                ...panel,
+                donorIds: selectedListIds.has(optionId)
+                  ? [...new Set([...inheritedRoster, draft.id])]
+                  : inheritedRoster.filter((id) => id !== draft.id)
+              };
+            })
+          };
+        }),
         recognitionSettings: { ...current.recognitionSettings, tags: [...new Set([...current.recognitionSettings.tags, ...(draft.tags ?? [])])].sort() }
       };
     });
     setEditingId(null);
     setDraft(null);
+    setDraftDonorListIds([]);
+    setOriginalDonorListIds([]);
     setDiscardDraftPending(false);
   };
 
@@ -2598,12 +2660,24 @@ function DonorsView({
       {draft && editingId && createPortal(<div className="modal-backdrop donor-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeEditor(); }}>
         <section className="editor-modal donor-editor-modal" role="dialog" aria-modal="true" aria-labelledby="donor-editor-title">
           <div className="editor-modal-head"><div><p className="eyebrow">Recognition profile</p><h2 id="donor-editor-title">Edit donor</h2></div><button className="icon-button" onClick={closeEditor} title="Close editor"><X size={18} /></button></div>
-          <EditorTabs value={editTab} options={[["profile", "Profile"], ["recognition", "Pledge"], ["history", "Donation History"], ["displays", "Boards"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
+          <EditorTabs value={editTab} options={[["profile", "Profile"], ["recognition", "Pledge"], ["history", "Donation History"], ["displays", "Donor lists"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
           <div className="editor-modal-body donor-editor-body">
             {editTab === "profile" && <div className="editor-form-grid"><LabeledInput label="Name" info="Donor or organization display name." value={draft.name} onChange={(name) => setDraft({ ...draft, name })} /><LabeledInput label={draft.givingProgramId ? "Recognition year" : "Donation date"} info={draft.givingProgramId ? "Cohort or pledge start year; this does not record a received gift." : "Enter an exact date or only a year."} value={draft.givingProgramId ? (draft.pledgeStartYear ?? draft.since) : (draft.donationDate ?? draft.since)} onChange={(date) => setDraft(draft.givingProgramId ? { ...draft, pledgeStartYear: date, since: date } : { ...draft, donationDate: date, since: date })} /><LabeledSelect label="Tier" info="Recognition tier." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} /><LabeledSelect label="Category" info="Donor category." value={draft.category} options={state.recognitionSettings.categories} onChange={(category) => setDraft({ ...draft, category })} /><label className="field span-two"><span>Basic public information <InfoDot text="Short summary used in donor lists." /></span><textarea value={draft.basicInfo ?? ""} onChange={(event) => setDraft({ ...draft, basicInfo: event.target.value })} /></label><label className="field span-two"><span>Expanded donor story <InfoDot text="Longer story shown on the donor profile." /></span><textarea className="expanded-copy" value={draft.expandedInfo ?? ""} onChange={(event) => setDraft({ ...draft, expandedInfo: event.target.value })} /></label><label className="switch-row span-two"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span>{draft.active ? "Active on recognition boards" : "Saved as draft"}</span></label></div>}
-            {editTab === "recognition" && <DonorPledgeEditor state={state} donor={draft} onChange={setDraft} />}
+            {editTab === "recognition" && <DonorPledgeEditor state={state} donor={draft} onChange={(nextDonor) => {
+              const previousBoardIds = new Set(draft.boardIds ?? []);
+              const nextBoardIds = new Set(nextDonor.boardIds ?? []);
+              setDraft(nextDonor);
+              setDraftDonorListIds((current) => availableDonorLists.reduce((assignments, option) => {
+                if (!previousBoardIds.has(option.boardId) && nextBoardIds.has(option.boardId)) return assignments.includes(option.id) ? assignments : [...assignments, option.id];
+                if (previousBoardIds.has(option.boardId) && !nextBoardIds.has(option.boardId)) return assignments.filter((id) => id !== option.id);
+                return assignments;
+              }, current));
+            }} />}
             {editTab === "history" && <DonationHistoryEditor donor={draft} users={state.users} activeUserId={activeUserId} onChange={(donations) => setDraft({ ...draft, donations })} />}
-            {editTab === "displays" && <div className="display-assignment-grid">{state.boardPrograms.map((board) => <div className={draft.boardIds?.includes(board.id) ? "display-assignment selected" : "display-assignment"} key={board.id}><label><input type="checkbox" checked={draft.boardIds?.includes(board.id) ?? false} onChange={(event) => setDraft({ ...draft, boardIds: event.target.checked ? [...(draft.boardIds ?? []), board.id] : (draft.boardIds ?? []).filter((id) => id !== board.id) })} /><span><strong>{board.name}</strong></span></label><button type="button" className="command-button secondary compact" onClick={() => onOpenBoard(board.id)}><ExternalLink size={14} /> Open board</button></div>)}</div>}
+            {editTab === "displays" && <div className="display-assignment-grid">{availableDonorLists.map((option) => {
+              const checked = draftDonorListIds.includes(option.id);
+              return <div className={checked ? "display-assignment selected" : "display-assignment"} key={option.id}><label><input type="checkbox" checked={checked} onChange={(event) => setDraftDonorListIds((current) => event.target.checked ? [...new Set([...current, option.id])] : current.filter((id) => id !== option.id))} /><span><strong>{option.label}</strong></span></label><button type="button" className="command-button secondary compact" onClick={() => onOpenBoard(option.boardId)}><ExternalLink size={14} /> Open board</button></div>;
+            })}{!availableDonorLists.length && <div className="empty-inspector"><Users size={24} /><strong>No donor lists available</strong><span>Add a donor-list panel to a board to assign donors here.</span></div>}</div>}
           </div>
           <div className="editor-modal-actions"><button className="command-button secondary" onClick={closeEditor}>Cancel</button><button className="command-button primary" onClick={saveDonor}><Save size={17} /> Save changes</button></div>
         </section>
@@ -3832,7 +3906,7 @@ function DirectBoardCanvas({
     .filter((donor): donor is Donor => Boolean(donor?.active));
   const palette = boardPreviewPalette(program.palette);
   const panelDonors = (panel: BoardPanel) => donors.filter((donor) =>
-    (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
+    (panel.donorIds === undefined || panel.donorIds.includes(donor.id))
     && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
   );
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });

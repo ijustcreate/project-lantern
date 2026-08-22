@@ -804,7 +804,7 @@ export function fitWarnings(state: LanternState) {
     if (donorPanels.length) {
       donorPanels.forEach((panel) => {
         const panelDonors = activeDonors.filter((donor) =>
-          (!panel.donorIds?.length || panel.donorIds.includes(donor.id))
+          (panel.donorIds === undefined || panel.donorIds.includes(donor.id))
           && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
         );
         const columns = panel.columns ?? program?.columns ?? 1;
