@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0273",
+    "title": "Stop unscheduled displays from showing legacy boards",
+    "summary": "Dashboard display previews now show only the board currently selected by the schedule. When no board event is active, they match the opened display with a clear idle and next-up state instead of silently rendering the display's old Legacy Donor Star Wall assignment.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 6:13 PM",
+    "areas": [
+      "Dashboard",
+      "Schedule",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright current-time idle verification; Playwright fixed-clock 17:30 scheduled-board verification; opened display parity verification; zero console errors"
+  },
+  {
     "id": "DEV-0272",
     "title": "Fit tracked glasses to each face",
     "summary": "Rebuilt the face-effect glasses geometry around eye contours and iris centers so both lenses follow eye size, perspective, tilt, nose position, and face width instead of floating from two outer-corner landmarks.",

@@ -2166,7 +2166,12 @@ function Dashboard({
           <div className={`dashboard-display-grid ${previewGridClass}`} data-display-count={displays.length}>
             {displays.map((screen) => {
               const activeSchedule = resolveCurrentBoardSchedule(state, screen.id, now);
-              const activeBoard = resolveActiveBoardProgram(state, screen.id, now);
+              // The dashboard must reflect the schedule, not the display's
+              // legacy/default assignment. When no board event is active,
+              // leave the preview idle just like the opened display route.
+              const activeBoard = activeSchedule
+                ? state.boardPrograms.find((program) => program.id === activeSchedule.boardId)
+                : undefined;
               const assignedBoard = state.boardPrograms.find((program) => program.id === screen.boardProgramId);
               const editableBoard = activeBoard;
               const noScheduledBoard = !activeSchedule;
