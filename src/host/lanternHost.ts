@@ -5,6 +5,8 @@ import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingPro
 import { normalizeVisitorMessageRotation, normalizeVisitorMessages } from "../visitorMessages";
 import { normalizeBroadcastComposition } from "../broadcastComposition";
 import { normalizeEffectStudioState, normalizePhase4LiveEffects, PHASE4_CONTENT_VERSION } from "../effectStudio";
+import { compactAuditRecord } from "../auditHistory";
+import { localStateIsNewer } from "../stateAuthority";
 
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
@@ -214,6 +216,7 @@ function clearLocalStateShadow() {
 function serializableLocalState(state: LanternState): LanternState {
   return {
     ...state,
+    auditHistory: state.auditHistory.map(compactAuditRecord),
     boardPrograms: state.boardPrograms.map((program) => program.backgroundMediaId && program.backgroundImage?.startsWith("blob:") ? { ...program, backgroundImage: undefined } : program),
     screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
       id,
@@ -298,6 +301,7 @@ async function deleteIndexedDbLanternState() {
 function serializableSharedState(state: LanternState): LanternState {
   return {
     ...state,
+    auditHistory: state.auditHistory.map(compactAuditRecord),
     boardPrograms: state.boardPrograms.map((program) => program.backgroundImage?.startsWith("blob:") ? { ...program, backgroundImage: undefined } : program),
     screens: Object.fromEntries(Object.entries(state.screens).map(([id, screen]) => [
       id,
@@ -337,10 +341,15 @@ export async function loadAuthoritativeLanternState(): Promise<AuthoritativeLant
     return { state: await hydrateLanternMedia(local), source: "local", sharedServiceReachable: false };
   }
   try {
-    const shared = await loadSharedLanternState();
+    const [sharedSnapshot, localUpdatedAt] = await Promise.all([
+      loadSharedLanternStateSnapshot(),
+      loadLanternStateUpdatedAt()
+    ]);
+    const useLocal = localStateIsNewer(localUpdatedAt, sharedSnapshot.updatedAt);
+    const selected = useLocal ? local : (sharedSnapshot.state ?? local);
     return {
-      state: await hydrateLanternMedia(shared ?? local),
-      source: shared ? "shared" : "local",
+      state: await hydrateLanternMedia(selected),
+      source: useLocal || !sharedSnapshot.state ? "local" : "shared",
       sharedServiceReachable: true
     };
   } catch {
@@ -1233,7 +1242,7 @@ function normalizeAuditHistory(
   aliases: Map<string, string>
 ) {
   return (Array.isArray(incoming) ? incoming : [])
-    .map((record) => ({ ...record, userId: aliases.get(record.userId) ?? record.userId }))
+    .map((record) => compactAuditRecord({ ...record, userId: aliases.get(record.userId) ?? record.userId }))
     .slice(0, MAX_AUDIT_HISTORY);
 }
 

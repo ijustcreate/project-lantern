@@ -29,7 +29,11 @@ const allowedOrigins = new Set([
 const maxEvidenceDataUrlLength = 1_500_000;
 const maxReportBytes = 8 * 1024 * 1024;
 const maxAssetBytes = 10 * 1024 * 1024;
-const maxStateBytes = 1_500_000;
+// Board-editor audit history can temporarily make the shared document larger
+// than the old 1.5 MB ceiling. The Worker stores and returns this JSON without
+// parsing it, so an 8 MB allowance is safe while clients compact legacy audit
+// snapshots during their next successful save.
+const maxStateBytes = 8 * 1024 * 1024;
 
 function corsHeaders(request: Request) {
   const origin = request.headers.get("origin") ?? "";

@@ -5,6 +5,7 @@ import type {
   LanternUser,
   ScheduleEntry
 } from "./types";
+import { compactAuditValue } from "./auditHistory";
 
 export interface AuditActor {
   id: string;
@@ -30,21 +31,6 @@ function idOf(value: unknown, fallback: string) {
   return value && typeof value === "object" && "id" in value && typeof value.id === "string" ? value.id : fallback;
 }
 
-function scrubAuditValue(value: unknown): unknown {
-  if (value === undefined) return undefined;
-  try {
-    return JSON.parse(JSON.stringify(value, (key, nested) => {
-      if (nested instanceof Blob) return `[${nested.type || "blob"} ${nested.size} bytes]`;
-      if (typeof nested === "string" && (nested.startsWith("data:") || nested.startsWith("blob:"))) {
-        return `[local media omitted${key ? `: ${key}` : ""}]`;
-      }
-      return nested;
-    })) as unknown;
-  } catch {
-    return "[value unavailable]";
-  }
-}
-
 function same(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -68,8 +54,8 @@ function auditRecord(
     entityId,
     action,
     summary: summary ?? `${action[0].toUpperCase()}${action.slice(1)} ${entityType}`,
-    before: scrubAuditValue(before),
-    after: scrubAuditValue(after)
+    before: compactAuditValue(entityType, before),
+    after: compactAuditValue(entityType, after)
   };
 }
 

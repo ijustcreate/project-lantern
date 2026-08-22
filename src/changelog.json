@@ -1,5 +1,27 @@
 [
   {
+    "id": "DEV-0277",
+    "title": "Keep board edits saveable and recoverable",
+    "summary": "Stopped board edit audit history from copying whole boards, increased the shared-state safety ceiling, and preserve a newer local save on refresh when server sync has not caught up.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 7:16 PM",
+    "areas": [
+      "Board Editor",
+      "Persistence",
+      "Shared service"
+    ],
+    "files": [
+      "src/auditHistory.ts",
+      "src/stateAuthority.ts",
+      "src/stateManagement.ts",
+      "src/host/lanternHost.ts",
+      "worker/bugs.ts",
+      "scripts/test-audit-compaction.mjs",
+      "scripts/test-state-authority.mjs"
+    ],
+    "tests": "node scripts/test-audit-compaction.mjs; node scripts/test-state-authority.mjs; npm run build; npm run build:worker; npx wrangler deploy; production shared-state GET"
+  },
+  {
     "id": "DEV-0276",
     "title": "Simplify donor list cards",
     "summary": "Removed the board-assignment icon and dropdown from compact donor rows; board membership remains available in each donor's Boards editor tab.",
