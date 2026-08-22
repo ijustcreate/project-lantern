@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0280",
+    "title": "Remove announcement showcase from donor page",
+    "summary": "Removed the large prepared-announcement showcase from the donor-program page while preserving the dedicated Announcements workspace.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 7:50 PM",
+    "areas": [
+      "Donors",
+      "Toy Soldier Brigade",
+      "Announcements"
+    ],
+    "files": [
+      "src/components/BrigadeView.tsx"
+    ],
+    "tests": "npm run build; source audit for removed Announcement Kit"
+  },
+  {
     "id": "DEV-0279",
     "title": "Remove board collection showcase",
     "summary": "Removed the large Board Collection template showcase from the donor-program page so the page stays focused on donor and program content.",

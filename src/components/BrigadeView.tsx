@@ -7,9 +7,7 @@ import {
   BadgeCheck,
   LayoutDashboard,
   Maximize2,
-  Megaphone,
   MessageSquare,
-  Monitor,
   Pencil,
   RotateCcw,
   Save,
@@ -18,10 +16,10 @@ import {
   Users,
   X
 } from "lucide-react";
-import type { GivingLevel, GivingProgram, LanternState, SavedAnnouncement } from "../types";
+import type { GivingLevel, GivingProgram, LanternState } from "../types";
 import "./BrigadeView.css";
 
-type BrigadeSection = "hero" | "why" | "contact" | "levels" | "roster" | "boards" | "announcements";
+type BrigadeSection = "hero" | "why" | "contact" | "levels" | "roster";
 
 interface BrigadePanelLayout {
   split?: number;
@@ -54,22 +52,12 @@ const HERO_ART = [
   "group-guard.svg"
 ] as const;
 
-const BOARD_ART = [
-  "head-red.svg",
-  "head-blue.svg",
-  "head-yellow.svg",
-  "group-hangout.svg",
-  "group-guard.svg"
-] as const;
-
 const DEFAULT_LAYOUTS: Record<BrigadeSection, BrigadePanelLayout> = {
   hero: { split: 60, reversed: false, compact: false },
   why: { columns: 3, compact: true },
   contact: { split: 40, reversed: false, compact: true },
   levels: { columns: 3, compact: true },
-  roster: { columns: 2, compact: true },
-  boards: { split: 35, reversed: false, compact: true },
-  announcements: { split: 35, reversed: false, compact: true }
+  roster: { columns: 2, compact: true }
 };
 
 function assetUrl(fileName: string) {
@@ -100,8 +88,6 @@ export function BrigadeView({
   updateState,
   onManageDonors,
   onOpenBoard,
-  onUseAnnouncement,
-  onPutAnnouncementOnScreen,
   onSaveJoke
 }: {
   state: LanternState;
@@ -117,7 +103,6 @@ export function BrigadeView({
   const [editing, setEditing] = useState<BrigadeSection | null>(null);
   const [draft, setDraft] = useState<BrigadeProgram | null>(null);
   const [heroArtwork, setHeroArtwork] = useState(0);
-  const [selectedAnnouncementId, setSelectedAnnouncementId] = useState("");
   const [jokeSetup, setJokeSetup] = useState("");
   const [jokePunchline, setJokePunchline] = useState("");
   const [jokeSaved, setJokeSaved] = useState(false);
@@ -129,17 +114,6 @@ export function BrigadeView({
   const templates = useMemo(() => program
     ? state.boardPrograms.filter((board) => board.givingProgramId === program.id)
     : [], [program, state.boardPrograms]);
-  const announcements = useMemo(() => state.savedAnnouncements.filter((announcement) => announcement.id.startsWith("brigade-")), [state.savedAnnouncements]);
-
-  useEffect(() => {
-    if (!program) return;
-    setSelectedAnnouncementId((current) => current && announcements.some((announcement) => announcement.id === current)
-      ? current
-      : program.landingPage?.selectedAnnouncementId && announcements.some((announcement) => announcement.id === program.landingPage?.selectedAnnouncementId)
-        ? program.landingPage.selectedAnnouncementId
-        : announcements[0]?.id ?? "");
-  }, [announcements, program]);
-
   useEffect(() => {
     const motionReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (motionReduced) return;
@@ -154,7 +128,6 @@ export function BrigadeView({
   const pageProgram = draft ?? program;
   const landing = pageProgram.landingPage ?? {};
   const members = state.donors.filter((donor) => donor.givingProgramId === program.id && donor.active);
-  const selectedAnnouncement = announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? announcements[0];
 
   const layoutFor = (section: BrigadeSection) => ({
     ...DEFAULT_LAYOUTS[section],
@@ -178,7 +151,6 @@ export function BrigadeView({
       ...current,
       givingPrograms: current.givingPrograms.map((item) => item.id === saved.id ? saved : item)
     }));
-    if (saved.landingPage?.selectedAnnouncementId) setSelectedAnnouncementId(saved.landingPage.selectedAnnouncementId);
     setDraft(null);
     setEditing(null);
   };
@@ -378,36 +350,6 @@ export function BrigadeView({
         </div>)}
       </section>
 
-      <section
-        className={`brigade-announcement-section brigade-editable-section brigade-compact-library${editing === "announcements" ? " is-editing" : ""}${layoutFor("announcements").compact ? " is-compact" : ""}`}
-        data-reversed={layoutFor("announcements").reversed || undefined}
-        style={panelStyle(layoutFor("announcements"))}
-      >
-        {sectionEditButton("announcements", "Announcement Kit")}
-        <div className="brigade-section-heading">
-          <div><p className="brigade-section-kicker">Announcement kit</p><h3>{landing.announcementsTitle ?? "Polished messages, ready when the moment arrives."}</h3></div>
-          <p>Prepared messages remain separate from quick visitor moments and Blips.</p>
-        </div>
-        <div className="brigade-library-layout">
-          <div className="brigade-library-selector">
-            <label htmlFor="brigade-announcement-selector">Choose a prepared announcement</label>
-            <select id="brigade-announcement-selector" value={selectedAnnouncement?.id ?? ""} onChange={(event) => {
-              setSelectedAnnouncementId(event.target.value);
-              if (editing === "announcements") patchLanding({ selectedAnnouncementId: event.target.value });
-            }}>
-              {announcementGroups(announcements).map(([style, items]) => <optgroup key={style} label={style}>{items.map((announcement) => <option key={announcement.id} value={announcement.id}>{announcement.title}</option>)}</optgroup>)}
-            </select>
-            {selectedAnnouncement && <div className="brigade-library-meta"><span>{selectedAnnouncement.style}</span><span>{selectedAnnouncement.durationMinutes} min</span><span>{selectedAnnouncement.priority}</span></div>}
-            <p>Program messages stay here. Put the selected message on screen whenever the moment is right.</p>
-          </div>
-          {selectedAnnouncement && <AnnouncementPreview announcement={selectedAnnouncement} art={BOARD_ART[Math.max(0, announcements.findIndex((item) => item.id === selectedAnnouncement.id)) % BOARD_ART.length]} onPutOnScreen={() => onPutAnnouncementOnScreen(selectedAnnouncement.id)} />}
-        </div>
-        {editor("announcements", <div className="brigade-edit-fields">
-          <BrigadeField label="Section headline"><input value={landing.announcementsTitle ?? "Polished messages, ready when the moment arrives."} onChange={(event) => patchLanding({ announcementsTitle: event.target.value })} /></BrigadeField>
-          <div className="brigade-linked-record-note"><Megaphone size={17} /><span><strong>Message text and styling stay connected to the announcement composer.</strong><small>The selected announcement becomes the landing-page default when you save.</small></span><button type="button" disabled={!selectedAnnouncement} onClick={() => selectedAnnouncement && onUseAnnouncement(selectedAnnouncement.id)}>Edit selected message</button></div>
-        </div>)}
-      </section>
-
       <section className="brigade-joke-creator" aria-labelledby="brigade-joke-heading">
         <div className="brigade-joke-heading">
           <span><Sparkles size={20} /></span>
@@ -451,7 +393,7 @@ function BrigadeField({ label, wide, children }: { label: string; wide?: boolean
 }
 
 function LayoutEditor({ section, layout, onChange }: { section: BrigadeSection; layout: BrigadePanelLayout; onChange: (patch: Partial<BrigadePanelLayout>) => void }) {
-  const splitSections: BrigadeSection[] = ["hero", "contact", "boards", "announcements"];
+  const splitSections: BrigadeSection[] = ["hero", "contact"];
   const columnSections: BrigadeSection[] = ["why", "levels", "roster"];
   return <div className="brigade-layout-editor" aria-label="Section layout controls">
     <strong><Maximize2 size={14} /> Layout</strong>
@@ -461,23 +403,4 @@ function LayoutEditor({ section, layout, onChange }: { section: BrigadeSection; 
     <button type="button" className={layout.compact ? "active" : ""} onClick={() => onChange({ compact: !layout.compact })}><Maximize2 size={14} /> Compact spacing</button>
     <small>Controls snap to safe increments and stay bounded inside this panel.</small>
   </div>;
-}
-
-function AnnouncementPreview({ announcement, art, onPutOnScreen }: { announcement: SavedAnnouncement; art: string; onPutOnScreen: () => void }) {
-  const style = {
-    "--brigade-announcement-bg": announcement.backgroundColor ?? "#1675a8",
-    "--brigade-announcement-ink": announcement.textColor ?? "#ffffff"
-  } as CSSProperties;
-  return <article className="brigade-floating-preview announcement" style={style}>
-    <span className="brigade-preview-orientation">Live preview · {announcement.style}</span>
-    <img src={assetUrl(art)} alt="" aria-hidden="true" />
-    <div><small>Toy Soldier Brigade</small><strong>{announcement.title}</strong><p>{announcement.message}</p>{announcement.details && <em>{announcement.details}</em>}</div>
-    <button type="button" className="brigade-put-on-screen" onClick={onPutOnScreen} title="Show this prepared message on every display now"><Monitor size={16} /><span>Put on screen</span><small>All displays · {announcement.durationMinutes} min</small></button>
-  </article>;
-}
-
-function announcementGroups(announcements: SavedAnnouncement[]) {
-  const groups = new Map<SavedAnnouncement["style"], SavedAnnouncement[]>();
-  announcements.forEach((announcement) => groups.set(announcement.style, [...(groups.get(announcement.style) ?? []), announcement]));
-  return Array.from(groups.entries());
 }
