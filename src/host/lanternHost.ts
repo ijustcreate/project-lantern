@@ -1126,10 +1126,14 @@ function scheduleReferenceIsValid(
   screenIds: Set<string>
 ) {
   if (entry.target !== "all" && !screenIds.has(entry.target)) return false;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.startTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.endTime)) return false;
+  if (entry.endTime <= entry.startTime) return false;
+  if (entry.scheduleDate && entry.scheduleEndDate && entry.scheduleEndDate < entry.scheduleDate) return false;
+  if (entry.recurrence === "once" ? !entry.scheduleDate : !entry.days?.length) return false;
   const contentType = entry.contentType ?? "board";
   if (contentType === "announcement") return Boolean(entry.announcementId && announcementIds.has(entry.announcementId));
   if (contentType === "blip") return Boolean(entry.blipId && blipIds.has(entry.blipId));
-  if (contentType === "broadcast") return true;
+  if (contentType === "broadcast") return entry.broadcastMode === "live" || Boolean(entry.broadcastVideoUrl);
   return boardIds.has(entry.boardId);
 }
 

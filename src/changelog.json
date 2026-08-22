@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0269",
+    "title": "Keep scheduled display events consistent",
+    "summary": "Scheduled Blips now remain visible over active broadcasts, resolve overlaps consistently, and preview against the event's saved board with a layout that fits both portrait and landscape. New events start as valid one-time entries, and malformed legacy schedules are disabled during normalization.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 5:11 PM",
+    "areas": [
+      "Schedule",
+      "Displays",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/scheduleResolution.ts",
+      "src/styles.css",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; Playwright frozen-time display targeting, live-overlay precedence, overlap fallback, exact start/end boundaries, and portrait/landscape preview containment"
+  },
+  {
     "id": "DEV-0268",
     "title": "Sharpen scaled display lettering",
     "summary": "Static straight-on board previews and display output now use proper mipmap filtering when reducing 4K board art, preserving thin text strokes without adding ongoing frame work. Boards also redraw once after bundled fonts load so fallback glyphs are not left baked into the display.",

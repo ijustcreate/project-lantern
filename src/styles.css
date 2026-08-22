@@ -121,7 +121,22 @@ body {
 .blip-countdown { position: relative; width: clamp(108px, 13vw, 200px); aspect-ratio: 1; display: grid; place-content: center; text-align: center; }.blip-countdown i { --countdown-progress: 360deg; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--blip-accent) var(--countdown-progress), rgba(255,255,255,.1) 0); -webkit-mask: radial-gradient(circle, transparent 57%, #000 59%); mask: radial-gradient(circle, transparent 57%, #000 59%); }.blip-countdown strong { color: white; font: 800 clamp(44px, 6vw, 88px)/.9 Fredoka, Inter, sans-serif; }.blip-countdown span { margin-top: 8px; color: var(--blip-accent); font: 800 clamp(9px, 1vw, 14px)/1 Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
 .blip-answer { grid-column: 1 / -1; max-height: 0; margin-top: 0; padding: 0 20px; border-left: 5px solid var(--blip-accent); opacity: 0; overflow: hidden; transform: translateY(15px); transition: max-height .5s ease, opacity .4s ease, transform .4s ease, margin .4s ease, padding .4s ease; }.blip-answer.visible { max-height: 260px; margin-top: clamp(22px, 3vw, 42px); padding: 8px 20px; opacity: 1; transform: none; }.blip-answer span, .blip-answer strong { display: block; }.blip-answer span { color: var(--blip-accent); font: 800 clamp(10px, 1vw, 15px)/1 Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; }.blip-answer strong { margin-top: 7px; color: white; font: 750 clamp(25px, 3.5vw, 56px)/1.08 DM Sans, Inter, sans-serif; text-wrap: balance; }
 .blip-celebration article { grid-template-columns: 1fr; text-align: center; }.blip-celebration .blip-prompt { max-width: 28ch; margin-inline: auto; }.blip-celebration .blip-copy h1 { color: var(--blip-accent); }
-.display-shell.portrait .blip-overlay article, .blip-preview-frame.portrait .blip-overlay article { grid-template-columns: 1fr; text-align: center; }.display-shell.portrait .blip-prompt, .blip-preview-frame.portrait .blip-prompt { margin-inline: auto; }.display-shell.portrait .blip-countdown, .blip-preview-frame.portrait .blip-countdown { justify-self: center; }.display-shell.portrait .blip-image, .blip-preview-frame.portrait .blip-image { max-height: 28vh; }
+.display-shell.portrait .blip-overlay article,
+.blip-preview-frame.portrait .blip-overlay article,
+.schedule-preview-surface.portrait .blip-overlay article,
+.dashboard-display-preview.portrait .blip-overlay article { grid-template-columns: 1fr; text-align: center; }
+.display-shell.portrait .blip-prompt,
+.blip-preview-frame.portrait .blip-prompt,
+.schedule-preview-surface.portrait .blip-prompt,
+.dashboard-display-preview.portrait .blip-prompt { margin-inline: auto; }
+.display-shell.portrait .blip-countdown,
+.blip-preview-frame.portrait .blip-countdown,
+.schedule-preview-surface.portrait .blip-countdown,
+.dashboard-display-preview.portrait .blip-countdown { justify-self: center; }
+.display-shell.portrait .blip-image,
+.blip-preview-frame.portrait .blip-image,
+.schedule-preview-surface.portrait .blip-image,
+.dashboard-display-preview.portrait .blip-image { max-height: 28vh; }
 .schedule-type-legend i.blip { background: #26b8b2; box-shadow: 0 0 0 2px rgba(38,184,178,.16); }.calendar-event.layer-blip, .month-event.layer-blip, .agenda-event.layer-blip { --event-color: #26b8b2; }
 @keyframes blip-slide-in { from { opacity: 0; transform: translateY(12%); } to { opacity: 1; transform: none; } } @keyframes blip-pop-in { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } } @keyframes blip-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
@@ -1244,19 +1259,21 @@ h2 {
   }
 }
 
-/* Compact Blip typography inside the control-room thumbnail. */
-.blip-preview-frame .blip-overlay { padding: 5%; }
-.blip-preview-frame .blip-overlay article { width: 90%; gap: 10px; padding: 8%; border-radius: 12px; }
-.blip-preview-frame .blip-kicker { font-size: 6px; }
-.blip-preview-frame .blip-copy h1 { margin-block: 5px; font-size: 20px; }
-.blip-preview-frame .blip-prompt { font-size: 12px; }
-.blip-preview-frame .blip-copy > small { margin-top: 5px; font-size: 6px; }
-.blip-preview-frame .blip-answer.visible { margin-top: 9px; padding: 3px 8px; border-left-width: 2px; }
-.blip-preview-frame .blip-answer span { font-size: 5px; }
-.blip-preview-frame .blip-answer strong { margin-top: 3px; font-size: 11px; }
-.blip-preview-frame .blip-countdown { width: 52px; }
-.blip-preview-frame .blip-countdown strong { font-size: 22px; }
-.blip-preview-frame .blip-countdown span { margin-top: 3px; font-size: 5px; }
+/* Compact Blip typography inside control-room and schedule previews. */
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-overlay { padding: 5%; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-overlay article { width: 90%; max-height: 90%; gap: 10px; padding: 8%; border-radius: 12px; overflow: hidden; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-image,
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-image img { max-height: 110px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-kicker { font-size: 6px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-copy h1 { margin-block: 5px; font-size: 20px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-prompt { font-size: 12px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-copy > small { margin-top: 5px; font-size: 6px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-answer.visible { margin-top: 9px; padding: 3px 8px; border-left-width: 2px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-answer span { font-size: 5px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-answer strong { margin-top: 3px; font-size: 11px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-countdown { width: 52px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-countdown strong { font-size: 22px; }
+:is(.blip-preview-frame, .schedule-preview-surface) .blip-countdown span { margin-top: 3px; font-size: 5px; }
 .scheduled-broadcast-video { position: absolute; inset: 0; z-index: 48; width: 100%; height: 100%; object-fit: cover; background: #000; }
 
 .display-picker {

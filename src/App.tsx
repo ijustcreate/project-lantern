@@ -148,7 +148,7 @@ import type {
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import codeChangelog from "./changelog.json";
 import { nextVisitorMessage, normalizeVisitorMessageRotation } from "./visitorMessages";
-import { resolveActiveBoardProgram, resolveCurrentBoardSchedule, scheduleMatchesDate } from "./scheduleResolution";
+import { resolveActiveBoardProgram, resolveCurrentBoardSchedule, resolveCurrentScheduleEntry, scheduleMatchesDate } from "./scheduleResolution";
 import { CHROMA_KEY_PRESETS, createBackgroundRemovalPatch, resolveBackgroundRemoval, SCREENLESS_REMOVAL_TECHNOLOGY, type BackgroundRemovalMethod } from "./backgroundRemoval";
 import { frameSurfaceStyle, normalizeBroadcastComposition, normalizeCropEdges } from "./broadcastComposition";
 import { renderCostumeOverlay } from "./costumeRenderer";
@@ -7440,12 +7440,12 @@ function ScheduleCalendarView({
       broadcastMode: contentType === "broadcast" ? "recorded" : undefined,
       announcementId: contentType === "announcement" ? saved?.id : undefined,
       blipId: contentType === "blip" ? savedBlip?.id : undefined,
-      days: slot ? [slot.date.getDay()] : [1, 2, 3, 4, 5],
-      recurrence: slot ? "once" : undefined,
+      days: [(slot?.date ?? currentMinutes).getDay()],
+      recurrence: "once",
       scheduleDate: eventDate,
       scheduleEndDate: eventDate,
       startTime: minutesToTime(start),
-      endTime: minutesToTime(Math.min(1440, start + 60)),
+      endTime: minutesToTime(Math.min(1439, start + 60)),
       color: contentType === "announcement" ? "#b45a78" : contentType === "blip" ? savedBlip?.accentColor ?? "#16a6a1" : contentType === "broadcast" ? "#d17928" : "#4f63cf",
       active: true
     };
@@ -7703,7 +7703,7 @@ function ScheduleCalendarView({
     </div>
     {selected && createPortal(<>{selectedPreviewScreen && selectedPreviewPosition && <aside className="schedule-event-board-preview" style={selectedPreviewPosition} aria-label={`Preview of ${selected.name} on ${selectedPreviewScreen.label}`}>
       <header><div><p className="eyebrow">Display preview</p><strong>{selected.contentType === "board" ? selectedPreviewProgram?.name ?? "Selected board" : selected.name}</strong><span>{selectedPreviewScreen.label} · {selectedPreviewScreen.orientation}</span></div>{selected.contentType === "announcement" ? <Megaphone size={16} /> : selected.contentType === "blip" ? <Sparkles size={16} /> : <Monitor size={16} />}</header>
-      <div className={`schedule-preview-surface ${orientationClass(selectedPreviewScreen)}`}><BabylonDonorWall state={state} screenId={selectedPreviewScreen.id} fitToScreen viewMode="2d" previewProgramId={selected.contentType === "board" ? selected.boardId : undefined} announcementActive={Boolean(selectedPreviewAnnouncement)} announcementCharacter={selectedPreviewAnnouncement?.character} announcementCharacterAsset={selectedPreviewAnnouncement} />{selectedPreviewAnnouncement && <FixedAnnouncementComposition screen={selectedPreviewScreen} announcement={selectedPreviewAnnouncement} startedAt={`${toDateInputValue(anchorDate)}T${selected.startTime}:00`} />}{selectedPreviewBlip && <BlipComposition blip={selectedPreviewBlip} startedAt={new Date(Date.now() - Math.max(0, selectedPreviewBlip.countdownSeconds - 3) * 1000).toISOString()} />}</div>
+      <div className={`schedule-preview-surface ${orientationClass(selectedPreviewScreen)}`}><BabylonDonorWall state={state} screenId={selectedPreviewScreen.id} fitToScreen viewMode="2d" previewProgramId={selected.boardId} announcementActive={Boolean(selectedPreviewAnnouncement)} announcementCharacter={selectedPreviewAnnouncement?.character} announcementCharacterAsset={selectedPreviewAnnouncement} />{selectedPreviewAnnouncement && <FixedAnnouncementComposition screen={selectedPreviewScreen} announcement={selectedPreviewAnnouncement} startedAt={`${toDateInputValue(anchorDate)}T${selected.startTime}:00`} />}{selectedPreviewBlip && <BlipComposition blip={selectedPreviewBlip} startedAt={new Date(Date.now() - Math.max(0, selectedPreviewBlip.countdownSeconds - 3) * 1000).toISOString()} />}</div>
     </aside>}<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
       <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; const editorHeight = event.currentTarget.parentElement?.getBoundingClientRect().height ?? 610; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - editorHeight - 8)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag title to move</p><h2 id="schedule-event-editor-title">{draftIsNew ? "New event" : "Edit event"}</h2></div><button type="button" className="icon-button" title={draftIsNew ? "Discard new event" : "Cancel edits and close"} onClick={closeEditor}><X size={17} /></button></header>
       <div className="schedule-event-editor-body">
@@ -7727,7 +7727,7 @@ function ScheduleCalendarView({
     </aside></>, document.body)}
     {contextMenu && createPortal(<div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">{contextMenu.id ? (() => { const entry = visibleSchedules.find((item) => item.id === contextMenu.id); return entry ? <><button type="button" onClick={() => { openEditorAt(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button><button type="button" onClick={() => { setPreviewEntry(entry); setContextMenu(null); }}><Eye size={14} /> Preview on display</button>{entry.contentType === "announcement" ? <button type="button" disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button type="button" onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button type="button" onClick={() => { duplicateEntry(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button type="button" className="danger" onClick={() => { confirmRemoveEntry(entry); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></> : null; })() : <><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("board", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Plus size={14} /> Add board here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("announcement", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Megaphone size={14} /> Add announcement here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("blip", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Sparkles size={14} /> Add Blip here</button></>}</div>, document.body)}
     {pendingDelete && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDelete(null); }}><section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-schedule-title" aria-describedby="delete-schedule-description"><div className="destructive-confirm-icon"><Trash2 size={22} /></div><div><p className="eyebrow">Delete scheduled content</p><h2 id="delete-schedule-title">Delete “{pendingDelete.name}”?</h2><p id="delete-schedule-description">This removes the event from the calendar. The underlying board, announcement, Blip, or recording will remain available.</p></div><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setPendingDelete(null)}>Cancel</button><button type="button" className="command-button danger" onClick={() => removeEntry(pendingDelete.id)}><Trash2 size={15} /> Delete event</button></div></section></div>, document.body)}
-    {previewEntry && (() => { const screenId = previewEntry.target === "all" ? (displayFilter === "all" ? Object.keys(state.screens)[0] : displayFilter) : previewEntry.target; const screen = state.screens[screenId]; const savedAnnouncement = previewEntry.contentType === "announcement" ? state.savedAnnouncements.find((item) => item.id === previewEntry.announcementId) : undefined; const announcement = savedAnnouncement ? { ...savedAnnouncement, active: true } : undefined; const savedBlip = previewEntry.contentType === "blip" ? state.savedBlips.find((item) => item.id === previewEntry.blipId) : undefined; const blip = savedBlip ? { ...savedBlip, active: true } as LanternState["activeBlip"] : undefined; return screen && createPortal(<div className="modal-backdrop schedule-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewEntry(null); }}><section className="editor-modal schedule-display-preview" role="dialog" aria-modal="true" aria-labelledby="schedule-preview-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled display preview</p><h2 id="schedule-preview-title">{screen.label} · {previewEntry.startTime}–{previewEntry.endTime}</h2></div><button type="button" className="icon-button" title="Close preview" onClick={() => setPreviewEntry(null)}><X size={18} /></button></div><div className={`schedule-preview-surface ${orientationClass(screen)}`}><BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" previewProgramId={previewEntry.contentType === "board" ? previewEntry.boardId : undefined} announcementActive={Boolean(announcement)} announcementCharacter={announcement?.character} announcementCharacterAsset={announcement} />{announcement && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={`${toDateInputValue(anchorDate)}T${previewEntry.startTime}:00`} />}{blip && <BlipComposition blip={blip} startedAt={new Date(Date.now() - Math.max(0, blip.countdownSeconds - 3) * 1000).toISOString()} />}</div><p className="field-note">Previewing the content scheduled for this event on {screen.label}.</p></section></div>, document.body); })()}
+    {previewEntry && (() => { const screenId = previewEntry.target === "all" ? (displayFilter === "all" ? Object.keys(state.screens)[0] : displayFilter) : previewEntry.target; const screen = state.screens[screenId]; const savedAnnouncement = previewEntry.contentType === "announcement" ? state.savedAnnouncements.find((item) => item.id === previewEntry.announcementId) : undefined; const announcement = savedAnnouncement ? { ...savedAnnouncement, active: true } : undefined; const savedBlip = previewEntry.contentType === "blip" ? state.savedBlips.find((item) => item.id === previewEntry.blipId) : undefined; const blip = savedBlip ? { ...savedBlip, active: true } as LanternState["activeBlip"] : undefined; return screen && createPortal(<div className="modal-backdrop schedule-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewEntry(null); }}><section className="editor-modal schedule-display-preview" role="dialog" aria-modal="true" aria-labelledby="schedule-preview-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled display preview</p><h2 id="schedule-preview-title">{screen.label} · {previewEntry.startTime}–{previewEntry.endTime}</h2></div><button type="button" className="icon-button" title="Close preview" onClick={() => setPreviewEntry(null)}><X size={18} /></button></div><div className={`schedule-preview-surface ${orientationClass(screen)}`}><BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" previewProgramId={previewEntry.boardId} announcementActive={Boolean(announcement)} announcementCharacter={announcement?.character} announcementCharacterAsset={announcement} />{announcement && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={`${toDateInputValue(anchorDate)}T${previewEntry.startTime}:00`} />}{blip && <BlipComposition blip={blip} startedAt={new Date(Date.now() - Math.max(0, blip.countdownSeconds - 3) * 1000).toISOString()} />}</div><p className="field-note">Previewing the content scheduled for this event on {screen.label}.</p></section></div>, document.body); })()}
   </section>;
 }
 
@@ -8582,7 +8582,9 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
     : null;
   const immediateBlipIsCurrent = immediateBlipExpiresAt === null || scheduleNow.getTime() < immediateBlipExpiresAt;
   const immediateBlip = state.activeBlip.active && immediateBlipIsCurrent && (state.activeBlip.targets?.length ? state.activeBlip.targets.includes(screenId) : targetIncludes(state.activeBlip.target, screenId)) ? { key: `${state.activeBlip.id}-${state.activeBlip.startedAt}`, blip: state.activeBlip, startedAt: state.activeBlip.startedAt ?? scheduleNow.toISOString() } : null;
-  const displayBlip = broadcastActive ? null : immediateBlip ?? resolveScheduledBlip(state, screenId, scheduleNow);
+  // Blips are brief interruption overlays. Keep their calendar behavior the
+  // same on Dashboard and opened displays, including while a broadcast is live.
+  const displayBlip = immediateBlip ?? resolveScheduledBlip(state, screenId, scheduleNow);
   const immediateAnnouncementExpiresAt = state.announcement.startedAt && state.announcement.durationMinutes > 0
     ? Date.parse(state.announcement.startedAt) + state.announcement.durationMinutes * 60_000
     : null;
@@ -9140,15 +9142,12 @@ function resolveDisplayedBoardProgramId(state: LanternState, screenId: ScreenId,
 }
 
 function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedScheduledAnnouncement | null {
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const entry = state.schedules?.find((item) =>
-    item.contentType === "announcement"
-    && item.active
-    && item.announcementId
-    && scheduleMatchesDate(item, now)
-    && (item.target === "all" || item.target === screenId)
-    && time >= item.startTime
-    && time < item.endTime
+  const entry = resolveCurrentScheduleEntry(
+    state,
+    screenId,
+    "announcement",
+    now,
+    (item) => Boolean(item.announcementId && state.savedAnnouncements.some((saved) => saved.id === item.announcementId))
   );
   if (!entry?.announcementId) return null;
   const saved = state.savedAnnouncements.find((item) => item.id === entry.announcementId);
@@ -9172,8 +9171,13 @@ function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, n
 }
 
 function resolveScheduledBlip(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedBlip | null {
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const entry = state.schedules?.find((item) => item.contentType === "blip" && item.active && item.blipId && scheduleMatchesDate(item, now) && (item.target === "all" || item.target === screenId) && time >= item.startTime && time < item.endTime);
+  const entry = resolveCurrentScheduleEntry(
+    state,
+    screenId,
+    "blip",
+    now,
+    (item) => Boolean(item.blipId && state.savedBlips.some((saved) => saved.id === item.blipId))
+  );
   if (!entry?.blipId) return null;
   const saved = state.savedBlips.find((item) => item.id === entry.blipId);
   if (!saved) return null;
@@ -9186,16 +9190,21 @@ function resolveScheduledBlip(state: LanternState, screenId: ScreenId, now = new
 }
 
 function resolveScheduledBroadcast(state: LanternState, screenId: ScreenId, now = new Date()): ResolvedScheduledBroadcast | null {
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const entry = state.schedules?.find((item) => item.contentType === "broadcast" && (item.broadcastMode ?? "recorded") === "recorded" && item.active && item.broadcastVideoUrl && scheduleMatchesDate(item, now) && (item.target === "all" || item.target === screenId) && time >= item.startTime && time < item.endTime);
+  const entry = resolveCurrentScheduleEntry(
+    state,
+    screenId,
+    "broadcast",
+    now,
+    (item) => (item.broadcastMode ?? "recorded") === "recorded" && Boolean(item.broadcastVideoUrl)
+  );
   if (!entry?.broadcastVideoUrl) return null;
   const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   return { key: `${entry.id}-${dateKey}`, broadcastVideoUrl: entry.broadcastVideoUrl };
 }
 
 function activeScheduleMessage(state: LanternState, screenId: ScreenId, now = new Date()) {
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return state.schedules?.find((entry) => (entry.contentType ?? "board") === "board" && entry.active && entry.message && scheduleMatchesDate(entry, now) && (entry.target === "all" || entry.target === screenId) && time >= entry.startTime && time < entry.endTime);
+  const entry = resolveCurrentBoardSchedule(state, screenId, now);
+  return entry?.message ? entry : undefined;
 }
 
 function statusLabel(status: string) {
