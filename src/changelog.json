@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0287",
+    "title": "Keep the selected Board Editor board",
+    "summary": "Board-opening links now hand the requested board to the editor once, so later shared-state refreshes cannot push the operator back to a previously opened board.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 9:07 PM",
+    "areas": [
+      "Board Editor",
+      "Navigation"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; Playwright board handoff, manual board switch, cloned state-update replacement, and zero console errors"
+  },
+  {
     "id": "DEV-0286",
     "title": "Reflow mobile broadcast controls",
     "summary": "Gave the Broadcast / Stream Studio title its own phone header line and arranged phone mode, broadcast, pop-out, and Preview controls in a readable two-row layout that stays on-screen.",

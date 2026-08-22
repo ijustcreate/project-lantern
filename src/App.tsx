@@ -1034,10 +1034,10 @@ function ControlCenter() {
             addDonor={addDonor}
             donorSetupOpen={donorSetupOpen}
             closeDonorSetup={() => setDonorSetupOpen(false)}
-            onOpenBoard={(boardId) => { setView("theme"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0); }}
+            onOpenBoard={(boardId) => { setRequestedBoardEditorId(boardId); setView("theme"); }}
           />
         )}
-        {view === "theme" && <ThemeStudio state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} requestedBoardId={requestedBoardEditorId} updateState={updateState} />}
+        {view === "theme" && <ThemeStudio state={state} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} requestedBoardId={requestedBoardEditorId} onRequestedBoardHandled={() => setRequestedBoardEditorId(null)} updateState={updateState} />}
         {view === "schedule" && <ScheduleCalendarView
           state={state}
           updateState={updateState}
@@ -1082,7 +1082,7 @@ function ControlCenter() {
           state={state}
           updateState={updateState}
           onManageDonors={() => setView("donors")}
-          onOpenBoard={(boardId) => { setView("theme"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("lantern:open-board", { detail: boardId })), 0); }}
+          onOpenBoard={(boardId) => { setRequestedBoardEditorId(boardId); setView("theme"); }}
           onUseAnnouncement={(announcementId) => {
             const saved = state.savedAnnouncements.find((item) => item.id === announcementId);
             if (saved) updateState((current) => ({ ...current, announcement: { ...saved, active: false, startedAt: undefined } }));
@@ -3256,24 +3256,23 @@ function ThemeStudio({
   selectedDisplayId,
   setSelectedDisplayId,
   requestedBoardId,
+  onRequestedBoardHandled,
   updateState
 }: {
   state: LanternState;
   selectedDisplayId: ScreenId;
   setSelectedDisplayId: (screenId: ScreenId) => void;
   requestedBoardId: string | null;
+  onRequestedBoardHandled: () => void;
   updateState: (updater: (current: LanternState) => LanternState) => void;
 }) {
   const display = state.screens[selectedDisplayId] ?? Object.values(state.screens)[0];
-  const [selectedProgramId, setSelectedProgramId] = useState(() => requestedBoardId ?? resolveDisplayedBoardProgramId(state, display.id));
+  const [selectedProgramId, setSelectedProgramId] = useState(() => state.boardPrograms.some((program) => program.id === requestedBoardId) ? requestedBoardId! : resolveDisplayedBoardProgramId(state, display.id));
   useEffect(() => {
-    if (requestedBoardId && state.boardPrograms.some((program) => program.id === requestedBoardId)) setSelectedProgramId(requestedBoardId);
-  }, [requestedBoardId, state.boardPrograms]);
-  useEffect(() => {
-    const openBoard = (event: Event) => setSelectedProgramId((event as CustomEvent<string>).detail);
-    window.addEventListener("lantern:open-board", openBoard);
-    return () => window.removeEventListener("lantern:open-board", openBoard);
-  }, []);
+    if (!requestedBoardId) return;
+    if (state.boardPrograms.some((program) => program.id === requestedBoardId)) setSelectedProgramId(requestedBoardId);
+    onRequestedBoardHandled();
+  }, [onRequestedBoardHandled, requestedBoardId, state.boardPrograms]);
   const [selectedPanelId, setSelectedPanelId] = useState("");
   const [selectedPanelIds, setSelectedPanelIds] = useState<string[]>([]);
   const [panelClipboard, setPanelClipboard] = useState<BoardPanel | null>(null);
