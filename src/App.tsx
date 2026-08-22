@@ -1130,6 +1130,31 @@ function ControlCenter() {
               return { ...current, savedBlips: [...current.savedBlips, savedJoke] };
             });
           }}
+          onSaveQuote={({ text, person }) => {
+            const id = `brigade-quote-${Date.now()}`;
+            updateState((current) => {
+              const savedQuote: SavedBlip = {
+                id,
+                name: `Inspirational quote · ${person}`,
+                kind: "celebration",
+                headline: "WORDS TO INSPIRE",
+                prompt: `“${text}”`,
+                subtext: `— ${person}`,
+                target: "all",
+                durationMinutes: 2,
+                countdownSeconds: 0,
+                showCountdown: false,
+                ticking: false,
+                startSfx: "bell",
+                revealSfx: "off",
+                sfxVolume: 55,
+                backgroundColor: "#173f61",
+                accentColor: "#f4c45d",
+                motion: "gentle"
+              };
+              return { ...current, savedBlips: [...current.savedBlips, savedQuote] };
+            });
+          }}
         />}
         {view === "dashboard" && displayEditorOpen && <ScreensView state={state} activeUserId={activeUser?.id} selectedDisplayId={selectedDisplayId} setSelectedDisplayId={setSelectedDisplayId} openDisplays={openDisplays} updateState={updateState} initialEditingId={selectedDisplayId} initialEditorTab={displayEditorTab} initialOpenRoomCamera={openAssignedRoomCamera} editorOnly onClose={() => { setOpenAssignedRoomCamera(false); setDisplayEditorOpen(false); }} />}
         {view === "revisions" && <RevisionsView state={state} />}

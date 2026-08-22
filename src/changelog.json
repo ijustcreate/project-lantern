@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0281",
+    "title": "Add inspirational quote composer",
+    "summary": "Added a donor-page form for saving inspirational quotes and their authors directly into the shared Blip library.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 7:54 PM",
+    "areas": [
+      "Donors",
+      "Toy Soldier Brigade",
+      "Blips"
+    ],
+    "files": [
+      "src/components/BrigadeView.tsx",
+      "src/components/BrigadeView.css",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; verified quote-to-Blip field mapping and required fields"
+  },
+  {
     "id": "DEV-0280",
     "title": "Remove announcement showcase from donor page",
     "summary": "Removed the large prepared-announcement showcase from the donor-program page while preserving the dedicated Announcements workspace.",

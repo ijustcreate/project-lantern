@@ -9,6 +9,7 @@ import {
   Maximize2,
   MessageSquare,
   Pencil,
+  Quote,
   RotateCcw,
   Save,
   Sparkles,
@@ -88,7 +89,8 @@ export function BrigadeView({
   updateState,
   onManageDonors,
   onOpenBoard,
-  onSaveJoke
+  onSaveJoke,
+  onSaveQuote
 }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
@@ -97,6 +99,7 @@ export function BrigadeView({
   onUseAnnouncement: (announcementId: string) => void;
   onPutAnnouncementOnScreen: (announcementId: string) => void;
   onSaveJoke: (joke: { setup: string; punchline: string }) => void;
+  onSaveQuote: (quote: { text: string; person: string }) => void;
 }) {
   const sourceProgram = state.givingPrograms.find((item) => item.id === "toy-soldier-brigade") as BrigadeProgram | undefined
     ?? state.givingPrograms[0] as BrigadeProgram | undefined;
@@ -106,6 +109,9 @@ export function BrigadeView({
   const [jokeSetup, setJokeSetup] = useState("");
   const [jokePunchline, setJokePunchline] = useState("");
   const [jokeSaved, setJokeSaved] = useState(false);
+  const [quoteText, setQuoteText] = useState("");
+  const [quotedPerson, setQuotedPerson] = useState("");
+  const [quoteSaved, setQuoteSaved] = useState(false);
 
   const program = useMemo(() => sourceProgram
     ? { ...sourceProgram, levels: resolvedLevels(sourceProgram) }
@@ -381,6 +387,41 @@ export function BrigadeView({
           <div className="brigade-joke-actions">
             <button type="submit" disabled={!jokeSetup.trim() || !jokePunchline.trim()}><Save size={16} /> Save joke Blip</button>
             <span role="status" aria-live="polite">{jokeSaved ? "Saved to Blip library" : "Defaults are ready to run"}</span>
+          </div>
+        </form>
+      </section>
+
+      <section className="brigade-joke-creator brigade-quote-creator" aria-labelledby="brigade-quote-heading">
+        <div className="brigade-joke-heading">
+          <span><Quote size={20} /></span>
+          <div>
+            <p className="brigade-section-kicker">Toy Soldier Brigade · Blip library</p>
+            <h3 id="brigade-quote-heading">Add an inspirational quote</h3>
+            <p>Save an encouraging quote and its author to the shared Blip library, ready to share on the museum displays.</p>
+          </div>
+        </div>
+        <form className="brigade-joke-form brigade-quote-form" onSubmit={(event) => {
+          event.preventDefault();
+          const text = quoteText.trim();
+          const person = quotedPerson.trim();
+          if (!text || !person) return;
+          onSaveQuote({ text, person });
+          setQuoteText("");
+          setQuotedPerson("");
+          setQuoteSaved(true);
+          window.setTimeout(() => setQuoteSaved(false), 2600);
+        }}>
+          <label>
+            <span>Inspirational quote</span>
+            <textarea value={quoteText} onChange={(event) => setQuoteText(event.target.value)} placeholder="The future belongs to those who believe in the beauty of their dreams." rows={3} />
+          </label>
+          <label>
+            <span>Quoted person</span>
+            <input value={quotedPerson} onChange={(event) => setQuotedPerson(event.target.value)} placeholder="Eleanor Roosevelt" />
+          </label>
+          <div className="brigade-joke-actions">
+            <button type="submit" disabled={!quoteText.trim() || !quotedPerson.trim()}><Save size={16} /> Save quote Blip</button>
+            <span role="status" aria-live="polite">{quoteSaved ? "Saved to Blip library" : "Quote and author are required"}</span>
           </div>
         </form>
       </section>

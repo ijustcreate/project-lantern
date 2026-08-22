@@ -304,12 +304,19 @@
 .brigade-joke-form > label { display: grid; gap: 6px; min-width: 0; }
 .brigade-joke-form label > span { color: #fff4d8; font-size: 9px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
 .brigade-joke-form textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid rgba(255, 245, 220, .3); border-radius: 12px; padding: 10px 11px; color: #173f61; background: rgba(255, 253, 246, .98); font: 700 12px/1.4 Nunito, sans-serif; }
-.brigade-joke-form textarea:focus { outline: 2px solid #7fd4f1; outline-offset: 2px; }
+.brigade-joke-form input { width: 100%; min-height: 76px; border: 1px solid rgba(255, 245, 220, .3); border-radius: 12px; padding: 10px 11px; color: #173f61; background: rgba(255, 253, 246, .98); font: 700 12px/1.4 Nunito, sans-serif; }
+.brigade-joke-form textarea:focus,
+.brigade-joke-form input:focus { outline: 2px solid #7fd4f1; outline-offset: 2px; }
 .brigade-joke-actions { display: grid; gap: 8px; min-width: 150px; }
 .brigade-joke-actions button { min-height: 42px; border-color: #ffdc76; color: #193e5f; background: #ffda75; box-shadow: none; }
 .brigade-joke-actions button:hover:not(:disabled) { background: #ffe59b; }
 .brigade-joke-actions button:disabled { opacity: .55; cursor: not-allowed; }
 .brigade-joke-actions span { color: rgba(255, 248, 232, .83); font-size: 9px; font-weight: 750; text-align: center; }
+.brigade-quote-creator { background: linear-gradient(125deg, #176f78, #173f61); }
+.brigade-quote-creator .brigade-joke-heading > span { color: #173f61; background: #8ee0dc; }
+.brigade-quote-creator .brigade-joke-heading .brigade-section-kicker { color: #a6f0e6; }
+.brigade-quote-creator .brigade-joke-actions button { border-color: #8ee0dc; background: #8ee0dc; }
+.brigade-quote-creator .brigade-joke-actions button:hover:not(:disabled) { background: #b5f0eb; }
 
 @media (max-width: 1220px) {
   .brigade-intro-grid { grid-template-columns: minmax(0, 1.15fr) minmax(380px, .85fr); }
