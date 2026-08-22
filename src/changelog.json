@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0279",
+    "title": "Remove board collection showcase",
+    "summary": "Removed the large Board Collection template showcase from the donor-program page so the page stays focused on donor and program content.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 7:43 PM",
+    "areas": [
+      "Donors",
+      "Toy Soldier Brigade"
+    ],
+    "files": [
+      "src/components/BrigadeView.tsx"
+    ],
+    "tests": "npm run build; source audit for removed showcase copy and component"
+  },
+  {
     "id": "DEV-0278",
     "title": "Make announcements readable on every display",
     "summary": "Redesigned announcement typography and layout so portrait notices stack into a clear card while landscape notices use a balanced banner hierarchy.",

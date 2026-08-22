@@ -72,14 +72,6 @@ const DEFAULT_LAYOUTS: Record<BrigadeSection, BrigadePanelLayout> = {
   announcements: { split: 35, reversed: false, compact: true }
 };
 
-const purposeLabels = {
-  roster: "Full honor roll",
-  level: "Level recognition",
-  story: "Supporter story",
-  invitation: "Program invitation",
-  "good-deeds": "Good deeds"
-} as const;
-
 function assetUrl(fileName: string) {
   return `${import.meta.env.BASE_URL}assets/brigade/${fileName}`;
 }
@@ -125,7 +117,6 @@ export function BrigadeView({
   const [editing, setEditing] = useState<BrigadeSection | null>(null);
   const [draft, setDraft] = useState<BrigadeProgram | null>(null);
   const [heroArtwork, setHeroArtwork] = useState(0);
-  const [selectedBoardId, setSelectedBoardId] = useState("");
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState("");
   const [jokeSetup, setJokeSetup] = useState("");
   const [jokePunchline, setJokePunchline] = useState("");
@@ -142,17 +133,12 @@ export function BrigadeView({
 
   useEffect(() => {
     if (!program) return;
-    setSelectedBoardId((current) => current && templates.some((template) => template.id === current)
-      ? current
-      : program.landingPage?.selectedBoardId && templates.some((template) => template.id === program.landingPage?.selectedBoardId)
-        ? program.landingPage.selectedBoardId
-        : templates[0]?.id ?? "");
     setSelectedAnnouncementId((current) => current && announcements.some((announcement) => announcement.id === current)
       ? current
       : program.landingPage?.selectedAnnouncementId && announcements.some((announcement) => announcement.id === program.landingPage?.selectedAnnouncementId)
         ? program.landingPage.selectedAnnouncementId
         : announcements[0]?.id ?? "");
-  }, [announcements, program, templates]);
+  }, [announcements, program]);
 
   useEffect(() => {
     const motionReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -168,7 +154,6 @@ export function BrigadeView({
   const pageProgram = draft ?? program;
   const landing = pageProgram.landingPage ?? {};
   const members = state.donors.filter((donor) => donor.givingProgramId === program.id && donor.active);
-  const selectedTemplate = templates.find((template) => template.id === selectedBoardId) ?? templates[0];
   const selectedAnnouncement = announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? announcements[0];
 
   const layoutFor = (section: BrigadeSection) => ({
@@ -193,7 +178,6 @@ export function BrigadeView({
       ...current,
       givingPrograms: current.givingPrograms.map((item) => item.id === saved.id ? saved : item)
     }));
-    if (saved.landingPage?.selectedBoardId) setSelectedBoardId(saved.landingPage.selectedBoardId);
     if (saved.landingPage?.selectedAnnouncementId) setSelectedAnnouncementId(saved.landingPage.selectedAnnouncementId);
     setDraft(null);
     setEditing(null);
@@ -395,40 +379,6 @@ export function BrigadeView({
       </section>
 
       <section
-        className={`brigade-template-section brigade-editable-section brigade-compact-library${editing === "boards" ? " is-editing" : ""}${layoutFor("boards").compact ? " is-compact" : ""}`}
-        data-reversed={layoutFor("boards").reversed || undefined}
-        style={panelStyle(layoutFor("boards"))}
-      >
-        {sectionEditButton("boards", "Board Collection")}
-        <div className="brigade-section-heading">
-          <div><p className="brigade-section-kicker">Board collection</p><h3>{landing.boardsTitle ?? "A complete recognition set for every museum screen."}</h3></div>
-          <p>Portrait and landscape editions for rosters, stories, invitations, and good-deed prompts.</p>
-        </div>
-        <div className="brigade-library-layout">
-          <div className="brigade-library-selector">
-            <label htmlFor="brigade-board-selector">Choose a board template</label>
-            <select id="brigade-board-selector" value={selectedTemplate?.id ?? ""} onChange={(event) => {
-              setSelectedBoardId(event.target.value);
-              if (editing === "boards") patchLanding({ selectedBoardId: event.target.value });
-            }}>
-              {Object.entries(purposeLabels).map(([purpose, label]) => {
-                const options = templates.filter((template) => (template.templatePurpose ?? "roster") === purpose);
-                return options.length ? <optgroup key={purpose} label={label}>{options.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</optgroup> : null;
-              })}
-            </select>
-            {selectedTemplate && <div className="brigade-library-meta"><span>{purposeLabels[selectedTemplate.templatePurpose ?? "roster"]}</span><span>{selectedTemplate.orientation}</span><span>{selectedTemplate.donorIds.length ? `${selectedTemplate.donorIds.length} members` : "Story-led"}</span></div>}
-            <p>Every template remains connected to the Board Editor and its current roster.</p>
-            <button type="button" className="brigade-secondary-action" disabled={!selectedTemplate} onClick={() => selectedTemplate && onOpenBoard(selectedTemplate.id)}><Pencil size={15} /> Open in Board Editor</button>
-          </div>
-          {selectedTemplate && <BoardPreview template={selectedTemplate} program={pageProgram} art={BOARD_ART[Math.max(0, templates.findIndex((item) => item.id === selectedTemplate.id)) % BOARD_ART.length]} />}
-        </div>
-        {editor("boards", <div className="brigade-edit-fields">
-          <BrigadeField label="Section headline"><input value={landing.boardsTitle ?? "A complete recognition set for every museum screen."} onChange={(event) => patchLanding({ boardsTitle: event.target.value })} /></BrigadeField>
-          <div className="brigade-linked-record-note"><LayoutDashboard size={17} /><span><strong>Board visuals and copy stay connected to the Board Editor.</strong><small>The selected template becomes the landing-page default when you save.</small></span><button type="button" disabled={!selectedTemplate} onClick={() => selectedTemplate && onOpenBoard(selectedTemplate.id)}>Edit selected board</button></div>
-        </div>)}
-      </section>
-
-      <section
         className={`brigade-announcement-section brigade-editable-section brigade-compact-library${editing === "announcements" ? " is-editing" : ""}${layoutFor("announcements").compact ? " is-compact" : ""}`}
         data-reversed={layoutFor("announcements").reversed || undefined}
         style={panelStyle(layoutFor("announcements"))}
@@ -511,15 +461,6 @@ function LayoutEditor({ section, layout, onChange }: { section: BrigadeSection; 
     <button type="button" className={layout.compact ? "active" : ""} onClick={() => onChange({ compact: !layout.compact })}><Maximize2 size={14} /> Compact spacing</button>
     <small>Controls snap to safe increments and stay bounded inside this panel.</small>
   </div>;
-}
-
-function BoardPreview({ template, program, art }: { template: LanternState["boardPrograms"][number]; program: BrigadeProgram; art: string }) {
-  return <article className={`brigade-floating-preview board palette-${template.palette ?? "classic"} ${template.orientation.toLowerCase()}`}>
-    <span className="brigade-preview-orientation">{template.orientation}</span>
-    <img src={assetUrl(art)} alt="" aria-hidden="true" />
-    <div><small>{program.classLabel}</small><strong>{template.heading}</strong><p>{template.subtitle}</p><i /></div>
-    <footer>{purposeLabels[template.templatePurpose ?? "roster"]} · {template.donorIds.length || "Story"}</footer>
-  </article>;
 }
 
 function AnnouncementPreview({ announcement, art, onPutOnScreen }: { announcement: SavedAnnouncement; art: string; onPutOnScreen: () => void }) {
