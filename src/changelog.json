@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0286",
+    "title": "Reflow mobile broadcast controls",
+    "summary": "Gave the Broadcast / Stream Studio title its own phone header line and arranged phone mode, broadcast, pop-out, and Preview controls in a readable two-row layout that stays on-screen.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 8:48 PM",
+    "areas": [
+      "Broadcast",
+      "Mobile layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Playwright at 500x1000 and 360x800; phone-mode interaction; geometry and contrast checks; zero console errors; npm run build"
+  },
+  {
     "id": "DEV-0285",
     "title": "Reflow the narrow Dashboard header",
     "summary": "Moved Dashboard actions onto their own responsive phone row so the museum identity, publication label, title, buttons, and user selector no longer overlap.",

@@ -6218,10 +6218,10 @@ function LivePreviewPanel({
       <div className="live-panel-heading">
         <div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div>
         <div className="live-heading-actions">
-          <button type="button" className="command-button phone-mode-button" onClick={enablePhoneMode}><Smartphone size={16} /> I’m on my phone</button>
+          <button type="button" className="command-button secondary phone-mode-button" onClick={enablePhoneMode}><Smartphone size={16} /> I’m on my phone</button>
           <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => { const mode = event.target.value as typeof popoutMode; setPopoutMode(mode); setPopoutBoardVisible(mode !== "broadcast"); }}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
-          <button type="button" className="command-button secondary compact" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
-          <button className={state.live.active ? "command-button danger compact" : "command-button primary compact"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
+          <button type="button" className="command-button secondary compact live-preview-window-button" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
+          <button className={`${state.live.active ? "command-button danger compact" : "command-button primary compact"} live-broadcast-toggle`} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
             {state.live.active ? <Square size={17} /> : <Play size={17} />}
             {state.live.active ? "End broadcast" : "Start broadcast"}
           </button>
