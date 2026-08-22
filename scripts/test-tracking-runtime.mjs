@@ -122,6 +122,35 @@ for (let index = 1; index < chain.length; index += 1) {
   assert.ok(Math.abs(Math.hypot(chain[index].x - chain[index - 1].x, chain[index].y - chain[index - 1].y) - 90 * 0.34) < 0.001, "wizard-hat bone lengths remain constrained");
 }
 
+const glassesFace = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+const setFacePoint = (index, x, y) => { glassesFace[index] = { x, y, z: 0 }; };
+setFacePoint(33, .31, .41); setFacePoint(133, .44, .41);
+setFacePoint(159, .375, .39); setFacePoint(145, .375, .43);
+setFacePoint(160, .36, .392); setFacePoint(144, .36, .428);
+setFacePoint(362, .56, .43); setFacePoint(263, .69, .43);
+setFacePoint(386, .625, .41); setFacePoint(374, .625, .45);
+setFacePoint(385, .64, .412); setFacePoint(380, .64, .448);
+for (const [index, x, y] of [[468, .385, .41], [469, .38, .405], [470, .39, .405], [471, .39, .415], [472, .38, .415], [473, .615, .43], [474, .61, .425], [475, .62, .425], [476, .62, .435], [477, .61, .435]]) setFacePoint(index, x, y);
+setFacePoint(168, .5, .445); setFacePoint(234, .23, .43); setFacePoint(454, .77, .45);
+setFacePoint(127, .22, .42); setFacePoint(356, .78, .46);
+const glassesFrame = {
+  nowMs: 0,
+  width: 640,
+  height: 360,
+  face: { landmarks: glassesFace, leftEyeOpen: 1, rightEyeOpen: 1, held: false },
+  hands: [],
+  extensionAnchors: {}
+};
+const glasses = effects.deriveTrackedGlassesGeometry(glassesFrame, "classic");
+assert.ok(glasses, "complete eye contours produce glasses geometry");
+assert.ok(glasses.angle > 0.04 && glasses.angle < 0.2, "frames follow the shared iris line when the head tilts");
+assert.ok(glasses.lenses[0].x < 0 && glasses.lenses[1].x > 0, "each lens is centered on its own eye");
+assert.ok(glasses.lenses[0].width > 1.35 * Math.abs((.44 - .31) * 640), "lenses include a wearable margin around the eye contour");
+assert.ok(glasses.lenses[0].x + glasses.lenses[0].width / 2 < glasses.lenses[1].x - glasses.lenses[1].width / 2, "lens sizing always leaves a real bridge gap");
+assert.ok(glasses.temples[0].x < glasses.lenses[0].x - glasses.lenses[0].width / 2, "left arm reaches toward the face edge");
+assert.ok(glasses.temples[1].x > glasses.lenses[1].x + glasses.lenses[1].width / 2, "right arm reaches toward the face edge");
+assert.ok(glasses.nosePadY <= (glasses.lenses[0].height + glasses.lenses[1].height) / 2 * .26, "nose pads stay attached to the bridge area");
+
 const rendererSource = await readFile(new URL("../src/components/ChromaVideo.tsx", import.meta.url), "utf8");
 assert.match(rendererSource, /Detecting face…/);
 assert.match(rendererSource, /outputFaceBlendshapes: true/);
@@ -147,5 +176,6 @@ console.log(JSON.stringify({
   occlusionHoldBounded: true,
   handAndBodyInference: true,
   experimentalMouthFailsClosed: true,
-  wizardBones: rig.points.length
+  wizardBones: rig.points.length,
+  fittedGlasses: true
 }, null, 2));

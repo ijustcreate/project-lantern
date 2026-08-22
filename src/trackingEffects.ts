@@ -11,6 +11,15 @@ export interface WizardHatRig {
   previousAt?: number;
 }
 
+export interface TrackedGlassesGeometry {
+  center: { x: number; y: number };
+  angle: number;
+  lineWidth: number;
+  lenses: Array<{ x: number; y: number; width: number; height: number }>;
+  temples: Array<{ x: number; y: number }>;
+  nosePadY: number;
+}
+
 export function createWizardHatRig(): WizardHatRig {
   return {
     points: [],
@@ -19,25 +28,12 @@ export function createWizardHatRig(): WizardHatRig {
 }
 
 export function drawTrackedGlasses(context: CanvasRenderingContext2D, frame: TrackingRenderFrame, style: GlassesStyle) {
-  const landmarks = frame.face?.landmarks;
-  if (!landmarks) return;
-  const leftEye = pixelPoint(landmarks[33], frame);
-  const rightEye = pixelPoint(landmarks[263], frame);
-  const nose = pixelPoint(landmarks[168] ?? landmarks[6], frame);
-  const leftTemple = pixelPoint(landmarks[127] ?? landmarks[234], frame);
-  const rightTemple = pixelPoint(landmarks[356] ?? landmarks[454], frame);
-  if (!leftEye || !rightEye || !nose) return;
-
-  const center = midpoint(leftEye, rightEye);
-  const eyeSpan = Math.max(20, distance(leftEye, rightEye));
-  const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
-  const lensWidth = eyeSpan * 0.39;
-  const lensHeight = eyeSpan * (style === "classic" ? 0.25 : 0.28);
-  const lensOffset = eyeSpan * 0.29;
-  const lineWidth = Math.max(3, eyeSpan * 0.045);
+  const geometry = deriveTrackedGlassesGeometry(frame, style);
+  if (!geometry) return;
+  const { center, angle, lenses, temples, lineWidth, nosePadY } = geometry;
 
   context.save();
-  context.translate(center.x, center.y + eyeSpan * 0.025);
+  context.translate(center.x, center.y);
   context.rotate(angle);
   context.lineJoin = "round";
   context.lineCap = "round";
@@ -46,56 +42,120 @@ export function drawTrackedGlasses(context: CanvasRenderingContext2D, frame: Tra
   if (style === "playful") {
     context.strokeStyle = "#b62f63";
     context.fillStyle = "rgba(255, 205, 70, 0.23)";
-    [-1, 1].forEach((side) => {
-      const x = side * lensOffset;
+    lenses.forEach((lens, index) => {
+      const side = index === 0 ? -1 : 1;
+      const { x, y, width: lensWidth, height: lensHeight } = lens;
       context.beginPath();
-      context.moveTo(x - lensWidth * 0.52, -lensHeight * 0.5);
-      context.quadraticCurveTo(x, -lensHeight * 0.75, x + lensWidth * 0.58, -lensHeight * 0.42);
-      context.lineTo(x + lensWidth * 0.48, lensHeight * 0.48);
-      context.quadraticCurveTo(x, lensHeight * 0.68, x - lensWidth * 0.48, lensHeight * 0.42);
+      context.moveTo(x - lensWidth * 0.52, y - lensHeight * 0.5);
+      context.quadraticCurveTo(x, y - lensHeight * 0.7, x + lensWidth * 0.54, y - lensHeight * 0.42);
+      context.lineTo(x + lensWidth * 0.47, y + lensHeight * 0.48);
+      context.quadraticCurveTo(x, y + lensHeight * 0.62, x - lensWidth * 0.47, y + lensHeight * 0.42);
       context.closePath();
       context.fill();
       context.stroke();
       context.beginPath();
-      context.moveTo(x - side * lensWidth * 0.15, -lensHeight * 0.58);
-      context.lineTo(x - side * lensWidth * 0.02, -lensHeight * 0.86);
+      context.moveTo(x - side * lensWidth * 0.15, y - lensHeight * 0.54);
+      context.lineTo(x - side * lensWidth * 0.02, y - lensHeight * 0.76);
       context.stroke();
     });
   } else {
     context.strokeStyle = "#172635";
-    context.fillStyle = "rgba(85, 199, 191, 0.2)";
-    [-1, 1].forEach((side) => {
-      const x = side * lensOffset;
-      roundedRect(context, x - lensWidth / 2, -lensHeight / 2, lensWidth, lensHeight, lensHeight * 0.42);
+    context.fillStyle = "rgba(85, 199, 191, 0.13)";
+    lenses.forEach((lens) => {
+      roundedRect(context, lens.x - lens.width / 2, lens.y - lens.height / 2, lens.width, lens.height, lens.height * 0.34);
       context.fill();
       context.stroke();
     });
   }
 
-  // A distinct curved bridge leaves visible space between both lenses.
+  const leftLens = lenses[0];
+  const rightLens = lenses[1];
+  const leftInner = leftLens.x + leftLens.width / 2;
+  const rightInner = rightLens.x - rightLens.width / 2;
+  const bridgeY = (leftLens.y + rightLens.y) / 2 - Math.min(leftLens.height, rightLens.height) * 0.03;
+  // A compact bridge follows the eye line and avoids the high arch that made
+  // the frames appear to float above the nose.
   context.beginPath();
-  context.moveTo(-lensOffset + lensWidth / 2, -lensHeight * 0.03);
-  context.quadraticCurveTo(0, -lensHeight * 0.42, lensOffset - lensWidth / 2, -lensHeight * 0.03);
+  context.moveTo(leftInner, bridgeY);
+  context.quadraticCurveTo(0, bridgeY - Math.min(leftLens.height, rightLens.height) * 0.2, rightInner, bridgeY);
   context.stroke();
 
   // Temple arms reach toward the sides of the head instead of joining both ovals.
-  const inverse = (point: { x: number; y: number } | undefined) => point ? rotatePoint({ x: point.x - center.x, y: point.y - center.y }, -angle) : undefined;
-  const localLeftTemple = inverse(leftTemple);
-  const localRightTemple = inverse(rightTemple);
   context.beginPath();
-  context.moveTo(-lensOffset - lensWidth / 2, -lensHeight * 0.06);
-  context.lineTo(localLeftTemple?.x ?? -eyeSpan * 0.68, (localLeftTemple?.y ?? lensHeight * 0.14) + lineWidth * 0.35);
-  context.moveTo(lensOffset + lensWidth / 2, -lensHeight * 0.06);
-  context.lineTo(localRightTemple?.x ?? eyeSpan * 0.68, (localRightTemple?.y ?? lensHeight * 0.14) + lineWidth * 0.35);
+  context.moveTo(leftLens.x - leftLens.width / 2, leftLens.y - leftLens.height * 0.08);
+  context.lineTo(temples[0].x, temples[0].y);
+  context.moveTo(rightLens.x + rightLens.width / 2, rightLens.y - rightLens.height * 0.08);
+  context.lineTo(temples[1].x, temples[1].y);
   context.stroke();
 
-  // Small nose pads make the asset read as wearable glasses at lower resolution.
+  // Subtle nose pads sit just below the bridge rather than drifting down the nose.
   context.fillStyle = style === "playful" ? "#ffe8a6" : "#dce9ec";
   context.beginPath();
-  context.ellipse(-lineWidth * 0.8, Math.max(0, nose.y - center.y) + lineWidth, lineWidth * 0.5, lineWidth * 0.75, -0.3, 0, Math.PI * 2);
-  context.ellipse(lineWidth * 0.8, Math.max(0, nose.y - center.y) + lineWidth, lineWidth * 0.5, lineWidth * 0.75, 0.3, 0, Math.PI * 2);
+  context.ellipse(-lineWidth * 0.7, nosePadY, lineWidth * 0.38, lineWidth * 0.56, -0.3, 0, Math.PI * 2);
+  context.ellipse(lineWidth * 0.7, nosePadY, lineWidth * 0.38, lineWidth * 0.56, 0.3, 0, Math.PI * 2);
   context.fill();
   context.restore();
+}
+
+/** Derive wearable geometry from complete eye contours, not two outer corners. */
+export function deriveTrackedGlassesGeometry(frame: TrackingRenderFrame, style: GlassesStyle): TrackedGlassesGeometry | undefined {
+  const landmarks = frame.face?.landmarks;
+  if (!landmarks) return undefined;
+
+  const eyeRecords = [
+    makeEyeRecord(landmarks, frame, [33, 133], [159, 145], [160, 144], [468, 469, 470, 471, 472]),
+    makeEyeRecord(landmarks, frame, [362, 263], [386, 374], [385, 380], [473, 474, 475, 476, 477])
+  ].filter((eye): eye is NonNullable<typeof eye> => Boolean(eye)).sort((left, right) => left.center.x - right.center.x);
+  if (eyeRecords.length !== 2) return undefined;
+
+  const [screenLeftEye, screenRightEye] = eyeRecords;
+  const center = midpoint(screenLeftEye.center, screenRightEye.center);
+  const eyeCenterDistance = Math.max(20, distance(screenLeftEye.center, screenRightEye.center));
+  const angle = Math.atan2(screenRightEye.center.y - screenLeftEye.center.y, screenRightEye.center.x - screenLeftEye.center.x);
+  const headEdges = [pixelPoint(landmarks[234], frame), pixelPoint(landmarks[454], frame)].filter((point): point is { x: number; y: number } => Boolean(point)).sort((left, right) => left.x - right.x);
+  const headWidth = headEdges.length === 2 ? Math.max(eyeCenterDistance * 2, distance(headEdges[0], headEdges[1])) : eyeCenterDistance * 2.5;
+  const localPoint = (point: { x: number; y: number }) => rotatePoint({ x: point.x - center.x, y: point.y - center.y }, -angle);
+  const localEyeCenters = [localPoint(screenLeftEye.center), localPoint(screenRightEye.center)];
+  const lineWidth = Math.max(2.5, Math.min(headWidth * 0.026, eyeCenterDistance * 0.05));
+  const minLensWidth = eyeCenterDistance * 0.48;
+  const maxLensWidth = Math.min(eyeCenterDistance * 0.82, headWidth * 0.36);
+  let lensWidths = [screenLeftEye.width, screenRightEye.width].map((eyeWidth) => clamp(eyeWidth * 1.52, minLensWidth, maxLensWidth));
+
+  // Preserve a real bridge gap even when a face turns and one eye contour grows.
+  const availableForHalfWidths = eyeCenterDistance - lineWidth * 2.2;
+  const combinedHalfWidths = (lensWidths[0] + lensWidths[1]) / 2;
+  if (combinedHalfWidths > availableForHalfWidths) {
+    const scale = availableForHalfWidths / combinedHalfWidths;
+    lensWidths = lensWidths.map((width) => width * scale);
+  }
+
+  const lenses = eyeRecords.map((eye, index) => {
+    const width = lensWidths[index];
+    const aspectHeight = width * (style === "classic" ? 0.54 : 0.6);
+    const height = clamp(Math.max(aspectHeight, eye.height * 2.15), width * 0.5, width * 0.7);
+    return { x: localEyeCenters[index].x, y: localEyeCenters[index].y - height * 0.055, width, height };
+  });
+  const averageLensHeight = (lenses[0].height + lenses[1].height) / 2;
+
+  const templeCandidates = [
+    frame.extensionAnchors.leftEar ? pixelPoint(frame.extensionAnchors.leftEar, frame) : pixelPoint(landmarks[127] ?? landmarks[234], frame),
+    frame.extensionAnchors.rightEar ? pixelPoint(frame.extensionAnchors.rightEar, frame) : pixelPoint(landmarks[356] ?? landmarks[454], frame)
+  ].filter((point): point is { x: number; y: number } => Boolean(point)).sort((left, right) => left.x - right.x).map(localPoint);
+  const temples = [
+    {
+      x: Math.min(templeCandidates[0]?.x ?? -headWidth * 0.48, lenses[0].x - lenses[0].width / 2 - lineWidth),
+      y: clamp(templeCandidates[0]?.y ?? averageLensHeight * 0.08, -averageLensHeight * 0.18, averageLensHeight * 0.28)
+    },
+    {
+      x: Math.max(templeCandidates[1]?.x ?? headWidth * 0.48, lenses[1].x + lenses[1].width / 2 + lineWidth),
+      y: clamp(templeCandidates[1]?.y ?? averageLensHeight * 0.08, -averageLensHeight * 0.18, averageLensHeight * 0.28)
+    }
+  ];
+  const nose = pixelPoint(landmarks[168] ?? landmarks[6], frame);
+  const localNose = nose ? localPoint(nose) : { x: 0, y: averageLensHeight * 0.12 };
+  const nosePadY = clamp(localNose.y + lineWidth * 0.25, averageLensHeight * 0.06, averageLensHeight * 0.26);
+
+  return { center, angle, lineWidth, lenses, temples, nosePadY };
 }
 
 export function drawTrackedHat(
@@ -320,6 +380,42 @@ function drawStar(context: CanvasRenderingContext2D, x: number, y: number, radiu
 
 function pixelPoint(point: TrackingPoint | undefined, frame: TrackingRenderFrame) {
   return point ? { x: point.x * frame.width, y: point.y * frame.height } : undefined;
+}
+
+function makeEyeRecord(
+  landmarks: TrackingPoint[],
+  frame: TrackingRenderFrame,
+  cornerIndices: [number, number],
+  verticalPairOne: [number, number],
+  verticalPairTwo: [number, number],
+  irisIndices: number[]
+) {
+  const corners = cornerIndices.map((index) => pixelPoint(landmarks[index], frame)).filter((point): point is { x: number; y: number } => Boolean(point));
+  if (corners.length !== 2) return undefined;
+  const contourCenter = midpoint(corners[0], corners[1]);
+  const width = Math.max(4, distance(corners[0], corners[1]));
+  const irisPoints = irisIndices.map((index) => pixelPoint(landmarks[index], frame)).filter((point): point is { x: number; y: number } => Boolean(point));
+  const irisCenter = averagePixelPoint(irisPoints);
+  const center = irisCenter && distance(irisCenter, contourCenter) <= width * 0.6 ? irisCenter : contourCenter;
+  const verticalDistances = [verticalPairOne, verticalPairTwo].map(([top, bottom]) => {
+    const topPoint = pixelPoint(landmarks[top], frame);
+    const bottomPoint = pixelPoint(landmarks[bottom], frame);
+    return topPoint && bottomPoint ? distance(topPoint, bottomPoint) : 0;
+  }).filter((value) => value > 0);
+  const height = verticalDistances.length ? verticalDistances.reduce((sum, value) => sum + value, 0) / verticalDistances.length : width * 0.28;
+  return { center, width, height };
+}
+
+function averagePixelPoint(points: Array<{ x: number; y: number }>) {
+  if (!points.length) return undefined;
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length
+  };
+}
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.max(minimum, Math.min(maximum, value));
 }
 
 function midpoint(left: { x: number; y: number }, right: { x: number; y: number }) {

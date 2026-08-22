@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0272",
+    "title": "Fit tracked glasses to each face",
+    "summary": "Rebuilt the face-effect glasses geometry around eye contours and iris centers so both lenses follow eye size, perspective, tilt, nose position, and face width instead of floating from two outer-corner landmarks.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 5:46 PM",
+    "areas": [
+      "Broadcast",
+      "Face effects",
+      "Tracking"
+    ],
+    "files": [
+      "src/trackingEffects.ts",
+      "scripts/test-tracking-runtime.mjs"
+    ],
+    "tests": "node scripts/test-tracking-runtime.mjs; npm run build; Playwright camera-independent Classic and Playful render fixture; Broadcast route smoke test; 0 console errors/warnings"
+  },
+  {
     "id": "DEV-0271",
     "title": "Improve Light theme readability",
     "summary": "Replaced leftover dark-theme text and control colors with readable Light-theme equivalents across Broadcast, Announcements, Board Editor, Settings, donor filters, Revisions, navigation, and system status areas while preserving dark media previews.",
