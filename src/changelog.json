@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0270",
+    "title": "Load event sounds from hosted builds",
+    "summary": "Blip and announcement sound effects now include the app's deployment base path, preventing missing chime files when Project Lantern is hosted under the GitHub Pages repository URL.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 5:16 PM",
+    "areas": [
+      "Schedule",
+      "Blips",
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; production browser console identified the old root-relative 404 paths; verify hosted sound files return 200 after deployment"
+  },
+  {
     "id": "DEV-0269",
     "title": "Keep scheduled display events consistent",
     "summary": "Scheduled Blips now remain visible over active broadcasts, resolve overlaps consistently, and preview against the event's saved board with a layout that fits both portrait and landscape. New events start as valid one-time entries, and malformed legacy schedules are disabled during normalization.",

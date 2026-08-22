@@ -235,8 +235,8 @@ const boardFontLabels: Record<BoardFontFamily, string> = {
 };
 
 const announcementSfxSources = {
-  ding: "/assets/sfx/announcement-ding.wav",
-  chime: "/assets/sfx/announcement-chime.ogg"
+  ding: `${import.meta.env.BASE_URL}assets/sfx/announcement-ding.wav`,
+  chime: `${import.meta.env.BASE_URL}assets/sfx/announcement-chime.ogg`
 } as const;
 
 export function App() {
