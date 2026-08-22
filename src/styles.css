@@ -13569,10 +13569,83 @@ textarea:focus-visible,
 .compact-donors .donor-meta-row { flex: 0 1 220px; }
 .compact-donors .collection-footer { display: none; }
 .donor-filter-count { padding: 1px 3px 0; color: #737a9f; font-size: 9px; }
+.donor-filter-row { display: contents; }
 
 @media (max-width: 900px) {
   .compact-donors .donor-card { min-height: 52px; }
   .compact-donors .donor-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+}
+
+@media (max-width: 620px) {
+  .compact-donors { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .compact-donors .toolbar-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    overflow: visible;
+  }
+  .compact-donors .search-field {
+    grid-column: 1;
+    width: auto;
+    min-width: 0;
+    min-height: 40px;
+  }
+  .compact-donors .toolbar-row > .command-button {
+    grid-column: 2;
+    min-height: 40px;
+    padding-inline: 12px;
+    white-space: nowrap;
+  }
+  .compact-donors .donor-filter-row {
+    grid-column: 1 / -1;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .compact-donors .donor-filter-row::-webkit-scrollbar { display: none; }
+  .compact-donors .donor-filter-row .toolbar-select {
+    width: 128px;
+    min-width: 128px;
+    min-height: 36px;
+    flex: 0 0 128px;
+  }
+  .compact-donors .donor-card-list { gap: 5px; }
+  .compact-donors .donor-card {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    min-height: 62px;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 6px;
+  }
+  .compact-donors .donor-card .drag-button {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+  }
+  .compact-donors .donor-main { gap: 1px; overflow: hidden; }
+  .compact-donors .donor-title-row > strong { font-size: 12.5px; line-height: 1.1; }
+  .compact-donors .donor-recognition-summary { gap: 3px; font-size: 7.5px; }
+  .compact-donors .donor-giving-summary { font-size: 7px; }
+  .compact-donors .donor-meta-row { min-height: 14px; max-height: 14px; gap: 3px; }
+  .compact-donors .tag-chip { min-height: 14px; padding-inline: 4px; font-size: 6.5px; }
+  .compact-donors .donor-actions {
+    grid-column: auto;
+    align-self: center;
+    gap: 4px;
+  }
+  .compact-donors .donor-actions .icon-button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
 }
 
 /* Board names retain one type size and gain lines instead of shrinking. */
