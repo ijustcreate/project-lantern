@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0276",
+    "title": "Simplify donor list cards",
+    "summary": "Removed the board-assignment icon and dropdown from compact donor rows; board membership remains available in each donor's Boards editor tab.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 6:59 PM",
+    "areas": [
+      "Donors"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Source regression search; npm run build"
+  },
+  {
     "id": "DEV-0275",
     "title": "Keep generated broadcast labels readable",
     "summary": "Camera mirroring now applies only to live camera sources, so generated test-feed labels, screen shares, and saved recordings are not reversed in the studio or display output.",

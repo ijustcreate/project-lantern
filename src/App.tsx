@@ -2427,21 +2427,6 @@ function DonorsView({
     setDragOverId(null);
   };
 
-  const donorIsOnBoard = (donor: Donor, board: DonorBoardProgram) => donor.boardIds?.includes(board.id) ?? board.donorIds.includes(donor.id);
-
-  const addDonorToBoard = (donorId: string, boardId: string) => {
-    updateState((current) => {
-      const board = current.boardPrograms.find((item) => item.id === boardId);
-      if (!board) return current;
-      const boardIds = current.boardPrograms.filter((item) => item.donorIds.includes(donorId)).map((item) => item.id);
-      return {
-        ...current,
-        donors: current.donors.map((item) => item.id === donorId ? { ...item, boardIds: [...new Set([...boardIds, boardId])] } : item),
-        boardPrograms: current.boardPrograms.map((item) => item.id === boardId ? { ...item, donorIds: [...new Set([...item.donorIds, donorId])] } : item)
-      };
-    });
-  };
-
   const createDonor = (donor: Donor) => {
     updateState((current) => {
       const assignedScreens = Object.values(current.screens).filter((screen) => donor.displayIds?.includes(screen.id));
@@ -2503,7 +2488,6 @@ function DonorsView({
         {visibleDonors.map((donor) => {
           const activeDraft = editingId === donor.id && draft ? draft : donor;
           const editing = false;
-          const assignedBoards = state.boardPrograms.filter((board) => donorIsOnBoard(donor, board));
           const visibleTags = (donor.tags ?? []).slice(0, 3);
           const hiddenTagCount = Math.max(0, (donor.tags?.length ?? 0) - visibleTags.length);
           return (
@@ -2550,7 +2534,7 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong><label className="donor-board-picker"><LayoutDashboard size={12} /><select aria-label={`Add ${donor.name} to a board`} value="" onChange={(event) => { if (event.target.value) addDonorToBoard(donor.id, event.target.value); }}><option value="" disabled>{assignedBoards.length ? `${assignedBoards.length} board${assignedBoards.length === 1 ? "" : "s"} assigned · Add to board` : "Add to board…"}</option>{state.boardPrograms.filter((board) => !donorIsOnBoard(donor, board)).map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}</select></label></div>
+                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong></div>
                     <span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span>
                     <small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small>
                     {!!visibleTags.length && <div className="donor-meta-row">{visibleTags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}{hiddenTagCount > 0 && <span className="tag-chip donor-more-tags" title={(donor.tags ?? []).slice(visibleTags.length).join(", ")}>+{hiddenTagCount} more</span>}</div>}
