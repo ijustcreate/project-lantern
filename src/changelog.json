@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0285",
+    "title": "Reflow the narrow Dashboard header",
+    "summary": "Moved Dashboard actions onto their own responsive phone row so the museum identity, publication label, title, buttons, and user selector no longer overlap.",
+    "author": "Codex",
+    "createdAt": "Aug 21, 2026, 8:38 PM",
+    "areas": [
+      "Dashboard",
+      "Mobile layout"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Playwright at 500x1000 and 360x800; geometry assertions; zero console errors; npm run build"
+  },
+  {
     "id": "DEV-0284",
     "title": "Tighten mobile donor management",
     "summary": "Separated the narrow donor toolbar into clear search, action, and scrollable filter rows, and compressed each donor card while keeping its handle, name, metadata, and edit/delete controls aligned.",

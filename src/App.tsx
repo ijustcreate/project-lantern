@@ -954,7 +954,7 @@ function ControlCenter() {
           </div>
           <div className="topbar-actions">
             {view === "dashboard" && (
-              <>
+              <div className="dashboard-quick-actions">
               <button className="header-operation-button" onClick={openDisplays} title="Open every recognition display">
                 <Monitor size={16} /><span>Open displays</span>
               </button>
@@ -965,7 +965,7 @@ function ControlCenter() {
               <button className="header-operation-button dashboard-brigade-entry" onClick={() => setView("brigade")} title="Open the Toy Soldier Brigade hub">
                 <Star size={16} /><span>Toy Soldier Brigade</span>
               </button>
-              </>
+              </div>
             )}
             <label className="header-user-control">
               <span><Users size={15} /> User <small>Local mode</small></span>
