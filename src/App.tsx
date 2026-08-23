@@ -4185,7 +4185,7 @@ function DirectBoardDonorName({ donor, display, program, palette, fontFamily, on
   display: DisplayProfile;
   program: DonorBoardProgram;
   palette: ReturnType<typeof boardPreviewPalette>;
-  fontFamily: string;
+  fontFamily: NonNullable<BoardPanel["fontFamily"]>;
   onRename: (donorId: string, name: string) => void;
 }) {
   const presentation = resolveBoardDonorPresentation(program, donor.id, {
