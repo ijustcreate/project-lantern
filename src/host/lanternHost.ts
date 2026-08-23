@@ -1,4 +1,4 @@
-import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, BOARD_TEXT_CONTRAST_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION, QUESTIONING_TOY_SOLDIER_CONTENT_VERSION } from "../sampleData";
+import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION, QUESTIONING_TOY_SOLDIER_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
@@ -1030,7 +1030,6 @@ function isUntouchedLegacyDemoScreen(id: string, screen: LanternState["screens"]
     && (screen.backgroundCrop?.rotation ?? 0) === 0
     && screen.layoutScale === 100
     && screen.brightness === 72
-    && screen.enabled !== false
     && screen.customHeading === "THANK YOU"
     && screen.customSubheading === "OUR GENEROUS DONORS"
     && screen.fontFamily === "Montserrat"
@@ -1051,8 +1050,6 @@ function isUntouchedLegacyDemoScreen(id: string, screen: LanternState["screens"]
     && !screen.backgroundMediaName
     && !screen.backgroundMediaType
     && !screen.showFrame
-    && !screen.textFinish
-    && !screen.textShadowEnabled
     && !screen.particleColorStyle
     && screen.particleCount === undefined
     && screen.particleSize === undefined
@@ -1331,7 +1328,6 @@ export function normalizeState(state: LanternState): LanternState {
   const needsDonorRosterBoardsMigration = incomingContentVersion < DONOR_ROSTER_BOARDS_CONTENT_VERSION;
   const needsLegacyStarRecovery = incomingContentVersion < LEGACY_STAR_RECOVERY_CONTENT_VERSION;
   const needsLegacyDonorTagsMigration = incomingContentVersion < LEGACY_DONOR_TAGS_CONTENT_VERSION;
-  const needsBoardTextContrastMigration = incomingContentVersion < BOARD_TEXT_CONTRAST_CONTENT_VERSION;
   const needsLegacyStarLayerMigration = incomingContentVersion < LEGACY_STAR_LAYER_CONTENT_VERSION;
   const needsAnnouncementLayoutMigration = incomingContentVersion < ANNOUNCEMENT_LAYOUT_CONTENT_VERSION;
   const needsQuestioningToySoldierMigration = incomingContentVersion < QUESTIONING_TOY_SOLDIER_CONTENT_VERSION;
@@ -1433,17 +1429,9 @@ export function normalizeState(state: LanternState): LanternState {
         })
     };
   });
-  const boardProgramsBeforeTextContrastMigration = migrateUnifiedBoardPanels(needsDonorDomainMigration
+  const boardProgramsBeforeToySoldierMigration = migrateUnifiedBoardPanels(needsDonorDomainMigration
     ? migrateLegacyDonorPresentation(normalizedBoardPrograms, donors)
     : normalizedBoardPrograms, donors);
-  // The dark brass outline was previously applied to a shipped board treatment.
-  // Replace it once for all current saved boards, without touching their content,
-  // panel layout, or donor/schedule assignments.
-  const boardProgramsBeforeToySoldierMigration = needsBoardTextContrastMigration
-    ? boardProgramsBeforeTextContrastMigration.map((program) => program.textFinish === "cut-brass"
-      ? { ...program, textFinish: "flat" as const }
-      : program)
-    : boardProgramsBeforeTextContrastMigration;
   const boardPrograms = needsQuestioningToySoldierMigration
     ? boardProgramsBeforeToySoldierMigration.map((program) => program.id === "board-toy-about-portrait"
       ? { ...program, panels: program.panels?.map((panel) => panel.id === "about-p-soldier" && panel.imageUrl === "/assets/donor-icons/toy-soldier.png"
@@ -1521,13 +1509,7 @@ export function normalizeState(state: LanternState): LanternState {
       && legacyBoardIds.has(screen.boardProgramId)
       && isUntouchedLegacyDemoScreen(id, legacyScreen);
     const replacement = migrateUntouchedDemoScreen ? initialState.screens[id] : undefined;
-    const migratedScreen = replacement ? {
-      ...replacement,
-      status: screen.status,
-      fps: screen.fps,
-      lastHeartbeat: screen.lastHeartbeat,
-      currentRevision: screen.currentRevision
-    } : screen;
+    const migratedScreen = replacement ? { ...replacement, currentRevision: screen.currentRevision } : screen;
     const legacyStarWall = needsLegacyDonorStarsMigration
       ? id === "display-1"
         ? { boardProgramId: "board-legacy-stars-photo-1", assignment: "Legacy donor star wall", style: "donor-wall" as const }
@@ -1541,9 +1523,7 @@ export function normalizeState(state: LanternState): LanternState {
       donorIds: remapDonorIds(migratedScreen.donorIds, donorAliases) ?? [],
       donorSubtextVisibility: Object.fromEntries(Object.entries(migratedScreen.donorSubtextVisibility ?? {}).map(([donorId, visible]) => [donorAliases.get(donorId) ?? donorId, visible]))
     };
-    return [id, needsBoardTextContrastMigration && normalizedScreen.textFinish === "cut-brass"
-      ? { ...normalizedScreen, textFinish: "flat" as const }
-      : normalizedScreen];
+    return [id, normalizedScreen];
   })) as LanternState["screens"];
 
   const retiredAnnouncementIds = new Set(retiredAnnouncements.map((announcement) => announcement.id));
@@ -1723,9 +1703,15 @@ function normalizeScreen(
   fallback: LanternState["screens"][string],
   id: string
 ): LanternState["screens"][string] {
+  const { enabled: _enabled, fps: _fps, lastHeartbeat: _lastHeartbeat, status: _status, ...screenWithoutRetiredDisplayState } = screen as typeof screen & {
+    enabled?: unknown;
+    fps?: unknown;
+    lastHeartbeat?: unknown;
+    status?: unknown;
+  };
   return {
     ...fallback,
-    ...screen,
+    ...screenWithoutRetiredDisplayState,
     id,
     label: screen?.label ?? fallback.label,
     style: screen?.style ?? fallback.style,
@@ -1736,7 +1722,6 @@ function normalizeScreen(
     backgroundCrop: { ...fallback.backgroundCrop, ...screen?.backgroundCrop, rotation: screen?.backgroundCrop?.rotation ?? 0 },
     layoutScale: screen?.layoutScale ?? fallback.layoutScale,
     brightness: screen?.brightness ?? fallback.brightness,
-    enabled: screen?.enabled ?? true,
     donorIds: screen?.donorIds ?? [],
     donorRosterConfigured: screen?.donorRosterConfigured ?? Boolean(screen?.donorIds?.length),
     donorSubtextVisibility: screen?.donorSubtextVisibility ?? {},

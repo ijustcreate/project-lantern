@@ -2979,7 +2979,6 @@ body,
   gap: 7px;
 }
 
-.dashboard-display-status > span { display: grid; place-items: center; color: #6adce4; }
 .dashboard-display-status .icon-button { width: 29px; height: 29px; min-height: 29px; }
 .dashboard-display-status .dashboard-schedule-now { min-height: 29px; padding-inline: 9px; }
 
@@ -3231,8 +3230,7 @@ body,
 
 .calendar-commandbar,
 .calendar-nav,
-.section-commandbar,
-.screen-icon-actions {
+.section-commandbar {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -3442,17 +3440,6 @@ body,
 
 .compact-screen-grid .mini-preview {
   max-height: 245px;
-}
-
-.screen-icon-actions span {
-  display: grid;
-  color: var(--muted);
-}
-
-.live-toggle.active {
-  color: #07111e;
-  border-color: rgba(121, 212, 155, 0.5);
-  background: var(--success);
 }
 
 .screen-card-summary {
@@ -5393,9 +5380,6 @@ textarea:focus-visible,
 
 .announcement-monitor-surface.landscape { width: 100%; max-height: 100%; aspect-ratio: 16 / 9; }
 .announcement-monitor-surface.portrait { width: auto; max-width: 100%; height: 100%; aspect-ratio: 9 / 16; }
-.announcement-monitor.mode-3d .announcement-monitor-surface { width: min(82%, 960px); height: auto; max-height: 80%; border: 5px solid #111923; border-radius: 5px; box-shadow: 14px 18px 42px rgba(0, 0, 0, .62), inset -6px 0 12px rgba(255, 255, 255, .025); }
-.announcement-monitor.mode-3d .announcement-monitor-surface.portrait { width: auto; height: 82%; }
-.announcement-monitor.mode-3d .announcement-monitor-surface::after { position: absolute; z-index: 20; inset: 0; border: 1px solid rgba(255, 255, 255, .1); content: ""; pointer-events: none; }
 .announcement-monitor-surface > .wall-canvas { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; }
 
 .monitor-view-controls {
@@ -7278,7 +7262,7 @@ textarea:focus-visible,
 
 .board-builder-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 390px;
   gap: 9px;
   width: 100%;
   max-width: 100%;
@@ -7540,18 +7524,19 @@ textarea:focus-visible,
 .panel-group-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid rgba(121, 202, 198, .2); border-radius: 8px; color: var(--muted); background: rgba(121, 202, 198, .045); font-size: 9px; }
 .panel-group-actions button { flex: 0 0 auto; min-height: 26px; padding: 0 8px; border: 1px solid rgba(121, 202, 198, .34); border-radius: 6px; color: #c8f2f1; background: rgba(18, 62, 72, .48); font: inherit; font-weight: 750; cursor: pointer; }
 .panel-group-actions button:disabled { opacity: .42; cursor: not-allowed; }
-.direct-board-canvas.text-shadow-enabled .editable-board-text,
-.direct-board-canvas.text-shadow-enabled .direct-donor-name {
+.direct-board-panel .editable-board-text,
+.direct-board-panel .direct-donor-name {
   text-shadow: var(--board-text-shadow-x) var(--board-text-shadow-y) var(--board-text-shadow-blur) rgb(0 0 0 / var(--board-text-shadow-alpha));
 }
 
 .board-save-cluster { display: flex; align-items: center; justify-content: flex-end; justify-self: end; gap: 9px; }
+.board-save-cluster .command-button:disabled { border-color: rgba(133, 145, 171, .36); color: #a6afc5; background: rgba(104, 116, 143, .24); box-shadow: none; opacity: 1; }
 .board-save-status { min-width: 108px; color: #9da6c7; font-size: 10px; font-weight: 700; }
 .board-save-status.saved { color: #79cac6; }
 .board-save-status.error { color: #ff9b84; }
-.direct-board-canvas.finish-cut-brass .editable-board-text,
-.direct-board-canvas.finish-cut-brass .direct-donor-name {
-  -webkit-text-stroke: .35px rgba(118, 81, 31, .72);
+.direct-board-panel .editable-board-text,
+.direct-board-panel .direct-donor-name {
+  -webkit-text-stroke: var(--panel-text-stroke, 0 transparent);
 }
 .panel-supporters-heading { flex-direction: column; }
 .panel-supporters-heading .board-section-title { max-width: 100%; overflow: hidden; font-size: min(var(--panel-font-size), 7cqw, 58cqh); white-space: normal; text-wrap: balance; }
@@ -7654,7 +7639,7 @@ textarea:focus-visible,
 .direct-star-placeholder { display: grid; place-items: center; color: #f3bc1f; font-size: min(16cqw, 82cqh); line-height: 1; }
 .direct-star-donor-name { position: absolute; z-index: 1; inset: 30% 23% 28%; display: grid; place-items: center; overflow: hidden; color: var(--star-donor-color); font-size: var(--star-donor-font-size); font-weight: var(--panel-font-weight, 800); font-style: var(--panel-font-style, normal); line-height: var(--panel-line-height, .92); letter-spacing: var(--panel-letter-spacing, 0px); text-align: center; text-decoration: var(--panel-text-decoration, none); text-transform: uppercase; }
 .direct-star-donor-name .donor-name-line { white-space: normal; }
-.direct-board-canvas.text-shadow-enabled .direct-star-donor-name { text-shadow: var(--board-text-shadow-x) var(--board-text-shadow-y) var(--board-text-shadow-blur) rgb(255 255 255 / .26); }
+.direct-board-panel .direct-star-donor-name { text-shadow: var(--board-text-shadow-x) var(--board-text-shadow-y) var(--board-text-shadow-blur) rgb(255 255 255 / var(--board-text-shadow-alpha)); }
 
 /* Legacy wall stars are deliberately two independent layers. The text panel sits
    in the safe center of the star but can be moved or edited without moving art. */
@@ -7676,7 +7661,7 @@ textarea:focus-visible,
 .board-editor-view-controls {
   position: absolute;
   z-index: 20;
-  right: 12px;
+  left: 12px;
   bottom: 12px;
   display: grid;
   gap: 5px;
@@ -7978,7 +7963,7 @@ textarea:focus-visible,
   .board-builder-toolbar { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 58px; align-items: center; }
   .builder-select { grid-template-columns: 58px minmax(0, 1fr); grid-template-rows: 1fr; align-items: center; gap: 8px; padding: 7px; }
   .board-picker-label { display: none; }
-  .board-builder-workspace { grid-template-columns: minmax(0, 1fr) 264px; }
+  .board-builder-workspace { grid-template-columns: minmax(0, 1fr) 330px; }
 }
 
 @media (max-width: 900px) {
@@ -7987,7 +7972,7 @@ textarea:focus-visible,
   .builder-select { grid-template-columns: 1fr; padding: 5px; }
   .builder-select > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .board-picker > summary { min-height: 54px; }
-  .board-builder-workspace { grid-template-columns: minmax(0, 1fr) 232px; }
+  .board-builder-workspace { grid-template-columns: minmax(0, 1fr) 280px; }
   .panel-story { grid-template-columns: 64px minmax(0, 1fr); }
 }
 
@@ -13746,6 +13731,44 @@ textarea:focus-visible,
     height: 34px;
     min-width: 34px;
     min-height: 34px;
+  }
+}
+
+/* Desktop donor cards reserve their existing compact height for two clear rows. */
+@media (min-width: 901px) {
+  .compact-donors .donor-card {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .compact-donors .donor-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title title"
+      "details tags";
+    min-height: 0;
+    align-content: center;
+    column-gap: 10px;
+    row-gap: 1px;
+  }
+
+  .compact-donors .donor-title-row { grid-area: title; }
+  .compact-donors .donor-details-row {
+    display: flex;
+    grid-area: details;
+    min-width: 0;
+    align-items: center;
+    gap: 14px;
+    overflow: hidden;
+  }
+  .compact-donors .donor-recognition-summary,
+  .compact-donors .donor-giving-summary { min-width: 0; flex: 0 1 auto; }
+  .compact-donors .donor-meta-row {
+    grid-area: tags;
+    min-width: 0;
+    max-width: 260px;
+    justify-self: end;
   }
 }
 

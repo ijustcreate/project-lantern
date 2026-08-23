@@ -1,5 +1,137 @@
 [
   {
+    "id": "DEV-0296",
+    "title": "Use dashboard 3D renderer for announcements",
+    "summary": "Updated the Announcements preview to use the same Babylon 3D board mode and camera interaction as dashboard display previews.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:25 AM",
+    "areas": [
+      "Announcements",
+      "Board rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; focused source checks for shared Babylon 3D mode"
+  },
+  {
+    "id": "DEV-0295",
+    "title": "Recover missing bug launcher button",
+    "summary": "Turning on the bug launcher now resets it beside the Bugs navigation item and saves the safe position for the current user.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:24 AM",
+    "areas": [
+      "Bugs",
+      "Navigation"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "git diff --check; focused source checks for reset, clamp, and persistence"
+  },
+  {
+    "id": "DEV-0294",
+    "title": "Improve Board Editor workspace layout",
+    "summary": "Moved zoom and pan controls to the left side of the board workspace and widened the settings panel to reduce scrolling.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:22 AM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; focused CSS source checks"
+  },
+  {
+    "id": "DEV-0293",
+    "title": "Move text treatment to individual panels",
+    "summary": "Removed board-level text treatment settings and made finish and shadow controls apply only to the selected text panel in the editor and live display.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:21 AM",
+    "areas": [
+      "Board Editor",
+      "Board rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/types.ts",
+      "src/host/lanternHost.ts",
+      "src/styles.css",
+      "src/sampleData.ts"
+    ],
+    "tests": "git diff --check; repository-wide source search for panel-only text treatment"
+  },
+  {
+    "id": "DEV-0292",
+    "title": "Remove board-level typeface override",
+    "summary": "Removed board-wide typeface controls and ensured each panel's font setting is the only font source for panel text in the editor and live display.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:17 AM",
+    "areas": [
+      "Board Editor",
+      "Board rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "git diff --check; source search for removed controls and program font fallbacks"
+  },
+  {
+    "id": "DEV-0291",
+    "title": "Keep unsaved board edits off live displays",
+    "summary": "Made Board Editor changes local drafts until Save board publishes them, and made the save control clearly disabled until unsaved edits exist.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:13 AM",
+    "areas": [
+      "Board Editor",
+      "Live displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; static source check confirms Board Editor mutations use local draft updates and Save board is disabled without a draft difference; TypeScript check exceeded the tool time limit under existing Node workload"
+  },
+  {
+    "id": "DEV-0290",
+    "title": "Align donor card details beneath names",
+    "summary": "Reformatted every desktop donor card into a compact two-line layout so names stay above their recognition and giving details without increasing row height.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:04 AM",
+    "areas": [
+      "Donors"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; source layout review confirms fixed 44px desktop donor cards with title and details on separate rows"
+  },
+  {
+    "id": "DEV-0289",
+    "title": "Simplify dashboard display controls",
+    "summary": "Removed the dashboard control-center publication header and the misleading display attachment and make-live controls, including their retired status-state plumbing.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 9:59 AM",
+    "areas": [
+      "Dashboard",
+      "Display management"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/host/lanternHost.ts",
+      "src/sampleData.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Static reference scan and git diff check; npm run build attempted but could not complete within the tool time limit because of existing Node workload"
+  },
+  {
     "id": "DEV-0288",
     "title": "Keep board layouts fixed while the editor resizes",
     "summary": "The Board Editor now scales a fixed authored canvas to the available workspace, preserving panel positions, typography, wrapping, and spacing at every browser size.",

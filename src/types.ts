@@ -4,8 +4,6 @@ export type ScreenId = string;
 
 export type TargetScreen = ScreenId | "all";
 
-export type DisplayStatus = "offline" | "ready" | "live" | "warning";
-
 export type QualityTier = "Baseline" | "Balanced" | "Showcase";
 
 export type RendererMode = "WebGL2" | "Certified WebGPU";
@@ -263,11 +261,6 @@ export interface DonorBoardProgram {
   backgroundMediaId?: string;
   backgroundCrop?: ImageCrop;
   showFrame?: boolean;
-  textFinish?: "flat" | "cut-brass";
-  textShadowEnabled?: boolean;
-  textShadowStrength?: number;
-  textShadowAngle?: number;
-  textShadowDistance?: number;
   givingProgramId?: string;
   templatePurpose?: "roster" | "level" | "story" | "invitation" | "good-deeds";
   palette?: "classic" | "brigade-blue" | "brigade-red" | "brigade-sunshine" | "brigade-cream" | "legacy-navy" | "legacy-sky";
@@ -309,6 +302,12 @@ export interface BoardPanel {
   fontStyle?: "normal" | "italic";
   underline?: boolean;
   strikethrough?: boolean;
+  /** Text treatment belongs to this panel only. */
+  textFinish?: "flat" | "cut-brass";
+  textShadowEnabled?: boolean;
+  textShadowStrength?: number;
+  textShadowAngle?: number;
+  textShadowDistance?: number;
   /** Horizontal alignment for text inside the panel's own bounds. */
   textAlign?: "left" | "center" | "right";
   /** Wrap by default; optional one-line mode reduces type to stay inside the panel. */
@@ -718,12 +717,8 @@ export interface DisplayProfile {
   currentRevision: number;
   renderer: RendererMode;
   quality: QualityTier;
-  fps: number;
-  status: DisplayStatus;
-  lastHeartbeat?: string;
   /** Native monitor preferred when this display preview is opened from the desktop app. */
   defaultMonitorId?: number;
-  enabled?: boolean;
   boardProgramId?: string;
   donorIds?: string[];
   donorRosterConfigured?: boolean;
@@ -747,11 +742,6 @@ export interface DisplayProfile {
   particleLifetime?: number;
   particleLifetimeRange?: number;
   showFrame?: boolean;
-  textFinish?: "flat" | "cut-brass";
-  textShadowEnabled?: boolean;
-  textShadowStrength?: number;
-  textShadowAngle?: number;
-  textShadowDistance?: number;
   showIcons?: boolean;
   donorIconStyle?: "circle" | "diamond" | "dash";
   donorIconPlacement?: "left" | "both";
@@ -804,17 +794,8 @@ export interface LanternState {
   revisions: RevisionRecord[];
 }
 
-export interface DisplayHeartbeat {
-  type: "display-heartbeat";
-  screenId: ScreenId;
-  fps: number;
-  status: DisplayStatus;
-  timestamp: string;
-}
-
 export type HostMessage =
   | { type: "state-update"; state: LanternState }
-  | DisplayHeartbeat
   | { type: "identify-screen"; screenId: ScreenId }
   | { type: "live-stop"; target: TargetScreen }
   | { type: "display-presence"; screenId: ScreenId; timestamp: string }

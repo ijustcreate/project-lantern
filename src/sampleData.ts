@@ -12,13 +12,14 @@ export const LEGACY_STAR_RECOVERY_CONTENT_VERSION = 11;
 /** Adds the exact Legacy tag to every donor transcribed from a recognition star. */
 export const LEGACY_DONOR_TAGS_CONTENT_VERSION = 12;
 /** Replaces the legacy brass outline treatment with clear, flat board text. */
-export const BOARD_TEXT_CONTRAST_CONTENT_VERSION = 13;
 /** Makes legacy recognition stars independent image and text layers. */
 export const LEGACY_STAR_LAYER_CONTENT_VERSION = 14;
 /** Repairs early announcement placements that treated layout X as a left edge. */
 export const ANNOUNCEMENT_LAYOUT_CONTENT_VERSION = 15;
 export const QUESTIONING_TOY_SOLDIER_CONTENT_VERSION = 16;
-export const LANTERN_CONTENT_VERSION = QUESTIONING_TOY_SOLDIER_CONTENT_VERSION;
+/** Removes retired display attachment, heartbeat, and manual live-toggle state. */
+export const DISPLAY_STATUS_REMOVAL_CONTENT_VERSION = 17;
+export const LANTERN_CONTENT_VERSION = DISPLAY_STATUS_REMOVAL_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -751,15 +752,15 @@ export const initialState: LanternState = {
   screens: {
     "display-1": {
       id: "display-1", label: "Welcome Gallery", orientation: "Portrait", resolution: "1080 x 1920", assignment: "Legacy donor star wall", style: "donor-wall",
-      backgroundCrop: { scale: 1, x: 0, y: 0 }, layoutScale: 100, brightness: 78, currentRevision: 19, renderer: "WebGL2", quality: "Balanced", fps: 0, status: "offline", enabled: true,
+      backgroundCrop: { scale: 1, x: 0, y: 0 }, layoutScale: 100, brightness: 78, currentRevision: 19, renderer: "WebGL2", quality: "Balanced",
       boardProgramId: "board-legacy-stars-photo-1", donorIds: [], donorRosterConfigured: false, customHeading: "", customSubheading: "", fontFamily: "DM Sans", nameSize: 30, columns: 2,
-      donorScrollEnabled: false, donorScrollSpeed: 4, particleAnimationEnabled: false, particleDriftDirection: "natural", particleDriftSpeed: 3, particleGravity: 3, showIcons: false, donorIconStyle: "circle", donorIconPlacement: "left", showSubtext: false, showFrame: true, textFinish: "flat", textShadowEnabled: false
+      donorScrollEnabled: false, donorScrollSpeed: 4, particleAnimationEnabled: false, particleDriftDirection: "natural", particleDriftSpeed: 3, particleGravity: 3, showIcons: false, donorIconStyle: "circle", donorIconPlacement: "left", showSubtext: false, showFrame: true
     },
     "display-2": {
       id: "display-2", label: "Discovery Hall", orientation: "Landscape", resolution: "1920 x 1080", assignment: "Legacy donor star wall", style: "donor-wall",
-      backgroundCrop: { scale: 1, x: 0, y: 0 }, layoutScale: 100, brightness: 78, currentRevision: 19, renderer: "WebGL2", quality: "Showcase", fps: 0, status: "offline", enabled: true,
+      backgroundCrop: { scale: 1, x: 0, y: 0 }, layoutScale: 100, brightness: 78, currentRevision: 19, renderer: "WebGL2", quality: "Showcase",
       boardProgramId: "board-legacy-stars-photo-2", donorIds: [], donorRosterConfigured: false, customHeading: "", customSubheading: "", fontFamily: "DM Sans", nameSize: 28, columns: 2,
-      donorScrollEnabled: false, donorScrollSpeed: 4, particleAnimationEnabled: false, particleDriftDirection: "natural", particleDriftSpeed: 3, particleGravity: 3, showIcons: false, donorIconStyle: "circle", donorIconPlacement: "left", showSubtext: false, showFrame: true, textFinish: "flat", textShadowEnabled: false
+      donorScrollEnabled: false, donorScrollSpeed: 4, particleAnimationEnabled: false, particleDriftDirection: "natural", particleDriftSpeed: 3, particleGravity: 3, showIcons: false, donorIconStyle: "circle", donorIconPlacement: "left", showSubtext: false, showFrame: true
     }
   },
   revisions: [

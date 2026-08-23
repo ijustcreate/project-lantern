@@ -73,8 +73,6 @@ import {
   Video,
   Volume2,
   VolumeX,
-  Wifi,
-  WifiOff,
   X,
   ZoomIn,
   ZoomOut
@@ -124,7 +122,6 @@ import {
 } from "./host/lanternHost";
 import { attachDisplayVideoReceiver, DirectorVideoBridge } from "./host/videoBridge";
 import type {
-  DisplayHeartbeat,
   DisplayProfile,
   DisplayStyle,
   BoardPanel,
@@ -278,6 +275,7 @@ function ControlCenter() {
   const [newUserName, setNewUserName] = useState("");
   const [bugLauncherVisible, setBugLauncherVisible] = useState(() => localStorage.getItem("project-lantern-bug-launcher-visible") !== "false");
   const [bugLauncherPosition, setBugLauncherPosition] = useState(() => readBugLauncherPosition(currentBugUser()));
+  const bugNavigationButtonRef = useRef<HTMLButtonElement | null>(null);
   const bugLauncherDrag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const suppressBugLauncherClick = useRef(false);
   const [scheduleFocusId, setScheduleFocusId] = useState<string | null>(null);
@@ -410,22 +408,7 @@ function ControlCenter() {
         });
       }
 
-      if (message.type === "display-heartbeat") {
-        setState((current) => applyHeartbeat(current, message));
-      }
-
       if (message.type === "display-presence") {
-        setState((current) => ({
-          ...current,
-          screens: {
-            ...current.screens,
-            [message.screenId]: {
-              ...(current.screens[message.screenId] ?? makeDisplay(message.screenId, Object.keys(current.screens).length + 1)),
-              status: current.live.active && targetIncludes(current.live.target, message.screenId) ? "live" : "ready",
-              lastHeartbeat: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })
-            }
-          }
-        }));
         void videoBridge.current?.connect(message.screenId);
       }
     });
@@ -799,11 +782,6 @@ function ControlCenter() {
   };
 
   const identifyDisplay = (screenId: ScreenId) => {
-    const connectedDisplays = Object.values(state.screens).filter((screen) => screen.status !== "offline");
-    if (!connectedDisplays.length) {
-      setDisplayOpenNotice({ message: "There are no open or connected displays to identify. Open a display window, then try again." });
-      return;
-    }
     const channel = new BroadcastChannel("project-lantern-host-v1");
     channel.postMessage({ type: "identify-screen", screenId } satisfies HostMessage);
     channel.close();
@@ -885,6 +863,17 @@ function ControlCenter() {
     setBugLauncherPosition({ x, y });
     if (drag.moved) writeBugLauncherPosition(currentBugUser(), { x, y });
   };
+  const resetBugLauncherPosition = () => {
+    const bugNavigationBounds = bugNavigationButtonRef.current?.getBoundingClientRect();
+    const position = bugNavigationBounds
+      ? {
+          x: Math.max(8, Math.min(window.innerWidth - 50, Math.round(bugNavigationBounds.right - 46))),
+          y: Math.max(8, Math.min(window.innerHeight - 50, Math.round(bugNavigationBounds.top + (bugNavigationBounds.height - 42) / 2)))
+        }
+      : defaultBugLauncherPosition();
+    setBugLauncherPosition(position);
+    writeBugLauncherPosition(currentBugUser(), position);
+  };
   const finishBugLauncherDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = bugLauncherDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
@@ -933,7 +922,7 @@ function ControlCenter() {
           {navItems.filter((item) => item.id === "revisions" || item.id === "bugs").map((item) => {
             const Icon = item.icon;
             return (
-              <button className={view === item.id ? "nav-item active" : "nav-item"} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
+              <button ref={item.id === "bugs" ? bugNavigationButtonRef : undefined} className={view === item.id ? "nav-item active" : "nav-item"} key={item.id} onClick={() => setView(item.id)} title={item.label} aria-current={view === item.id ? "page" : undefined}>
                 <span className="nav-icon"><Icon size={18} /></span>
                 <span className="nav-copy"><b>{item.label}</b></span>
               </button>
@@ -942,14 +931,13 @@ function ControlCenter() {
         </nav>
         <div className="system-card">
           <span className="system-pulse"><Activity size={14} /></span>
-          <div><strong>System ready</strong><small>{Object.values(state.screens).filter((screen) => screen.status !== "offline").length}/{Object.keys(state.screens).length} displays linked</small></div>
+          <div><strong>System ready</strong><small>{Object.keys(state.screens).length} displays configured</small></div>
         </div>
       </aside>
 
       <main className={`main-panel${view === "brigade" ? " brigade-main" : ""}${showIdeas ? ideasOpen ? " ideas-open" : " ideas-collapsed" : ""}`}>
         <header className={view === "dashboard" ? "topbar dashboard-topbar" : "topbar"}>
           <div className="page-identity">
-            <p className="eyebrow"><span>Museum Donor Board Control Center</span><i />Published {state.publishedAt}</p>
             <h1>{titleFor(view)}</h1>
           </div>
           <div className="topbar-actions">
@@ -1161,6 +1149,7 @@ function ControlCenter() {
         {view === "bugs" && <BugsView onNewBug={() => void openBugReport()} launcherVisible={bugLauncherVisible} onLauncherVisibleChange={(visible) => {
           setBugLauncherVisible(visible);
           localStorage.setItem("project-lantern-bug-launcher-visible", String(visible));
+          if (visible) window.requestAnimationFrame(resetBugLauncherPosition);
         }} />}
         {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} appearance={portalAppearance} onAppearanceChange={changePortalAppearance} onAddDisplay={addDisplay} />}
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
@@ -1252,6 +1241,9 @@ function readBugLauncherPosition(user: string): { x: number; y: number } {
     const saved = positions[user];
     if (typeof saved?.x === "number" && typeof saved.y === "number") return { x: saved.x, y: saved.y };
   } catch { /* Use the default position when preferences are unavailable. */ }
+  return defaultBugLauncherPosition();
+}
+function defaultBugLauncherPosition(): { x: number; y: number } {
   return { x: Math.max(8, window.innerWidth - 64), y: Math.max(8, window.innerHeight - 62) };
 }
 function writeBugLauncherPosition(user: string, position: { x: number; y: number }) {
@@ -1389,7 +1381,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
           revision: state.revision,
           publishedAt: state.publishedAt,
           donors: state.donors.length,
-          screens: Object.values(state.screens).map(({ id, label, status, lastHeartbeat }) => ({ id, label, status, lastHeartbeat })),
+          screens: Object.values(state.screens).map(({ id, label }) => ({ id, label })),
           announcementActive: state.announcement.active,
           liveActive: state.live.active,
           scheduleCount: state.schedules.length,
@@ -1951,12 +1943,12 @@ function fileToDataUrl(file: File): Promise<string> {
 const helpSlides = [
   {
     kicker: "Welcome",
-    title: "Meet the Museum Donor Board Control Center",
+    title: "Meet the recognition boards",
     copy: "Project Lantern brings donor records, board design, display previews, scheduling, announcements, broadcasts, and feedback into one staff-friendly workspace.",
     points: ["Prepare and preview safely", "Control portrait and landscape displays", "Publish only when you are ready"],
     accent: "01",
     image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
-    imageAlt: "Museum Donor Board Control Center dashboard with two display previews",
+    imageAlt: "Dashboard with two display previews",
     callout: "Start from the Dashboard"
   },
   {
@@ -2085,7 +2077,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
               </div>
               <figure className="help-slide-visual">
                 <div className="help-slide-browser">
-                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>Museum Donor Board Control Center</span></div>
+                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>Recognition boards</span></div>
                   <img src={current.image} alt={current.imageAlt} />
                 </div>
                 <figcaption><Sparkles size={14} /> {current.callout}</figcaption>
@@ -2225,7 +2217,7 @@ function Dashboard({
                     </div>
                     <span>{screen.orientation} · {screen.resolution}</span>
                   </div>
-                  <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={17} /> : <Wifi size={17} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => updateState((current) => ({ ...current, screens: { ...current.screens, [screen.id]: { ...current.screens[screen.id], enabled: !current.screens[screen.id], } } }))} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={15} /></button></div>
+                  <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button></div>
                 </header>
                 <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}`}>
                   {activeBoard ? <>
@@ -2624,8 +2616,7 @@ function DonorsView({
                 ) : (
                   <>
                     <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong></div>
-                    <span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span>
-                    <small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small>
+                    <div className="donor-details-row"><span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span><small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small></div>
                     {!!visibleTags.length && <div className="donor-meta-row">{visibleTags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}{hiddenTagCount > 0 && <span className="tag-chip donor-more-tags" title={(donor.tags ?? []).slice(visibleTags.length).join(", ")}>+{hiddenTagCount} more</span>}</div>}
                   </>
                 )}
@@ -3251,8 +3242,18 @@ function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): Bo
   return { ...templates[type], x: Math.max(0, Math.min(100 - width, position.x)), y: Math.max(0, Math.min(100 - height, position.y)), width, height };
 }
 
+function boardEditorDraftSnapshot(state: LanternState) {
+  return JSON.stringify({
+    board: state.board,
+    boardPrograms: state.boardPrograms,
+    donors: state.donors,
+    widgets: state.widgets,
+    screens: state.screens
+  });
+}
+
 function ThemeStudio({
-  state,
+  state: savedState,
   selectedDisplayId,
   setSelectedDisplayId,
   requestedBoardId,
@@ -3266,6 +3267,16 @@ function ThemeStudio({
   onRequestedBoardHandled: () => void;
   updateState: (updater: (current: LanternState) => LanternState) => void;
 }) {
+  const [draftState, setDraftState] = useState<LanternState>(() => structuredClone(savedState));
+  const [savedDraftSnapshot, setSavedDraftSnapshot] = useState(() => boardEditorDraftSnapshot(savedState));
+  const observedSavedSnapshot = useRef(boardEditorDraftSnapshot(savedState));
+  const state = draftState;
+  const draftSnapshot = boardEditorDraftSnapshot(draftState);
+  const incomingSavedSnapshot = boardEditorDraftSnapshot(savedState);
+  const hasUnsavedChanges = draftSnapshot !== savedDraftSnapshot;
+  const updateDraftState = useCallback((updater: (current: LanternState) => LanternState) => {
+    setDraftState((current) => updater(current));
+  }, []);
   const display = state.screens[selectedDisplayId] ?? Object.values(state.screens)[0];
   const [selectedProgramId, setSelectedProgramId] = useState(() => state.boardPrograms.some((program) => program.id === requestedBoardId) ? requestedBoardId! : resolveDisplayedBoardProgramId(state, display.id));
   useEffect(() => {
@@ -3297,6 +3308,13 @@ function ThemeStudio({
   const filteredBoardDonors = state.donors.filter((donor) => donor.name.toLowerCase().includes(donorSearch.trim().toLowerCase()));
   const donorPageCount = Math.max(1, Math.ceil(filteredBoardDonors.length / donorPageSize));
   const donorPageItems = filteredBoardDonors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
+  useEffect(() => {
+    if (incomingSavedSnapshot === observedSavedSnapshot.current) return;
+    observedSavedSnapshot.current = incomingSavedSnapshot;
+    if (hasUnsavedChanges) return;
+    setDraftState(structuredClone(savedState));
+    setSavedDraftSnapshot(incomingSavedSnapshot);
+  }, [hasUnsavedChanges, incomingSavedSnapshot, savedState]);
   useEffect(() => setDonorPage(0), [donorSearch]);
   useEffect(() => {
     if (donorPage >= donorPageCount) setDonorPage(donorPageCount - 1);
@@ -3347,7 +3365,7 @@ function ThemeStudio({
 
   const patchProgram = (patch: Partial<LanternState["boardPrograms"][number]>) => {
     if (!selectedProgram) return;
-    updateState((current) => ({
+    updateDraftState((current) => ({
       ...current,
       boardPrograms: current.boardPrograms.map((program) => program.id === selectedProgram.id ? { ...program, ...patch } : program)
     }));
@@ -3356,7 +3374,7 @@ function ThemeStudio({
   const patchPanel = (panelId: string, patch: Partial<BoardPanel>) => {
     if (!selectedProgram) return;
     const programId = selectedProgram.id;
-    updateState((current) => {
+    updateDraftState((current) => {
       const currentProgram = current.boardPrograms.find((program) => program.id === programId);
       if (!currentProgram) return current;
       const nextPanels = (currentProgram.panels ?? []).map((panel) => panel.id === panelId ? { ...panel, ...patch } : panel);
@@ -3409,7 +3427,7 @@ function ThemeStudio({
   const saveWidget = (name: string) => {
     const chosen = panels.filter((panel) => selectedPanelIds.includes(panel.id)); if (!chosen.length) return;
     const widget: BoardWidget = { id: `widget-${Date.now()}`, name, panels: chosen.map((panel) => ({ ...panel, id: `${panel.id}-template` })), defaultImageUrl: chosen.find((panel) => panel.type === "image" && panel.imageUrl)?.imageUrl };
-    updateState((current) => ({ ...current, widgets: [...(current.widgets ?? []), widget] }));
+    updateDraftState((current) => ({ ...current, widgets: [...(current.widgets ?? []), widget] }));
   };
 
   const requestRemovePanel = (panelId: string, position?: { x: number; y: number }) => {
@@ -3420,14 +3438,14 @@ function ThemeStudio({
   };
   const confirmRemovePanel = () => {
     if (!pendingPanelDelete) return;
-    updateState((current) => ({ ...current, boardPrograms: current.boardPrograms.map((program) => program.id === pendingPanelDelete.programId ? { ...program, panels: (program.panels ?? []).filter((panel) => !pendingPanelDelete.ids.includes(panel.id)) } : program) }));
+    updateDraftState((current) => ({ ...current, boardPrograms: current.boardPrograms.map((program) => program.id === pendingPanelDelete.programId ? { ...program, panels: (program.panels ?? []).filter((panel) => !pendingPanelDelete.ids.includes(panel.id)) } : program) }));
     setLastDeletedPanels({ programId: pendingPanelDelete.programId, removed: pendingPanelDelete.removed });
     setSelectedPanelId(""); setSelectedPanelIds([]);
     setPendingPanelDelete(null);
   };
   const undoLastPanelDelete = useCallback(() => {
     if (!lastDeletedPanels) return;
-    updateState((current) => ({ ...current, boardPrograms: current.boardPrograms.map((program) => {
+    updateDraftState((current) => ({ ...current, boardPrograms: current.boardPrograms.map((program) => {
       if (program.id !== lastDeletedPanels.programId) return program;
       const currentPanels = program.panels ?? [];
       const existingIds = new Set(currentPanels.map((panel) => panel.id));
@@ -3439,7 +3457,7 @@ function ThemeStudio({
     setSelectedPanelIds(lastDeletedPanels.removed.map(({ panel }) => panel.id));
     setSelectedPanelId(lastDeletedPanels.removed[0]?.panel.id ?? "");
     setLastDeletedPanels(null);
-  }, [lastDeletedPanels, updateState]);
+  }, [lastDeletedPanels, updateDraftState]);
   useEffect(() => {
     const handleUndo = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
@@ -3467,7 +3485,7 @@ function ThemeStudio({
     if (!selectedProgram) return;
     const id = `board-${Date.now()}`;
     const clonedPanels = panels.map((panel, index) => ({ ...panel, id: `${id}-${panel.type}-${index}` }));
-    updateState((current) => ({
+    updateDraftState((current) => ({
       ...current,
       donors: current.donors.map((donor) => selectedProgram.donorIds.includes(donor.id)
         ? { ...donor, boardIds: [...new Set([...(donor.boardIds ?? []), id])] }
@@ -3489,7 +3507,7 @@ function ThemeStudio({
       donorStyles: undefined,
       panels: []
     };
-    updateState((current) => ({ ...current, boardPrograms: [...current.boardPrograms, next] }));
+    updateDraftState((current) => ({ ...current, boardPrograms: [...current.boardPrograms, next] }));
     setSelectedProgramId(id);
   };
 
@@ -3498,7 +3516,7 @@ function ThemeStudio({
     const program = state.boardPrograms.find((item) => item.id === programId);
     if (!program) return;
     const remaining = state.boardPrograms.filter((item) => item.id !== program.id);
-    updateState((current) => ({
+    updateDraftState((current) => ({
       ...current,
       donors: current.donors.map((donor) => ({ ...donor, boardIds: (donor.boardIds ?? []).filter((id) => id !== program.id) })),
       boardPrograms: current.boardPrograms.filter((item) => item.id !== program.id),
@@ -3512,7 +3530,6 @@ function ThemeStudio({
     if (!file || !selectedProgram) return;
     try {
       const backgroundImage = await uploadLanternAsset(file);
-      void deleteLanternMedia(selectedProgram.backgroundMediaId);
       patchProgram({
         backgroundMode: "image",
         backgroundImage,
@@ -3521,7 +3538,6 @@ function ThemeStudio({
       });
     } catch {
       const mediaId = await storeLanternMedia(file);
-      void deleteLanternMedia(selectedProgram.backgroundMediaId);
       patchProgram({
         backgroundMode: "image",
         backgroundImage: URL.createObjectURL(file),
@@ -3533,7 +3549,6 @@ function ThemeStudio({
 
   const removeBoardBackground = () => {
     if (!selectedProgram) return;
-    void deleteLanternMedia(selectedProgram.backgroundMediaId);
     patchProgram({
       backgroundMode: "board",
       backgroundImage: undefined,
@@ -3551,7 +3566,7 @@ function ThemeStudio({
   const setProgramDonorIds = (donorIds: string[]) => {
     if (!selectedProgram) return;
     const roster = new Set(donorIds);
-    updateState((current) => ({
+    updateDraftState((current) => ({
       ...current,
       donors: current.donors.map((donor) => ({
         ...donor,
@@ -3572,24 +3587,47 @@ function ThemeStudio({
   };
 
   const renameDonor = (donorId: string, name: string) => {
-    updateState((current) => ({ ...current, donors: current.donors.map((donor) => donor.id === donorId ? { ...donor, name } : donor) }));
+    updateDraftState((current) => ({ ...current, donors: current.donors.map((donor) => donor.id === donorId ? { ...donor, name } : donor) }));
   };
 
   const saveBoard = async () => {
+    if (!hasUnsavedChanges) return;
     setSaveStatus("saving");
-    const persistence = await saveLanternStateDurably(state);
-    publishState(state, { persist: false });
+    const boardDraft = {
+      ...savedState,
+      board: draftState.board,
+      boardPrograms: draftState.boardPrograms,
+      donors: draftState.donors,
+      widgets: draftState.widgets,
+      screens: draftState.screens
+    };
+    const persistence = await saveLanternStateDurably(boardDraft);
     if (persistence === "failed") {
       setSaveStatus("error");
       return;
     }
+    updateState((current) => ({
+      ...current,
+      board: draftState.board,
+      boardPrograms: draftState.boardPrograms,
+      donors: draftState.donors,
+      widgets: draftState.widgets,
+      screens: draftState.screens
+    }));
+    savedState.boardPrograms.forEach((savedProgram) => {
+      const draftProgram = draftState.boardPrograms.find((program) => program.id === savedProgram.id);
+      if (savedProgram.backgroundMediaId && savedProgram.backgroundMediaId !== draftProgram?.backgroundMediaId) {
+        void deleteLanternMedia(savedProgram.backgroundMediaId);
+      }
+    });
+    setSavedDraftSnapshot(draftSnapshot);
     if (!canWriteSharedLanternState()) {
       setSaveStatus("local");
       window.setTimeout(() => setSaveStatus("idle"), 2600);
       return;
     }
     try {
-      await saveSharedLanternState(state);
+      await saveSharedLanternState(boardDraft);
       setSaveStatus("saved");
     } catch (error) {
       // The local save already succeeded. Do not imply the server received it.
@@ -3651,7 +3689,7 @@ function ThemeStudio({
           </details>
         </div>
         <div className="board-save-cluster">
-          <button type="button" className="command-button primary compact" disabled={saveStatus === "saving"} onClick={() => void saveBoard()}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : "Save board"}</button>
+          <button type="button" className="command-button primary compact" disabled={saveStatus === "saving" || !hasUnsavedChanges} onClick={() => void saveBoard()} title={hasUnsavedChanges ? "Save changes to this board and publish them to live displays" : "No unsaved board changes"}><Save size={16} /> {saveStatus === "saving" ? "Saving…" : hasUnsavedChanges ? "Save board" : "Saved"}</button>
           <span className={`board-save-status ${saveStatus}`} role="status">{saveStatus === "saved" ? "Saved for everyone" : saveStatus === "local" ? "Saved on this device (server unavailable)" : saveStatus === "sync-error" ? "Saved locally — server sync failed; retry" : saveStatus === "error" ? "Could not save locally — check browser storage" : ""}</span>
         </div>
       </div>
@@ -3740,7 +3778,16 @@ function ThemeStudio({
                   </div>
                 </details>
               </>}
-              {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row">{selectedPanel.type === "text" && <div className="field"><span>Text flow <InfoDot text="Wrap is the default. Fit one line keeps a heading on one line and reduces its size only when needed." /></span><SegmentedControl value={selectedPanel.textFlow ?? "wrap"} options={[["wrap", "Wrap"], ["fit-one-line", "Fit one line"]]} onChange={(textFlow) => patchPanel(selectedPanel.id, { textFlow: textFlow as BoardPanel["textFlow"] })} /></div>}<div className="field"><span>Text alignment</span><SegmentedControl value={selectedPanel.textAlign ?? "center"} options={[["left", "Left"], ["center", "Center"], ["right", "Right"]]} onChange={(textAlign) => patchPanel(selectedPanel.id, { textAlign: textAlign as BoardPanel["textAlign"] })} /></div><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
+              {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row">{selectedPanel.type === "text" && <div className="field"><span>Text flow <InfoDot text="Wrap is the default. Fit one line keeps a heading on one line and reduces its size only when needed." /></span><SegmentedControl value={selectedPanel.textFlow ?? "wrap"} options={[["wrap", "Wrap"], ["fit-one-line", "Fit one line"]]} onChange={(textFlow) => patchPanel(selectedPanel.id, { textFlow: textFlow as BoardPanel["textFlow"] })} /></div>}<div className="field"><span>Text alignment</span><SegmentedControl value={selectedPanel.textAlign ?? "center"} options={[["left", "Left"], ["center", "Center"], ["right", "Right"]]} onChange={(textAlign) => patchPanel(selectedPanel.id, { textAlign: textAlign as BoardPanel["textAlign"] })} /></div><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
+              {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Text treatment</summary><div className="inspector-block">
+                <LabeledSelect label="Text finish" info="Applies only to this selected element." value={selectedPanel.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchPanel(selectedPanel.id, { textFinish: textFinish as BoardPanel["textFinish"] })} />
+                <label className="switch-row"><input type="checkbox" checked={selectedPanel.textShadowEnabled ?? false} onChange={(event) => patchPanel(selectedPanel.id, { textShadowEnabled: event.target.checked })} /><span>Shadow under text</span></label>
+                {selectedPanel.textShadowEnabled && <>
+                  <Slider label="Shadow strength" info="Controls how dark and pronounced this element's text shadow appears." value={selectedPanel.textShadowStrength ?? 55} min={0} max={100} onChange={(textShadowStrength) => patchPanel(selectedPanel.id, { textShadowStrength })} />
+                  <Slider label="Shadow angle" info="Sets the direction this element's shadow falls, in degrees." value={selectedPanel.textShadowAngle ?? 135} min={0} max={360} onChange={(textShadowAngle) => patchPanel(selectedPanel.id, { textShadowAngle })} />
+                  <Slider label="Shadow distance" info="Sets how far this element's text appears lifted from the board." value={selectedPanel.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchPanel(selectedPanel.id, { textShadowDistance })} />
+                </>}
+              </div></details>}
               <div className="panel-group-actions"><span>{selectedPanel.groupId ? "Grouped panels move together." : "Select two panels with Shift to group them."}</span>{selectedPanel.groupId ? <button type="button" onClick={() => ungroupPanel(selectedPanel)}>Ungroup</button> : <button type="button" disabled={selectedPanelIds.length < 2} onClick={groupSelectedPanels}>Group selected</button>}</div>
               <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : -50} max={field === "width" || field === "height" ? 150 : 100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const isSize = field === "width" || field === "height"; const limit = field === "width" ? Math.min(150, 150 - (selectedPanel.x ?? 0)) : field === "height" ? Math.min(150, 150 - (selectedPanel.y ?? 0)) : 100; patchPanel(selectedPanel.id, { [field]: Math.max(isSize ? 4 : -50, Math.min(limit, value)) }); }} /></label>)}</div><small className="panel-position-note">Panels may extend beyond the board edge; anything outside the board stays clipped.</small><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={(event) => requestRemovePanel(selectedPanel.id, { x: event.clientX, y: event.clientY })}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
@@ -3748,7 +3795,6 @@ function ThemeStudio({
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
               <LabeledSelect label="Board palette" info="A saved visitor-facing color system for this board." value={selectedProgram.palette ?? "classic"} options={["classic", "brigade-blue", "brigade-red", "brigade-sunshine", "brigade-cream", "legacy-navy", "legacy-sky"]} optionLabels={{ classic: "Lantern classic", "brigade-blue": "Brigade blue", "brigade-red": "Brigade red", "brigade-sunshine": "Brigade sunshine", "brigade-cream": "Brigade cream", "legacy-navy": "Legacy navy wall", "legacy-sky": "Legacy sky wall" }} onChange={(palette) => patchProgram({ palette: palette as DonorBoardProgram["palette"] })} />
-              <LabeledSelect label="Board typeface" info="Default typeface for elements that do not use an override." value={selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchProgram({ fontFamily: fontFamily as DonorBoardProgram["fontFamily"] })} />
             </div></details>
             <details className="inspector-details"><summary>Background & frame</summary><div className="inspector-block">
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.showFrame ?? display.showFrame ?? true} onChange={(event) => patchProgram({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
@@ -3763,21 +3809,12 @@ function ThemeStudio({
               </>}
               <p className="field-note">Board images are saved with this template and do not change other displays.</p>
             </div></details>
-            <details className="inspector-details"><summary>Text treatment</summary><div className="inspector-block">
-              <LabeledSelect label="Text finish" info="Cut brass adds a metallic face, beveled edge, and dimensional highlight." value={selectedProgram.textFinish ?? display.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchProgram({ textFinish: textFinish as DisplayProfile["textFinish"] })} />
-              <label className="switch-row"><input type="checkbox" checked={selectedProgram.textShadowEnabled ?? display.textShadowEnabled ?? false} onChange={(event) => patchProgram({ textShadowEnabled: event.target.checked })} /><span>Shadow under text</span></label>
-              {(selectedProgram.textShadowEnabled ?? display.textShadowEnabled) && <>
-                <Slider label="Shadow strength" info="Controls how dark and pronounced the text shadow appears." value={selectedProgram.textShadowStrength ?? display.textShadowStrength ?? 55} min={0} max={100} onChange={(textShadowStrength) => patchProgram({ textShadowStrength })} />
-                <Slider label="Shadow angle" info="Sets the direction the shadow falls, in degrees." value={selectedProgram.textShadowAngle ?? display.textShadowAngle ?? 135} min={0} max={360} onChange={(textShadowAngle) => patchProgram({ textShadowAngle })} />
-                <Slider label="Shadow distance" info="Sets how far the text appears lifted from the board." value={selectedProgram.textShadowDistance ?? display.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchProgram({ textShadowDistance })} />
-              </>}
-            </div></details>
             <details className="inspector-details" open><summary>Donor presentation</summary><div className="inspector-block">
               <BoardDonorPresentationEditor
                 program={selectedProgram}
                 donors={selectedProgram.donorIds.map((donorId) => state.donors.find((donor) => donor.id === donorId)).filter((donor): donor is Donor => Boolean(donor))}
                 fallbacks={{
-                  fontFamily: selectedProgram.fontFamily ?? display.fontFamily ?? "Montserrat",
+                  fontFamily: "Montserrat",
                   nameColor: boardPreviewPalette(selectedProgram.palette).text,
                   accentColor: boardPreviewPalette(selectedProgram.palette).accent
                 }}
@@ -3945,7 +3982,7 @@ function DirectBoardCanvas({
   useEffect(() => {
     const panelIds = new Set(panels.map((panel) => panel.id));
     panels.forEach((panel) => {
-      const fontFamily = panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat";
+      const fontFamily = panel.fontFamily ?? "Montserrat";
       const previousFontFamily = fittedFontFamilyRef.current.get(panel.id);
       fittedFontFamilyRef.current.set(panel.id, fontFamily);
       if (previousFontFamily !== undefined && previousFontFamily !== fontFamily) commitFittedFontSize(panel);
@@ -3953,7 +3990,7 @@ function DirectBoardCanvas({
     fittedFontFamilyRef.current.forEach((_, panelId) => {
       if (!panelIds.has(panelId)) fittedFontFamilyRef.current.delete(panelId);
     });
-  }, [panels, program.fontFamily, display.fontFamily]);
+  }, [panels]);
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -4026,8 +4063,6 @@ function DirectBoardCanvas({
   const boardBackgroundCrop = program.backgroundMode === "image" && program.backgroundImage ? program.backgroundCrop ?? display.backgroundCrop : display.backgroundCrop;
   const backgroundScale = boardBackgroundCrop?.scale ?? 1;
   const particleCount = display.particleCount ?? 34;
-  const shadowRadians = (program.textShadowAngle ?? display.textShadowAngle ?? 135) * Math.PI / 180;
-  const shadowDistance = program.textShadowDistance ?? display.textShadowDistance ?? 5;
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
   const selectedPanelToolTop = selectedPanel
     ? (selectedPanel.y ?? 5) < 8
@@ -4048,10 +4083,10 @@ function DirectBoardCanvas({
     });
     if (candidate && !target.closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}${(program.textFinish ?? display.textFinish) === "cut-brass" ? " finish-cut-brass" : ""}${(program.textShadowEnabled ?? display.textShadowEnabled) ? " text-shadow-enabled" : ""}`} style={{
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{
     width: `${authoredCanvasSize.width}px`,
     height: `${authoredCanvasSize.height}px`,
-    fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
+    fontFamily: "Montserrat",
     "--board-editor-scale": editorFitScale * editorZoom,
     "--board-editor-pan-x": `${editorPan.x}px`,
     "--board-editor-pan-y": `${editorPan.y}px`,
@@ -4059,10 +4094,6 @@ function DirectBoardCanvas({
     "--board-palette-accent": palette.accent,
     "--board-palette-secondary": palette.secondary,
     "--board-palette-muted": palette.muted,
-    "--board-text-shadow-x": `${Math.cos(shadowRadians) * shadowDistance}px`,
-    "--board-text-shadow-y": `${Math.sin(shadowRadians) * shadowDistance}px`,
-    "--board-text-shadow-blur": `${1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 28}px`,
-    "--board-text-shadow-alpha": Math.min(.62, .1 + (program.textShadowStrength ?? display.textShadowStrength ?? 55) / 165)
   } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
     {boardBackgroundImage && <div className="direct-board-background"><img src={resolveProjectAssetUrl(boardBackgroundImage)} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
@@ -4090,7 +4121,7 @@ function DirectBoardCanvas({
         height: `${panel.height ?? 18}%`,
         zIndex: panel.id === selectedPanelId ? panels.length + 20 : index + 2,
         textAlign: panel.textAlign ?? "center",
-        fontFamily: panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat",
+        fontFamily: panel.fontFamily ?? "Montserrat",
         "--panel-text-color": panel.textColor ?? (panel.type === "supporters-heading" || panel.type === "footer" ? palette.accent : panel.type === "message" || panel.type === "story" ? palette.text : palette.text),
         "--panel-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
         "--panel-base-font-size": `${panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? display.nameSize ?? 28 : 24)}px`,
@@ -4102,16 +4133,21 @@ function DirectBoardCanvas({
         "--donor-name-size": `${panel.fontSize ?? display.nameSize ?? 28}px`,
         "--donor-divider-color": panel.donorDividerColor ?? palette.accent,
         "--donor-divider-thickness": `${panel.donorDividerThickness ?? 1}px`,
-        "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`
+        "--donor-divider-opacity": `${panel.donorDividerOpacity ?? 18}%`,
+        "--board-text-shadow-x": `${Math.cos(((panel.textShadowAngle ?? 135) * Math.PI) / 180) * (panel.textShadowDistance ?? 5)}px`,
+        "--board-text-shadow-y": `${Math.sin(((panel.textShadowAngle ?? 135) * Math.PI) / 180) * (panel.textShadowDistance ?? 5)}px`,
+        "--board-text-shadow-blur": `${1 + (panel.textShadowStrength ?? 55) / 28}px`,
+        "--board-text-shadow-alpha": panel.textShadowEnabled ? Math.min(.62, .1 + (panel.textShadowStrength ?? 55) / 165) : 0,
+        "--panel-text-stroke": panel.textFinish === "cut-brass" ? ".35px rgba(118, 81, 31, .72)" : "0 transparent"
       } as React.CSSProperties} onClick={(event) => { if (suppressPanelClickRef.current) { event.preventDefault(); event.stopPropagation(); suppressPanelClickRef.current = false; return; } event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
-        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize} fontFamily={panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "Montserrat"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
+        {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize} fontFamily={panel.fontFamily ?? "Montserrat"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "supporters-heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
-        {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
+        {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} fontFamily={panel.fontFamily ?? "Montserrat"} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
         {panel.type === "message" && <AutoFitBoardContent className="direct-message-content"><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></AutoFitBoardContent>}
         {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><AutoFitBoardContent className="direct-story-copy"><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></AutoFitBoardContent></>}
         {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={resolveProjectAssetUrl(panel.imageUrl)} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
-        {panel.type === "donor-star" && <DirectStarDonorName donor={state.donors.find((donor) => donor.id === panel.donorId)} fallbackName={panel.title} imageUrl={panel.imageUrl} fontFamily={panel.fontFamily ?? program.fontFamily ?? display.fontFamily ?? "DM Sans"} fontSize={panel.fontSize ?? 14} textColor={panel.textColor ?? "#201708"} onRename={onRenameDonor} />}
+        {panel.type === "donor-star" && <DirectStarDonorName donor={state.donors.find((donor) => donor.id === panel.donorId)} fallbackName={panel.title} imageUrl={panel.imageUrl} fontFamily={panel.fontFamily ?? "DM Sans"} fontSize={panel.fontSize ?? 14} textColor={panel.textColor ?? "#201708"} onRename={onRenameDonor} />}
         {panel.type === "footer" && <div className={`direct-footer-line icons-${panel.footerIconPlacement ?? "left"}`}><span /><span>♡</span><EditableBoardText value={panel.title} onCommit={(value) => commitText(panel, "title", value)} />{panel.footerIconPlacement === "both" && <span className="footer-heart">♡</span>}<span /></div>}
       </section>)}
     </div>
@@ -4144,15 +4180,16 @@ function directDonorGridStyle(donors: Donor[], columns: number, requestedRows: n
   } as React.CSSProperties;
 }
 
-function DirectBoardDonorName({ donor, display, program, palette, onRename }: {
+function DirectBoardDonorName({ donor, display, program, palette, fontFamily, onRename }: {
   donor: Donor;
   display: DisplayProfile;
   program: DonorBoardProgram;
   palette: ReturnType<typeof boardPreviewPalette>;
+  fontFamily: string;
   onRename: (donorId: string, name: string) => void;
 }) {
   const presentation = resolveBoardDonorPresentation(program, donor.id, {
-    fontFamily: program.fontFamily ?? display.fontFamily ?? "Montserrat",
+    fontFamily,
     nameColor: palette.text,
     accentColor: palette.accent
   });
@@ -4435,7 +4472,6 @@ function LegacyThemeStudio({
         {propertyTab === "design" && <div className="property-tab-panel">
         <div className="editor-section-title">Design</div>
         <LabeledSelect label="Board style" info="Choose the saved visual treatment used by the donor board." value={state.board.visualStyle} options={["chalkboard", "chalkboard-minimal", "gallery-plaque", "museum"]} optionLabels={{ chalkboard: "Chalkboard with dividers", "chalkboard-minimal": "Minimal chalkboard with dots", "gallery-plaque": "Gallery plaque", museum: "Museum information board" }} onChange={(value) => patchBoard({ visualStyle: value as LanternState["board"]["visualStyle"] })} />
-        <LabeledSelect label="Donor font" info="Typeface used for donor names on this saved board." value={selectedProgram?.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(value) => patchProgram({ fontFamily: value as DonorBoardProgram["fontFamily"] })} />
         <Slider label="Name size" info="Preferred donor-name size for this saved board." value={selectedProgram?.nameSize ?? 28} min={14} max={48} onChange={(value) => patchProgram({ nameSize: value })} />
         <Slider label="Layout scale" info="Makes donor text and spacing larger or smaller on this display." value={display.layoutScale} min={78} max={124} onChange={(value) => patchDisplay({ layoutScale: value })} />
         <Slider label="Brightness" info="Adjusts final brightness on this display without changing the theme." value={display.brightness} min={30} max={100} onChange={(value) => patchDisplay({ brightness: value })} />
@@ -6214,7 +6250,7 @@ function LivePreviewPanel({
     <div className="form-panel live-setup-panel">
       {phoneMode ? <section className="phone-broadcast" aria-label="Phone broadcast controls">
         <header className="phone-broadcast-head">
-          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><div><strong>{state.live.active ? "LIVE" : "Ready to broadcast"}</strong><small>{state.live.active ? `Live to ${labelForTarget(state.live.target)}` : "Museum Donor Board Control Center"}</small></div></div>
+          <div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><div><strong>{state.live.active ? "LIVE" : "Ready to broadcast"}</strong><small>{state.live.active ? `Live to ${labelForTarget(state.live.target)}` : "Select a source to begin."}</small></div></div>
           <button type="button" className="phone-frame-button" onClick={() => setPhoneMode(false)}>Studio</button>
         </header>
         <div className="phone-camera-stage">
@@ -6464,6 +6500,9 @@ function AnnouncementMonitorSurface({
     // never pan or orbit while the operator is placing a message element.
     if (editing) return;
     if ((event.target as Element).closest(".monitor-view-controls, .announcement-edit-handle, [contenteditable='true'], .announcement-image.editable")) return;
+    // In 3D mode the dashboard's Babylon renderer owns the board camera and
+    // receives its own orbit input directly from the canvas.
+    if (viewMode === "3d" && (event.target as Element).closest(".wall-canvas")) return;
     // Clicking the display background clears the physical-editing chrome so the
     // user can inspect the actual board without handles and resize edges.
     if (editing) setEditing(false);
@@ -6487,9 +6526,7 @@ function AnnouncementMonitorSurface({
     dragRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
-  const transform = viewMode === "3d"
-    ? `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom}) rotateX(${view.rotateX}deg) rotateY(${view.rotateY}deg)`
-    : `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})`;
+  const transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})`;
 
   return <div className={`announcement-monitor${demo ? " demo" : ""} mode-${viewMode}${editing ? " editing" : ""}`}>
     <div className="monitor-view-controls">
@@ -6506,7 +6543,7 @@ function AnnouncementMonitorSurface({
       setView((current) => ({ ...current, zoom: clamp(current.zoom + (event.deltaY < 0 ? .1 : -.1), .45, 2.5) }));
     }}>
       <div className={`announcement-monitor-surface ${orientationClass(screen)}`} style={{ transform }}>
-        <BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" announcementCharacter={announcement.character} announcementActive announcementCharacterAsset={announcement} />
+        <BabylonDonorWall state={state} screenId={screen.id} interactive={viewMode === "3d" && !editing} fitToScreen viewMode={viewMode} announcementCharacter={announcement.character} announcementActive announcementCharacterAsset={announcement} />
         <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} editing={editing} onPatch={onPatch} />
       </div>
     </div>
@@ -7262,10 +7299,6 @@ function ScreensView({
   };
 
   const identify = (screenId: ScreenId) => {
-    if (!screens.some((screen) => screen.status !== "offline")) {
-      setDisplayNotice("There are no open or connected displays to identify. Open a display window, then try again.");
-      return;
-    }
     const channel = new BroadcastChannel("project-lantern-host-v1");
     channel.postMessage({ type: "identify-screen", screenId } satisfies HostMessage);
     channel.close();
@@ -7309,11 +7342,11 @@ function ScreensView({
 
   return (
     <section className={editorOnly ? "display-workspace display-editor-overlay" : "display-workspace"}>
-      <div className="section-commandbar"><div><strong>{Object.keys(state.screens).length} displays</strong><span>Wi-Fi shows attachment. Power controls whether content is live.</span></div><div className="button-row"><button className="command-button secondary" onClick={openDisplays}><Monitor size={17} /> Open test displays</button><button className="command-button primary" onClick={addDisplay}><Plus size={17} /> Add display</button></div></div>
+      <div className="section-commandbar"><div><strong>{Object.keys(state.screens).length} displays</strong><span>Open a display when you are ready to preview its scheduled content.</span></div><div className="button-row"><button className="command-button secondary" onClick={openDisplays}><Monitor size={17} /> Open test displays</button><button className="command-button primary" onClick={addDisplay}><Plus size={17} /> Add display</button></div></div>
       <div className="screens-grid managed compact-screen-grid">
         {pageScreens.map((screen) => (
           <article className={selectedDisplayId === screen.id ? "screen-card selected" : "screen-card"} key={screen.id}>
-            <div className="screen-card-head"><div><h2>{screen.label}</h2><p>{screen.orientation} · {screen.resolution}</p></div><div className="screen-icon-actions"><span title={screen.status === "offline" ? "Display is not attached" : "Display attached"}>{screen.status === "offline" ? <WifiOff size={19} /> : <Wifi size={19} />}</span><button className={screen.enabled ? "icon-button live-toggle active" : "icon-button live-toggle"} onClick={() => patchDisplay(screen.id, { enabled: !screen.enabled })} title={screen.enabled ? "Take display offline" : "Make display live"}><Power size={17} /></button></div></div>
+            <div className="screen-card-head"><div><h2>{screen.label}</h2><p>{screen.orientation} · {screen.resolution}</p></div></div>
             <button className={`mini-preview ${orientationClass(screen)}`} onClick={() => setSelectedDisplayId(screen.id)}><BabylonDonorWall state={state} screenId={screen.id} /></button>
             <div className="screen-card-summary"><span>{labelForStyle(screen.style)}</span><span>{screen.donorScrollEnabled ? `Scrolling · ${screen.donorScrollSpeed ?? 4}/10` : `${screen.columns ?? 1} column${screen.columns === 2 ? "s" : ""}`}</span><span>{screen.roomVideoDeviceId ? "Room camera assigned" : "Default room camera"}</span></div>
             <div className="button-row screen-actions"><button className="icon-button" onClick={() => identify(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => void openRoomView(screen)} title={`Pop out ${screen.label} room camera to a movable window`}><PictureInPicture2 size={17} /></button><button className="command-button secondary" onClick={() => { setSelectedDisplayId(screen.id); setEditingId(screen.id); setEditorTab("setup"); }}><Settings2 size={17} /> Edit</button><button className="icon-button danger-icon" onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
@@ -7501,11 +7534,8 @@ function ScheduleCalendarView({
   const agendaDates = Array.from({ length: 14 }, (_, index) => addCalendarDays(anchorDate, index));
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const todayEntries = filtered.filter((entry) => entry.active && entryOccursOnDate(entry, now));
-  const onlineTodayEntries = todayEntries.filter((entry) => entry.target === "all"
-    ? Object.values(state.screens).some((screen) => screen.status !== "offline")
-    : state.screens[entry.target]?.status !== "offline");
-  const liveEntries = onlineTodayEntries.filter((entry) => timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes);
-  const nextEntry = onlineTodayEntries.filter((entry) => timeToMinutes(entry.startTime) > nowMinutes).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))[0];
+  const liveEntries = todayEntries.filter((entry) => timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes);
+  const nextEntry = todayEntries.filter((entry) => timeToMinutes(entry.startTime) > nowMinutes).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))[0];
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -7656,9 +7686,6 @@ function ScheduleCalendarView({
     && timeToMinutes(candidate.startTime) < timeToMinutes(entry.endTime)
     && timeToMinutes(candidate.endTime) > timeToMinutes(entry.startTime)
   );
-  const displayIsOffline = (entry: ScheduleEntry) => entry.target === "all"
-    ? Object.values(state.screens).every((screen) => screen.status === "offline")
-    : state.screens[entry.target]?.status === "offline";
   const movePeriod = (direction: -1 | 1) => {
     const next = new Date(anchorDate);
     if (visibleMode === "month") next.setMonth(next.getMonth() + direction);
@@ -7829,17 +7856,16 @@ function ScheduleCalendarView({
             const lane = scheduleLane(entry, entries);
             const conflict = conflictFor(entry, date);
             const live = today && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes;
-            const offline = displayIsOffline(entry);
-            return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={(event) => openEditor(entry.id, event)} onContextMenu={(event) => openContextMenu(event, entry)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}${offline ? ", target display offline" : ""}`} title="Drag to move. Drag the top or bottom edge to resize.">
+            return <button type="button" key={entry.id} className={`calendar-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${conflict ? " conflict" : ""}${live ? " live" : ""}${selectedId === entry.id ? " selected" : ""}${dragPreview?.id === entry.id ? " dragging" : ""}`} style={eventStyle(entry, date, lane.index, lane.count)} onClick={(event) => openEditor(entry.id, event)} onContextMenu={(event) => openContextMenu(event, entry)} onPointerDown={(event) => beginDrag(event, entry, date, "move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={finishDrag} aria-label={`${entry.name}, ${entry.startTime} to ${entry.endTime}`} title="Drag to move. Drag the top or bottom edge to resize.">
               <span className="calendar-resize-handle top" onPointerDown={(event) => beginDrag(event, entry, date, "resize-start")} />
-              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : entry.contentType === "blip" ? <Sparkles size={11} /> : entry.contentType === "broadcast" ? <Radio size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small><b>{entry.contentType === "announcement" ? "Announcement" : entry.contentType === "blip" ? "Blip" : entry.contentType === "broadcast" ? "Broadcast" : "Board"}</b> · {offline ? "Display offline" : live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
+              <strong>{entry.contentType === "announcement" ? <Megaphone size={11} /> : entry.contentType === "blip" ? <Sparkles size={11} /> : entry.contentType === "broadcast" ? <Radio size={11} /> : <Monitor size={11} />}{entry.name}{conflict && <AlertTriangle size={10} />}</strong><span>{minutesToTime(dragPreview?.id === entry.id ? dragPreview.start : timeToMinutes(entry.startTime))}–{minutesToTime(dragPreview?.id === entry.id ? dragPreview.end : timeToMinutes(entry.endTime))}</span><small><b>{entry.contentType === "announcement" ? "Announcement" : entry.contentType === "blip" ? "Blip" : entry.contentType === "broadcast" ? "Broadcast" : "Board"}</b> · {live ? "Live now" : targetOptionLabels(state)[entry.target]}</small>
               <span className="calendar-resize-handle bottom" onPointerDown={(event) => beginDrag(event, entry, date, "resize-end")} />
             </button>;
           })}</div>; })}
         </div></div>
       </div>}
-      {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{offline ? <WifiOff size={10} /> : conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
-      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const offline = displayIsOffline(entry); const live = !offline && isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${offline ? " display-offline" : ""}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={`${entry.name}${offline ? ", target display offline" : ""}`} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : entry.contentType === "blip" ? <Sparkles size={14} /> : entry.contentType === "broadcast" ? <Radio size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : entry.contentType === "blip" ? "Blip" : entry.contentType === "broadcast" ? "Broadcast" : "Donor board"}{live ? " · Live now" : ""}</span>{offline ? <small><WifiOff size={12} /> Target display offline</small> : conflict && <small><AlertTriangle size={12} /> Same-type conflict on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
+      {visibleMode === "month" && <div className="month-calendar"><div className="month-weekdays">{dayLabels.map((label) => <span key={label}>{label.slice(0, 3)}</span>)}</div><div className="month-grid">{monthDates.map((date) => { const entries = entriesForDate(date); return <section key={toDateInputValue(date)} className={`month-day${date.getMonth() !== anchorDate.getMonth() ? " outside" : ""}${isSameCalendarDate(date, now) ? " today" : ""}`}><button type="button" className="month-day-number" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>{date.getDate()}</button><div className="month-events">{entries.slice(0, 3).map((entry) => { const conflict = conflictFor(entry, date); return <button type="button" key={entry.id} className={`month-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${conflict ? " conflict" : ""}`} aria-label={entry.name} onClick={(event) => openEditor(entry.id, event)}><i style={{ background: entry.color ?? "#5f55bd" }} /><span>{entry.startTime}</span><strong>{entry.name}</strong>{conflict && <AlertTriangle size={10} />}</button>; })}{entries.length > 3 && <button type="button" className="month-more" onClick={() => { setAnchorDate(date); setViewMode("agenda"); }}>+{entries.length - 3} more</button>}</div></section>; })}</div></div>}
+      {visibleMode === "agenda" && <div className="agenda-calendar">{agendaDates.map((date) => { const entries = entriesForDate(date); return <section className={`agenda-day${isSameCalendarDate(date, now) ? " today" : ""}`} key={toDateInputValue(date)}><header><div><span>{date.toLocaleDateString([], { weekday: "short" })}</span><strong>{date.getDate()}</strong></div><p>{date.toLocaleDateString([], { month: "long", year: "numeric" })}</p></header><div className="agenda-events">{entries.length ? entries.map((entry) => { const conflict = conflictFor(entry, date); const live = isSameCalendarDate(date, now) && entry.active && timeToMinutes(entry.startTime) <= nowMinutes && timeToMinutes(entry.endTime) > nowMinutes; return <article key={entry.id} className={`agenda-event layer-${entry.contentType ?? "board"}${entry.active ? "" : " disabled"}${conflict ? " conflict" : ""}${live ? " live" : ""}`} aria-label={entry.name} onClick={(event) => openEditor(entry.id, event)}><div className="agenda-event-time"><strong>{entry.startTime}</strong><span>{entry.endTime}</span></div><i style={{ background: entry.color ?? "#5f55bd" }} /><div className="agenda-event-copy"><strong>{entry.contentType === "announcement" ? <Megaphone size={14} /> : entry.contentType === "blip" ? <Sparkles size={14} /> : entry.contentType === "broadcast" ? <Radio size={14} /> : <Monitor size={14} />}{entry.name}</strong><span>{targetOptionLabels(state)[entry.target]} · {entry.contentType === "announcement" ? "Announcement" : entry.contentType === "blip" ? "Blip" : entry.contentType === "broadcast" ? "Broadcast" : "Donor board"}{live ? " · Live now" : ""}</span>{conflict && <small><AlertTriangle size={12} /> Same-type conflict on this display</small>}</div>{quickActions(entry)}</article>; }) : <p className="agenda-empty">No scheduled content</p>}</div></section>; })}</div>}
     </div>
     {selected && createPortal(<>{selectedPreviewScreen && selectedPreviewPosition && <aside className="schedule-event-board-preview" style={selectedPreviewPosition} aria-label={`Preview of ${selected.name} on ${selectedPreviewScreen.label}`}>
       <header><div><p className="eyebrow">Display preview</p><strong>{selected.contentType === "board" ? selectedPreviewProgram?.name ?? "Selected board" : selected.name}</strong><span>{selectedPreviewScreen.label} · {selectedPreviewScreen.orientation}</span></div>{selected.contentType === "announcement" ? <Megaphone size={16} /> : selected.contentType === "blip" ? <Sparkles size={16} /> : <Monitor size={16} />}</header>
@@ -8622,7 +8648,6 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
 function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const [state, setState] = useState<LanternState>(() => loadLanternState());
   const [stateReady, setStateReady] = useState(false);
-  const [fps, setFps] = useState(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [identify, setIdentify] = useState(false);
   const [fitToScreen, setFitToScreen] = useState(true);
@@ -8633,7 +8658,6 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const blipSoundKeyRef = useRef("");
   const identifyTimerRef = useRef<number | null>(null);
   const receivedStateUpdateRef = useRef(false);
-  const heartbeatStateRef = useRef({ fps, liveActive: state.live.active, liveTarget: state.live.target });
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
   const showIdentity = useCallback(() => {
     if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
@@ -8674,10 +8698,6 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   }, []);
 
   useEffect(() => {
-    heartbeatStateRef.current = { fps, liveActive: state.live.active, liveTarget: state.live.target };
-  }, [fps, state.live.active, state.live.target]);
-
-  useEffect(() => {
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") {
         receivedStateUpdateRef.current = true;
@@ -8688,21 +8708,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       }
     });
 
-    const heartbeat = () => {
-      const latest = heartbeatStateRef.current;
-      channel.post({
-        type: "display-heartbeat",
-        screenId,
-        fps: latest.fps,
-        status: latest.liveActive && targetIncludes(latest.liveTarget, screenId) ? "live" : "ready",
-        timestamp: new Date().toISOString()
-      });
-    };
-
-    const timer = window.setInterval(heartbeat, 1600);
-    heartbeat();
     return () => {
-      window.clearInterval(timer);
       channel.close();
     };
   }, [screenId, showIdentity]);
@@ -8799,7 +8805,6 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       {scheduledBoard && <BabylonDonorWall
           state={state}
           screenId={screenId}
-          onFps={setFps}
           fitToScreen={fitToScreen}
           viewMode="2d"
           announcementCharacter={(showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement)?.character ?? "off"}
@@ -9091,22 +9096,6 @@ function useHashView(): [View, (view: View) => void] {
   return [view, setView];
 }
 
-function applyHeartbeat(state: LanternState, heartbeat: DisplayHeartbeat): LanternState {
-  const screen = state.screens[heartbeat.screenId] ?? makeDisplay(heartbeat.screenId, Object.keys(state.screens).length + 1);
-  return {
-    ...state,
-    screens: {
-      ...state.screens,
-      [heartbeat.screenId]: {
-        ...screen,
-        fps: heartbeat.fps,
-        status: heartbeat.status,
-        lastHeartbeat: new Date(heartbeat.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })
-      }
-    }
-  };
-}
-
 function makeDisplay(id: string, number: number): DisplayProfile {
   const portrait = number === 1;
   return {
@@ -9122,8 +9111,6 @@ function makeDisplay(id: string, number: number): DisplayProfile {
     currentRevision: 18,
     renderer: "WebGL2",
     quality: number === 1 ? "Balanced" : "Showcase",
-    fps: 0,
-    status: "offline",
     donorScrollEnabled: false,
     donorScrollSpeed: 4
   };

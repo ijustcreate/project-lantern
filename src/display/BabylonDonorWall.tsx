@@ -36,7 +36,6 @@ interface BabylonDonorWallProps {
   announcementCharacter?: Announcement["character"];
   announcementCharacterAsset?: Announcement;
   announcementActive?: boolean;
-  onFps?: (fps: number) => void;
 }
 
 const backgroundMediaCache = new Map<string, HTMLImageElement | HTMLVideoElement>();
@@ -47,7 +46,7 @@ const boardPanelImageCache = new Map<string, HTMLImageElement>();
 // dashboard console. Rendering failures still surface as Babylon errors.
 Logger.LogLevels = Logger.ErrorLogLevel;
 
-export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), onFps }: BabylonDonorWallProps) {
+export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId) }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previousAnnouncementActive = useRef(announcementActive);
   const [scheduleMinute, setScheduleMinute] = useState(() => Math.floor(Date.now() / 60_000));
@@ -83,14 +82,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
   const sceneStateKey = useMemo(
     () => {
       const screen = state.screens[screenId];
-      const renderScreen = screen
-        ? {
-            ...screen,
-            fps: undefined,
-            status: undefined,
-            lastHeartbeat: undefined
-          }
-        : null;
+      const renderScreen = screen ?? null;
       return JSON.stringify({
         revision: state.revision,
         donors: state.donors,
@@ -362,7 +354,6 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       });
     }
 
-    let lastReport = 0;
     let lastMediaRedraw = 0;
     engine.runRenderLoop(() => {
       const now = performance.now();
@@ -371,10 +362,6 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
         redrawPanel(now);
       }
       scene.render();
-      if (onFps && now - lastReport > 1000) {
-        lastReport = now;
-        onFps(Math.round(engine.getFps()));
-      }
     });
 
     let resizeFrame = 0;
@@ -400,7 +387,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       scene.dispose();
       engine.dispose();
     };
-  }, [sceneStateKey, screenId, interactive, fitToScreen, viewMode, resetKey, onFps]);
+  }, [sceneStateKey, screenId, interactive, fitToScreen, viewMode, resetKey]);
 
   return <>
     <canvas className="wall-canvas" ref={canvasRef} tabIndex={interactive ? 0 : -1} role="img" aria-label={`${activeProgram?.name ?? "Recognition board"}. ${accessibleDonors.length} recognized supporters.`} />
@@ -418,13 +405,6 @@ function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId,
   const height = isPortrait ? 3840 : 2160;
   const texture = new DynamicTexture("panel-texture", { width, height }, scene, generateMipMaps);
   const context = texture.getContext() as unknown as CanvasRenderingContext2D;
-  (context as StyledTextContext).__lanternTextStyle = {
-    finish: screen.textFinish ?? "flat",
-    shadowEnabled: screen.textShadowEnabled ?? false,
-    shadowStrength: screen.textShadowStrength ?? 55,
-    shadowAngle: screen.textShadowAngle ?? 135,
-    shadowDistance: screen.textShadowDistance ?? 5
-  };
 
   texture.hasAlpha = false;
   const redraw = (animationTime = performance.now()) => {
@@ -462,12 +442,7 @@ function drawTextureContent(
   const renderScreen = displayProgram ? {
     ...screen,
     showFrame: displayProgram.showFrame ?? screen.showFrame,
-    showIcons: displayProgram.showIcons ?? screen.showIcons,
-    textFinish: displayProgram.textFinish ?? screen.textFinish,
-    textShadowEnabled: displayProgram.textShadowEnabled ?? screen.textShadowEnabled,
-    textShadowStrength: displayProgram.textShadowStrength ?? screen.textShadowStrength,
-    textShadowAngle: displayProgram.textShadowAngle ?? screen.textShadowAngle,
-    textShadowDistance: displayProgram.textShadowDistance ?? screen.textShadowDistance
+    showIcons: displayProgram.showIcons ?? screen.showIcons
   } : screen;
 
   const draw = () => {
@@ -709,11 +684,18 @@ function drawComposableBoard(
     const panelHeight = height * ((panel.height ?? 18) / 100);
     const centerX = left + contentWidth / 2;
     const centerY = y + panelHeight / 2;
-    const font = panel.fontFamily ?? screen?.fontFamily ?? "Montserrat";
+    const font = panel.fontFamily ?? "Montserrat";
     const panelTextColor = panel.textColor;
     const requestedSize = panel.fontSize ?? (panel.type === "heading" ? 32 : panel.type === "donors" ? screen?.nameSize ?? 28 : 24);
     const fontUnit = Math.max(8, requestedSize * height / authoredCanvasHeight);
     context.save();
+    (context as StyledTextContext).__lanternTextStyle = {
+      finish: panel.textFinish ?? "flat",
+      shadowEnabled: panel.textShadowEnabled ?? false,
+      shadowStrength: panel.textShadowStrength ?? 55,
+      shadowAngle: panel.textShadowAngle ?? 135,
+      shadowDistance: panel.textShadowDistance ?? 5
+    };
     context.beginPath();
     context.rect(left, y, contentWidth, panelHeight);
     context.clip();
