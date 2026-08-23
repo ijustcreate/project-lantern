@@ -5679,6 +5679,9 @@ function LivePreviewPanel({
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const [liveTab, setLiveTab] = useState<"setup" | "frame" | "effects">("setup");
   const [previewWindow, setPreviewWindow] = useState<Window | null>(null);
+  const [roomCameraWindow, setRoomCameraWindow] = useState<Window | null>(null);
+  const [roomCameraStream, setRoomCameraStream] = useState<MediaStream | null>(null);
+  const [roomCameraError, setRoomCameraError] = useState<string | null>(null);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [phoneMode, setPhoneMode] = useState(false);
   const [phoneSettingsOpen, setPhoneSettingsOpen] = useState(false);
@@ -5704,6 +5707,8 @@ function LivePreviewPanel({
   const recordingActive = recordingPhase === "starting" || recordingPhase === "recording";
   const previewStreamRef = useRef<MediaStream | null>(null);
   const previewLeaseRef = useRef<MediaDeviceLease | null>(null);
+  const roomCameraLeaseRef = useRef<MediaDeviceLease | null>(null);
+  const roomCameraWindowRef = useRef<Window | null>(null);
   const previewWindowRef = useRef<Window | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -5776,6 +5781,9 @@ function LivePreviewPanel({
       previewLeaseRef.current = null;
       if (!previewLease) previewStreamRef.current?.getTracks().forEach((track) => track.stop());
       if (previewWindowRef.current && !previewWindowRef.current.closed) previewWindowRef.current.close();
+      if (roomCameraWindowRef.current && !roomCameraWindowRef.current.closed) roomCameraWindowRef.current.close();
+      roomCameraLeaseRef.current?.release();
+      roomCameraLeaseRef.current = null;
       recorderRef.current?.state === "recording" && recorderRef.current.stop();
       recordingInputRef.current?.getTracks().forEach((track) => track.stop());
       demoRecordingCaptureRef.current?.stop();
@@ -5801,6 +5809,56 @@ function LivePreviewPanel({
   const allScreens = Object.values(state.screens);
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
   const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
+  const closeBroadcastRoomCamera = () => {
+    const popup = roomCameraWindowRef.current;
+    roomCameraWindowRef.current = null;
+    setRoomCameraWindow(null);
+    roomCameraLeaseRef.current?.release();
+    roomCameraLeaseRef.current = null;
+    setRoomCameraStream(null);
+    if (popup && !popup.closed) popup.close();
+  };
+  const openBroadcastRoomCamera = async () => {
+    if (!previewScreen) return;
+    let popup = roomCameraWindowRef.current;
+    if (!popup || popup.closed) {
+      popup = openRoomCameraPopout(window, document, previewScreen.label);
+      if (!popup) {
+        setRoomCameraError("The browser blocked the room-camera window. Allow pop-ups for this site, then try again.");
+        return;
+      }
+      roomCameraWindowRef.current = popup;
+      popup.addEventListener("beforeunload", () => {
+        if (roomCameraWindowRef.current !== popup) return;
+        roomCameraWindowRef.current = null;
+        setRoomCameraWindow(null);
+        roomCameraLeaseRef.current?.release();
+        roomCameraLeaseRef.current = null;
+        setRoomCameraStream(null);
+      }, { once: true });
+    }
+    setRoomCameraWindow(popup);
+    popup.focus();
+    setRoomCameraError(null);
+    try {
+      const nextLease = await mediaDeviceManager.acquire(`broadcast:room:${previewScreen.id}`, {
+        video: {
+          deviceId: previewScreen.roomVideoDeviceId,
+          constraints: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+          fallbackToDefault: true,
+          required: true
+        },
+        audio: false
+      });
+      const previousLease = roomCameraLeaseRef.current;
+      roomCameraLeaseRef.current = nextLease;
+      if (previousLease && previousLease.consumerId !== nextLease.consumerId) previousLease.release();
+      setRoomCameraStream(nextLease.stream);
+    } catch (error) {
+      setRoomCameraStream(null);
+      setRoomCameraError(formatMediaDeviceError(error, { kind: "video", deviceId: previewScreen.roomVideoDeviceId }));
+    }
+  };
   const patchDisplayLayout = (screenId: ScreenId, patch: NonNullable<LanternState["live"]["displayLayouts"]>[string]) => updateState((current) => ({
     ...current,
     live: {
@@ -6307,6 +6365,28 @@ function LivePreviewPanel({
         previewWindow.document.getElementById("lantern-live-preview-root")!
       )
     : null;
+  const roomCameraPortalRoot = roomCameraWindow && !roomCameraWindow.closed
+    ? roomCameraWindow.document.getElementById(ROOM_CAMERA_POPOUT_ROOT_ID)
+    : null;
+  const roomCameraPortal = roomCameraPortalRoot
+    ? createPortal(
+        <main className="room-view-popout broadcast-room-camera-popout">
+          <div className="room-view-shell">
+            <header className="room-view-header">
+              <div><span className={roomCameraStream ? "live-indicator active" : "live-indicator"} /><strong>{previewScreen.label}</strong><small>Room camera · broadcast monitor</small></div>
+              <button type="button" className="icon-button" onClick={closeBroadcastRoomCamera} title="Close room camera"><X size={18} /></button>
+            </header>
+            <div className="room-view-video">
+              {roomCameraStream
+                ? <MediaStreamVideo stream={roomCameraStream} muted />
+                : <div className="room-view-empty"><Camera size={34} /><strong>Room camera unavailable</strong><span>{roomCameraError ?? "Connecting to the camera assigned to this display…"}</span></div>}
+            </div>
+            <footer className="room-view-footer"><span>Monitoring only · audio muted</span><span>{previewScreen.roomVideoDeviceId ? "Assigned camera" : "Default camera"}</span></footer>
+          </div>
+        </main>,
+        roomCameraPortalRoot
+      )
+    : null;
 
   return (
     <div className="form-panel live-setup-panel">
@@ -6336,6 +6416,7 @@ function LivePreviewPanel({
         <div><h2>Broadcast / Stream Studio <InfoDot text="Preview camera, microphone, title, and target display before starting a broadcast." /></h2><span className={previewWindow && !previewWindow.closed ? "preview-window-status open" : "preview-window-status"}>{previewWindow && !previewWindow.closed ? "Preview window open" : "Preview window closed"}</span></div>
         <div className="live-heading-actions">
           <button type="button" className="command-button secondary phone-mode-button" onClick={enablePhoneMode}><Smartphone size={16} /> I’m on my phone</button>
+          {state.live.active && <button type="button" className="command-button secondary compact" onClick={() => void openBroadcastRoomCamera()} title={`Open ${previewScreen.label} room camera in a movable window`}><PictureInPicture2 size={16} /> Room camera</button>}
           <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => { const mode = event.target.value as typeof popoutMode; setPopoutMode(mode); setPopoutBoardVisible(mode !== "broadcast"); }}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
           <button type="button" className="command-button secondary compact live-preview-window-button" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
           <button className={`${state.live.active ? "command-button danger compact" : "command-button primary compact"} live-broadcast-toggle`} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
@@ -6507,6 +6588,7 @@ function LivePreviewPanel({
       </div>
       </>}
       {previewPortal}
+      {roomCameraPortal}
       {mobilePreviewOpen && <div className="mobile-live-preview" role="dialog" aria-modal="true" aria-label="Live presentation preview">
         <header><div><span className={state.live.active ? "live-indicator active" : "live-indicator"} /><strong>Live presentation</strong><small>{previewScreen.label}</small></div><button type="button" className="icon-button" onClick={() => setMobilePreviewOpen(false)} title="Close preview"><X size={18} /></button></header>
         <div className="mobile-live-preview-stage"><DirectLiveStage state={state} screen={previewScreen} live={state.live} stream={previewStream} mode={directMode} previewError={previewError} boardProgramId={selectedPreviewBoardId} onFrameChange={(frame) => patchDisplayLayout(previewScreen.id, { frame })} onTitlePositionChange={(titlePosition) => patchDisplayLayout(previewScreen.id, { titlePosition })} onLowerThirdPositionChange={(lowerThirdPosition) => patchDisplayLayout(previewScreen.id, { lowerThirdPosition })} /></div>

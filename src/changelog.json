@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0327",
+    "title": "Open room camera during broadcasts",
+    "summary": "Active broadcasts now include a Room camera button that opens the target display’s assigned camera in a separate movable, muted monitor window.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 1:03 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Display monitoring"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0326",
     "title": "Remove duplicate camera action",
     "summary": "Removed the redundant Broadcast Source camera card so the existing connection card remains the single start/stop camera control.",
