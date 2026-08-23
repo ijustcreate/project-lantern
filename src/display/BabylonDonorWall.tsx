@@ -631,7 +631,10 @@ function drawBroadcastOverlay(context: CanvasRenderingContext2D, width: number, 
   if (surface && ((surface instanceof HTMLCanvasElement && surface.width > 0) || (surface instanceof HTMLVideoElement && surface.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA))) {
     context.save();
     context.translate(x + frameWidth / 2, y + frameHeight / 2);
-    context.scale(frame.mirrorX ? -1 : 1, frame.mirrorY ? -1 : 1);
+    // Match the 2D/open-display renderer: a mirror setting is a camera-feed
+    // transform, never a transform for the board, overlays, or another source.
+    const mirrorCamera = live.source === "camera";
+    context.scale(mirrorCamera && frame.mirrorX ? -1 : 1, mirrorCamera && frame.mirrorY ? -1 : 1);
     context.rotate((frame.rotation ?? 0) * Math.PI / 180);
     context.drawImage(surface, -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight);
     context.restore();

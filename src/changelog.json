@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0329",
+    "title": "Isolate camera mirroring",
+    "summary": "Keep 3D broadcast mirroring scoped to the camera feed instead of applying stored flags to other sources.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 1:20 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Live displays"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0328",
     "title": "Improve screenless broadcast backgrounds",
     "summary": "Keep removed camera backgrounds transparent over donor boards and add solid and gradient replacements.",
