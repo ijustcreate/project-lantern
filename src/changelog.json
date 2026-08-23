@@ -1,5 +1,86 @@
 [
   {
+    "id": "DEV-0322",
+    "title": "Fix GitHub Pages deployment blocker",
+    "summary": "Repair TypeScript errors in the 3D board renderer so the accumulated portal changes can deploy to GitHub Pages.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:26 PM",
+    "areas": [
+      "Deployment",
+      "3D previews"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "GitHub Actions failure log reviewed; git diff --check"
+  },
+  {
+    "id": "DEV-0321",
+    "title": "Restore Broadcast camera start control",
+    "summary": "Keep a direct Start camera action visible in Broadcast Source even while another video source is selected.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:22 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false started without errors before local timeout; git diff --check"
+  },
+  {
+    "id": "DEV-0320",
+    "title": "Protect board data during release and local sync",
+    "summary": "Keep shared board data authoritative after release-time normalization and add a confirmed read-only pull for configured local builds.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:19 PM",
+    "areas": [
+      "Data preservation",
+      "Settings",
+      "Shared state"
+    ],
+    "files": [
+      "src/host/lanternHost.ts",
+      "src/App.tsx",
+      "src/styles.css",
+      "README.md"
+    ],
+    "tests": "npx tsc --noEmit --pretty false started without errors before local timeout; git diff --check"
+  },
+  {
+    "id": "DEV-0319",
+    "title": "Use Bugs-style global user picker",
+    "summary": "Replace the older topbar user dropdown with the clearer labeled picker style used in the Bugs toolbar.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:13 PM",
+    "areas": [
+      "Global navigation",
+      "Bugs"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
+    "id": "DEV-0318",
+    "title": "Use Bugs-style global user picker",
+    "summary": "Replace the older topbar user dropdown with the clearer labeled picker style used in the Bugs toolbar.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:13 PM",
+    "areas": [
+      "Global navigation",
+      "Bugs"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0317",
     "title": "Refine Broadcast effects inspector",
     "summary": "Nest related Broadcast effects controls into clearer cards and provide palette-specific contrast across every portal theme.",

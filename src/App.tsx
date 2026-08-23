@@ -105,11 +105,13 @@ import {
 } from "./stateManagement";
 import {
   canWriteSharedLanternState,
+  canReadSharedLanternState,
   createHostChannel,
   deleteLanternMedia,
   enableSharedStatePersistence,
   fitWarnings,
   loadAuthoritativeLanternState,
+  loadSharedLanternStateSnapshot,
   loadLanternState,
   openDisplayWindows,
   publishState,
@@ -273,6 +275,8 @@ function ControlCenter() {
   const activeUserIdRef = useRef(activeUserId);
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [newUserName, setNewUserName] = useState("");
+  const [siteSyncStatus, setSiteSyncStatus] = useState("");
+  const [siteSyncing, setSiteSyncing] = useState(false);
   const [bugLauncherVisible, setBugLauncherVisible] = useState(() => localStorage.getItem("project-lantern-bug-launcher-visible") !== "false");
   const [bugLauncherPosition, setBugLauncherPosition] = useState(() => readBugLauncherPosition(currentBugUser()));
   const bugNavigationButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -360,6 +364,34 @@ function ControlCenter() {
   const addMenuUser = () => {
     setNewUserName("");
     setCreateUserOpen(true);
+  };
+
+  const pullLatestSiteChanges = async () => {
+    if (!canReadSharedLanternState()) {
+      setSiteSyncStatus("Site sync is not configured for this local build.");
+      return;
+    }
+    if (!window.confirm("Pull the latest shared site data? This replaces this computer's local working copy. Your current local changes will remain on the site only if they were already saved there.")) return;
+    setSiteSyncing(true);
+    setSiteSyncStatus("Checking the site copy…");
+    try {
+      const snapshot = await loadSharedLanternStateSnapshot();
+      if (!snapshot.state) {
+        setSiteSyncStatus("No shared site data is available yet.");
+        return;
+      }
+      const persistence = await saveLanternStateDurably(snapshot.state);
+      if (persistence === "failed") throw new Error("The pulled site data could not be stored on this computer.");
+      setState(snapshot.state);
+      // Refresh local display windows without writing the pulled copy back to
+      // the shared service or changing its authoritative timestamp.
+      publishState(snapshot.state, { persist: false, shared: false });
+      setSiteSyncStatus(`Pulled the site copy${snapshot.updatedAt ? ` saved ${new Date(snapshot.updatedAt).toLocaleString()}` : ""}.`);
+    } catch (error) {
+      setSiteSyncStatus(error instanceof Error ? error.message : "Could not pull the shared site data.");
+    } finally {
+      setSiteSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -955,9 +987,8 @@ function ControlCenter() {
               </button>
               </div>
             )}
-            <label className="header-user-control">
-              <Users size={15} />
-              <span>User</span>
+            <label className="bug-user-control">
+              <span><Users size={15} /> User</span>
               <select aria-label="Current user (local non-secure mode)" value={activeUser?.id ?? ""} onChange={(event) => event.target.value === "__new__" ? addMenuUser() : selectActiveUser(event.target.value)}>
                 {state.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                 <option value="__new__">+ Create user…</option>
@@ -1152,7 +1183,7 @@ function ControlCenter() {
           localStorage.setItem("project-lantern-bug-launcher-visible", String(visible));
           if (visible) window.requestAnimationFrame(resetBugLauncherPosition);
         }} />}
-        {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} appearance={portalAppearance} onAppearanceChange={changePortalAppearance} onAddDisplay={addDisplay} />}
+        {view === "settings" && <RecognitionSettingsView state={state} updateState={updateState} appearance={portalAppearance} onAppearanceChange={changePortalAppearance} onAddDisplay={addDisplay} onPullSiteChanges={pullLatestSiteChanges} siteSyncAvailable={canReadSharedLanternState()} siteSyncing={siteSyncing} siteSyncStatus={siteSyncStatus} />}
         {showIdeas && <IdeasDrawer page={view} open={ideasOpen} onToggle={() => setIdeasOpen((current) => !current)} />}
       </main>
       {helpOpen && <HelpCenterModal onClose={() => setHelpOpen(false)} />}
@@ -6333,6 +6364,13 @@ function LivePreviewPanel({
           <LabeledSelect label="Microphone" info={recordingActive ? "Microphone selection is locked while recording." : "Microphone used for live mode when the browser allows it."} value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} />
         </>}
       </div>
+      <div className="source-camera-action">
+        <div><strong>{state.live.source === "camera" && previewStream ? "Camera preview is on" : "Ready to use your camera"}</strong><span>Uses the selected camera and microphone above.</span></div>
+        <button type="button" className={state.live.source === "camera" && previewStream ? "command-button danger compact" : "command-button primary compact"} disabled={previewBusy || recordingActive} onClick={() => state.live.source === "camera" && previewStream ? stopPreviewStream() : selectSource("camera")}>
+          {state.live.source === "camera" && previewStream ? <Square size={15} /> : <Camera size={15} />}
+          {recordingActive ? "Camera locked" : previewBusy ? "Connecting…" : state.live.source === "camera" && previewStream ? "Stop camera" : "Start camera"}
+        </button>
+      </div>
       <section className={previewError || popupBlocked ? "source-connection-card error" : previewStream ? "source-connection-card ready" : "source-connection-card"}>
         <div className="source-connection-status">
           {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}
@@ -8230,12 +8268,16 @@ function entryOccursOnDate(entry: ScheduleEntry, date: Date) {
 function scheduleTargetsConflict(left: TargetScreen, right: TargetScreen) { return left === "all" || right === "all" || left === right; }
 function clamp(value: number, min: number, max: number) { return Math.min(max, Math.max(min, value)); }
 
-function RecognitionSettingsView({ state, updateState, appearance, onAppearanceChange, onAddDisplay }: {
+function RecognitionSettingsView({ state, updateState, appearance, onAppearanceChange, onAddDisplay, onPullSiteChanges, siteSyncAvailable, siteSyncing, siteSyncStatus }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
   appearance: LanternState["recognitionSettings"]["appearance"];
   onAppearanceChange: (appearance: LanternState["recognitionSettings"]["appearance"]) => void;
   onAddDisplay: () => void;
+  onPullSiteChanges: () => void;
+  siteSyncAvailable: boolean;
+  siteSyncing: boolean;
+  siteSyncStatus: string;
 }) {
   const [vocabularyExpanded, setVocabularyExpanded] = useState(true);
   const changeVocabulary = (kind: "tiers" | "categories" | "tags", next: string[], previous?: string, replacement?: string) => {
@@ -8282,6 +8324,15 @@ function RecognitionSettingsView({ state, updateState, appearance, onAppearanceC
           <span>Create a new display here when the museum adds or replaces a physical screen.</span>
         </div>
         <button type="button" className="command-button primary" onClick={onAddDisplay}><Plus size={16} /> Add display</button>
+      </section>
+      <section className="appearance-settings site-sync-settings" aria-labelledby="site-sync-heading">
+        <div>
+          <p className="eyebrow">Shared project data</p>
+          <h2 id="site-sync-heading">Pull latest site changes</h2>
+          <span>{siteSyncAvailable ? "Replace this computer’s local working copy with the latest saved data from the live site before you begin editing." : "Configure VITE_LANTERN_READ_ENDPOINT in this local build to enable read-only pulls from the live site."}</span>
+          {siteSyncStatus && <small role="status">{siteSyncStatus}</small>}
+        </div>
+        <button type="button" className="command-button secondary" onClick={onPullSiteChanges} disabled={!siteSyncAvailable || siteSyncing}><Download size={16} /> {siteSyncing ? "Pulling…" : "Pull latest site changes"}</button>
       </section>
       <button type="button" className={`settings-intro vocabulary-toggle${vocabularyExpanded ? " expanded" : ""}`} onClick={() => setVocabularyExpanded((expanded) => !expanded)} aria-expanded={vocabularyExpanded} aria-controls="donor-vocabulary-options">
         <div>

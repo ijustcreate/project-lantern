@@ -201,6 +201,20 @@ Set the GitHub Actions repository variable `LANTERN_BUG_ENDPOINT` to the
 deployed Worker endpoint. The Pages workflow exposes it to the frontend as
 `VITE_LANTERN_BUG_ENDPOINT` and `VITE_LANTERN_SERVICE_ENDPOINT`.
 
+### Pull live data into a local build
+
+Local development intentionally never writes to the shared museum data. To let
+the local app pull the current live site copy, create `.env.local` with the
+read-only endpoint:
+
+```text
+VITE_LANTERN_READ_ENDPOINT=https://your-worker.example.workers.dev
+```
+
+Then use **Settings → Pull latest site changes** before making local edits. The
+pull replaces the local working copy only after confirmation and does not write
+anything back to the shared site.
+
 ## Repository map
 
 ```text

@@ -1004,7 +1004,7 @@ function drawComposableBoard(
         drawBoardDonorHighlight(context, presentation.highlight, x, baseline, cellWidth * 0.72, baseSize * Math.max(1, lines.length * .92) * scale, presentation.accentColor);
         context.font = `500 ${Math.round(baseSize * scale)}px ${presentation.fontFamily}, Inter, sans-serif`;
         drawBoardDonorName(context, donor.name, x, baseline, cellWidth * 0.88, Math.round(baseSize * scale), 7, presentation, animationTime, donor.id);
-        if (panel.showIcons && presentation.recognitionIcon !== "none") drawBoardRecognitionIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, presentation, screen, Math.max(7, baseSize * 0.35));
+        if (panel.showIcons && presentation.recognitionIcon !== "none" && screen) drawBoardRecognitionIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, presentation, screen, Math.max(7, baseSize * 0.35));
         if (showSubtext && (donor.subtext || donor.note)) {
           context.fillStyle = muted;
           context.font = `400 ${Math.max(8, Math.round(baseSize * 0.48))}px ${presentation.fontFamily}, Inter, sans-serif`;
@@ -2690,6 +2690,10 @@ function drawBrigadeAccents(context: CanvasRenderingContext2D, width: number, he
     context.fill();
   });
   context.restore();
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function materialColor(material: string) {

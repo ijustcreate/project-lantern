@@ -25,7 +25,10 @@ const configuredWriteEndpoint = (import.meta.env.VITE_LANTERN_SERVICE_ENDPOINT a
   || "";
 const configuredReadEndpoint = (import.meta.env.VITE_LANTERN_READ_ENDPOINT as string | undefined)?.trim()
   || configuredWriteEndpoint;
-const LANTERN_READ_SERVICE_ROOT = import.meta.env.DEV ? "" : configuredReadEndpoint.replace(/\/bugs\/?$/, "");
+// Local development is read-only by default, but can opt into the same shared
+// snapshot by setting VITE_LANTERN_READ_ENDPOINT in .env.local. Never enable
+// shared writes outside a production build.
+const LANTERN_READ_SERVICE_ROOT = configuredReadEndpoint.replace(/\/bugs\/?$/, "");
 const LANTERN_WRITE_SERVICE_ROOT = import.meta.env.DEV ? "" : configuredWriteEndpoint.replace(/\/bugs\/?$/, "");
 const LEGACY_CONTENT_MIGRATION_VERSION = 3;
 const MAX_AUDIT_HISTORY = 350;
@@ -336,16 +339,16 @@ export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternSta
 
 /** Load one authoritative startup state for every app surface. */
 export async function loadAuthoritativeLanternState(): Promise<AuthoritativeLanternState> {
+  // Capture this before normalization. A schema migration may save the local
+  // copy, which must not make an older board appear newer than the site copy.
+  const localUpdatedAtBeforeNormalization = await loadLanternStateUpdatedAt();
   const local = await loadIndexedDbLanternState() ?? loadLanternState();
   if (!LANTERN_READ_SERVICE_ROOT) {
     return { state: await hydrateLanternMedia(local), source: "local", sharedServiceReachable: false };
   }
   try {
-    const [sharedSnapshot, localUpdatedAt] = await Promise.all([
-      loadSharedLanternStateSnapshot(),
-      loadLanternStateUpdatedAt()
-    ]);
-    const useLocal = localStateIsNewer(localUpdatedAt, sharedSnapshot.updatedAt);
+    const sharedSnapshot = await loadSharedLanternStateSnapshot();
+    const useLocal = localStateIsNewer(localUpdatedAtBeforeNormalization, sharedSnapshot.updatedAt);
     const selected = useLocal ? local : (sharedSnapshot.state ?? local);
     return {
       state: await hydrateLanternMedia(selected),
@@ -418,6 +421,10 @@ export async function uploadLanternAsset(file: File) {
 
 export function canWriteSharedLanternState() {
   return Boolean(LANTERN_WRITE_SERVICE_ROOT);
+}
+
+export function canReadSharedLanternState() {
+  return Boolean(LANTERN_READ_SERVICE_ROOT);
 }
 
 async function shareImageUrl(value: string | undefined, name: string) {
@@ -600,9 +607,9 @@ export function createHostChannel(listener: Listener) {
   };
 }
 
-export function publishState(state: LanternState, options: { persist?: boolean } = {}) {
+export function publishState(state: LanternState, options: { persist?: boolean; shared?: boolean } = {}) {
   const savedLocally = options.persist === false || saveLanternState(state);
-  queueSharedStateSave(state);
+  if (options.shared !== false) queueSharedStateSave(state);
   const message = { type: "state-update", state } satisfies HostMessage;
   const wireMessage = wireHostMessage(message);
   try {
