@@ -74,6 +74,14 @@ function hexRgb(value: string) {
   return [0, 2, 4].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255);
 }
 
+function drawScreenlessGradient(context: CanvasRenderingContext2D, width: number, height: number, start: string, end: string) {
+  const gradient = context.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, start);
+  gradient.addColorStop(1, end);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+}
+
 export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill", className, onTrackingStatus, onMediaSurfaceChange, renderTrackedOverlay }: ChromaVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -159,7 +167,9 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
     setAiStatus(aiBackgroundActive ? "loading" : "idle");
     if (faceEffectsActive) setTrackingPhase("detecting");
 
-    const context = canvas.getContext("2d");
+    // This canvas is also sampled by the 3D board texture. Explicit alpha is
+    // essential: the "Remove" result must leave the donor board visible.
+    const context = canvas.getContext("2d", { alpha: true });
     const source = document.createElement("canvas");
     source.width = OUTPUT_WIDTH;
     source.height = OUTPUT_HEIGHT;
@@ -522,6 +532,17 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
             context.filter = `blur(${currentEffects.blur}px)`;
             context.drawImage(source, -overscan, -overscan, OUTPUT_WIDTH + overscan * 2, OUTPUT_HEIGHT + overscan * 2);
             context.restore();
+          } else if (currentEffects.background === "solid") {
+            context.fillStyle = currentEffects.backgroundColor ?? "#173f5f";
+            context.fillRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+          } else if (currentEffects.background === "gradient") {
+            drawScreenlessGradient(
+              context,
+              OUTPUT_WIDTH,
+              OUTPUT_HEIGHT,
+              currentEffects.backgroundGradientStart ?? "#0f4c5c",
+              currentEffects.backgroundGradientEnd ?? "#7439a8"
+            );
           } else if (currentEffects.background === "image") {
             const replacement = replacementImageRef.current;
             if (replacement?.complete && replacement.naturalWidth > 0) drawCover(context, replacement, OUTPUT_WIDTH, OUTPUT_HEIGHT);

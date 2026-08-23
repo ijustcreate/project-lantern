@@ -1,5 +1,24 @@
 [
   {
+    "id": "DEV-0328",
+    "title": "Improve screenless broadcast backgrounds",
+    "summary": "Keep removed camera backgrounds transparent over donor boards and add solid and gradient replacements.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 1:13 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Live displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/types.ts",
+      "src/sampleData.ts",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit"
+  },
+  {
     "id": "DEV-0327",
     "title": "Open room camera during broadcasts",
     "summary": "Active broadcasts now include a Room camera button that opens the target display’s assigned camera in a separate movable, muted monitor window.",

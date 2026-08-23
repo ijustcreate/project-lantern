@@ -468,8 +468,12 @@ export interface ChromaKeySettings {
 }
 
 export interface LiveEffectsSettings {
-  background: "original" | "remove" | "blur" | "image";
+  background: "original" | "remove" | "blur" | "solid" | "gradient" | "image";
   backgroundImage?: string;
+  /** Screenless-removal replacement background settings. */
+  backgroundColor?: string;
+  backgroundGradientStart?: string;
+  backgroundGradientEnd?: string;
   blur: number;
   segmentationThreshold: number;
   segmentationFeather: number;

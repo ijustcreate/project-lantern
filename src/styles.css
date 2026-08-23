@@ -9624,6 +9624,16 @@ textarea:focus-visible,
   background: #050d17;
 }
 
+/* A screenless "Remove" result has an alpha canvas; never put a dark frame
+   behind it or the donor board disappears in opened displays. */
+.direct-live-content.screenless-transparent,
+.live-overlay.screenless-transparent {
+  background: transparent;
+  box-shadow: none;
+}
+
+.screenless-background-colors { margin-top: 10px; }
+
 .live-camera-transform {
   position: absolute;
   z-index: 1;

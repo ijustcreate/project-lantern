@@ -5392,9 +5392,10 @@ function DirectLiveStage({
           onPointerUp={finishDrag}
           onPointerCancel={finishDrag}
         >
-          <div className={`direct-live-content broadcast-frame-surface mask-${composedLive.frame.maskShape ?? "rectangle"}`} style={{
+          <div className={`direct-live-content broadcast-frame-surface mask-${composedLive.frame.maskShape ?? "rectangle"}${!composedLive.chromaKey.enabled && composedLive.effects.background === "remove" ? " screenless-transparent" : ""}`} style={{
             ...(composedLive.frame.maskShape === "polygon" ? { clipPath: polygonClip } : {}),
-            ...frameSurfaceStyle(composedLive)
+            ...frameSurfaceStyle(composedLive),
+            ...(!composedLive.chromaKey.enabled && composedLive.effects.background === "remove" ? { backgroundColor: "transparent" } : {})
           }}>
             <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${cropEdges.top}% ${cropEdges.right}% ${cropEdges.bottom}% ${cropEdges.left}%)` }}>
               <div className="live-camera-transform" style={broadcastSourceTransformStyle(composedLive)}>
@@ -6549,12 +6550,14 @@ function LivePreviewPanel({
 
         {backgroundRemoval.enabled && selectedRemovalMethod === "screenless" && <section className="effect-settings-card ai-settings-card">
           <div className="effect-card-heading"><div><strong>Screenless Removal</strong><span>{SCREENLESS_REMOVAL_TECHNOLOGY.name} runs person segmentation in this browser</span></div><b>LOCAL</b></div>
-          <div className="field"><span>Background result <InfoDot text="Keep only the person, blur the room, or place a local image behind them." /></span><SegmentedControl value={state.live.effects.background} options={[["remove", "Remove"], ["blur", "Blur"], ["image", "Image"]]} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: value as LanternState["live"]["effects"]["background"] } })} /></div>
+          <div className="field"><span>Background result <InfoDot text="Remove keeps only the person over the board. You can instead place a blur, solid color, gradient, or image behind them." /></span><SegmentedControl value={state.live.effects.background} options={[["remove", "Remove"], ["blur", "Blur"], ["solid", "Solid"], ["gradient", "Gradient"], ["image", "Image"]]} onChange={(value) => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: value as LanternState["live"]["effects"]["background"] } })} /></div>
           <div className="three-col ai-precision-controls">
             <Slider label="Edge precision" info="Raise this to reject more background; lower it to retain fine hair and hands." value={Math.round(state.live.effects.segmentationThreshold * 100)} min={20} max={75} onChange={(value) => patchLive({ effects: { ...state.live.effects, segmentationThreshold: value / 100 } })} />
             <Slider label="Edge feather" info="Smooths the transition around the segmented person." value={Math.round(state.live.effects.segmentationFeather * 100)} min={4} max={35} onChange={(value) => patchLive({ effects: { ...state.live.effects, segmentationFeather: value / 100 } })} />
             {state.live.effects.background === "blur" ? <Slider label="Background blur" info="Blur strength behind the segmented person." value={state.live.effects.blur} min={4} max={40} onChange={(value) => patchLive({ effects: { ...state.live.effects, blur: value } })} /> : <div className="effect-setting-note">Mask updates are stabilized between frames to reduce edge flicker.</div>}
           </div>
+          {state.live.effects.background === "solid" && <div className="announcement-color-row screenless-background-colors"><ColorControl label="Solid color" value={state.live.effects.backgroundColor ?? "#173f5f"} onChange={(backgroundColor) => patchLive({ effects: { ...state.live.effects, backgroundColor } })} /></div>}
+          {state.live.effects.background === "gradient" && <div className="announcement-color-row screenless-background-colors"><ColorControl label="Gradient start" value={state.live.effects.backgroundGradientStart ?? "#0f4c5c"} onChange={(backgroundGradientStart) => patchLive({ effects: { ...state.live.effects, backgroundGradientStart } })} /><ColorControl label="Gradient end" value={state.live.effects.backgroundGradientEnd ?? "#7439a8"} onChange={(backgroundGradientEnd) => patchLive({ effects: { ...state.live.effects, backgroundGradientEnd } })} /></div>}
           {state.live.effects.background === "image" && <div className="background-image-status">
             {state.live.effects.backgroundImage && <img src={state.live.effects.backgroundImage} alt="Current screenless-removal background" />}
             <button type="button" className="command-button secondary compact" onClick={() => patchLive({ chromaKey: { ...state.live.chromaKey, enabled: false }, effects: { ...state.live.effects, background: "image", backgroundImage: `${import.meta.env.BASE_URL}assets/characters/friendly-zombie/03-backgrounds/friendly-zombie__background__halloween-garden__v01.png` } })}><Sparkles size={14} /> Friendly Halloween scene</button>
@@ -8984,7 +8987,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       {scheduledBroadcast?.broadcastVideoUrl && <video className="scheduled-broadcast-video" src={scheduledBroadcast.broadcastVideoUrl} autoPlay loop playsInline />}
       {showLive && !scheduledBoard && <BroadcastBackgroundLayer live={liveComposition} orientation={screen.orientation} className="live-broadcast-background" />}
       {showLive && (
-        <div className={`live-overlay broadcast-frame-surface mask-${liveComposition.frame.maskShape ?? "rectangle"}`} style={{ left: `${liveComposition.frame.x}%`, top: `${liveComposition.frame.y}%`, width: `${liveComposition.frame.width}%`, height: `${liveComposition.frame.height}%`, clipPath: liveComposition.frame.maskShape === "polygon" ? livePolygonClip(liveComposition.frame) : undefined, ...frameSurfaceStyle(liveComposition) }}>
+        <div className={`live-overlay broadcast-frame-surface mask-${liveComposition.frame.maskShape ?? "rectangle"}${!liveComposition.chromaKey.enabled && liveComposition.effects.background === "remove" ? " screenless-transparent" : ""}`} style={{ left: `${liveComposition.frame.x}%`, top: `${liveComposition.frame.y}%`, width: `${liveComposition.frame.width}%`, height: `${liveComposition.frame.height}%`, clipPath: liveComposition.frame.maskShape === "polygon" ? livePolygonClip(liveComposition.frame) : undefined, ...frameSurfaceStyle(liveComposition), ...(!liveComposition.chromaKey.enabled && liveComposition.effects.background === "remove" ? { backgroundColor: "transparent" } : {}) }}>
           <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${liveCropEdges.top}% ${liveCropEdges.right}% ${liveCropEdges.bottom}% ${liveCropEdges.left}%)` }}>
             <div className="live-camera-transform" style={broadcastSourceTransformStyle(liveComposition)}>
               <ChromaVideo stream={stream} chromaKey={liveComposition.chromaKey} effects={liveComposition.effects} crop={liveComposition.frame.crop} fitMode={liveComposition.frame.fitMode} renderTrackedOverlay={displayCostumeRenderer} />
