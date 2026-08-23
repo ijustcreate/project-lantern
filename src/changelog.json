@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0324",
+    "title": "Remove announcement composer guide line",
+    "summary": "Removed the temporary pink divider while preserving the fixed announcement controls and scrolling editor.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:42 PM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "git diff --check"
+  },
+  {
     "id": "DEV-0323",
     "title": "Unify portal theme accents",
     "summary": "Primary and selected controls now inherit blue, orange, yellow, rainbow, or museum-primary styling from the active portal theme; Sparkle Unicorn also uses a compact rainbow-confetti click effect.",
