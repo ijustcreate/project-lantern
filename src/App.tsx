@@ -5686,6 +5686,8 @@ function LivePreviewPanel({
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [phoneMode, setPhoneMode] = useState(false);
   const [phoneSettingsOpen, setPhoneSettingsOpen] = useState(false);
+  const [openDisplayIds, setOpenDisplayIds] = useState<ScreenId[]>([]);
+  const [displayDelivery, setDisplayDelivery] = useState<Partial<Record<ScreenId, Extract<HostMessage, { type: "display-video-status" }>>>>({});
   const [sourcePromptOpen, setSourcePromptOpen] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -5725,6 +5727,34 @@ function LivePreviewPanel({
   const sourceRecordingPlaybackRef = useRef<HTMLVideoElement | null>(null);
   const sourceRecordingUrlRef = useRef<string | null>(null);
   const recordingMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const presence = new Map<ScreenId, number>();
+    const channel = createHostChannel((message) => {
+      if (message.type === "display-presence") {
+        presence.set(message.screenId, Date.now());
+        setOpenDisplayIds([...presence.keys()]);
+      }
+      if (message.type === "display-video-status") {
+        setDisplayDelivery((current) => ({ ...current, [message.screenId]: message }));
+      }
+    });
+    const prune = window.setInterval(() => {
+      const now = Date.now();
+      let changed = false;
+      presence.forEach((seenAt, screenId) => {
+        if (now - seenAt > 5_000) {
+          presence.delete(screenId);
+          changed = true;
+        }
+      });
+      if (changed) setOpenDisplayIds([...presence.keys()]);
+    }, 1000);
+    return () => {
+      window.clearInterval(prune);
+      channel.close();
+    };
+  }, []);
 
   useEffect(() => { previewStreamRef.current = previewStream; }, [previewStream]);
   useEffect(() => {
@@ -5808,6 +5838,9 @@ function LivePreviewPanel({
   const cameraOptions = deviceOptionList(cameraDevices, "Default camera", "Camera");
   const micOptions = deviceOptionList(micDevices, "Default mic", "Mic");
   const allScreens = Object.values(state.screens);
+  const openScreens = allScreens.filter((screen) => openDisplayIds.includes(screen.id));
+  const openTargetOptions = openScreens.map((screen) => screen.id);
+  const openTargetLabels = Object.fromEntries(openScreens.map((screen) => [screen.id, `${screen.label} (${screen.orientation})`]));
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
   const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
   const closeBroadcastRoomCamera = () => {
@@ -5984,7 +6017,13 @@ function LivePreviewPanel({
         nextLease = await mediaDeviceManager.acquire("broadcast:preview", {
           video: {
             deviceId: state.live.videoDeviceId,
-            constraints: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } },
+            constraints: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              aspectRatio: phoneMode ? { ideal: 16 / 9 } : undefined,
+              facingMode: phoneMode ? { ideal: "user" } : undefined,
+              frameRate: { ideal: 30, max: 30 }
+            },
             fallbackToDefault: true,
             required: true
           },
@@ -6301,6 +6340,11 @@ function LivePreviewPanel({
   };
 
   const beginLivePresentation = () => {
+    if (phoneMode && !openTargetOptions.includes(state.live.target as ScreenId)) {
+      setPreviewError(openScreens.length ? "Choose one of the open displays before going live." : "Open a display first. Phone broadcasts can only be sent to an open display.");
+      setPhoneSettingsOpen(true);
+      return;
+    }
     if (previewStream && state.live.source !== "demo") {
       void startLiveStream(previewStream.clone(), state.live.source === "screen" ? "Using approved screen share." : state.live.source === "recording" ? `Playing saved recording: ${selectedSourceRecording?.title ?? "Recording"}.` : "Using approved camera preview.");
       return;
@@ -6335,6 +6379,11 @@ function LivePreviewPanel({
     setPhoneSettingsOpen(false);
     setPhoneMode(true);
   };
+
+  useEffect(() => {
+    if (!phoneMode || state.live.active || !openTargetOptions.length || openTargetOptions.includes(state.live.target as ScreenId)) return;
+    patchLive({ target: openTargetOptions[0] as TargetScreen });
+  }, [phoneMode, state.live.active, state.live.target, openTargetOptions.join("|")]);
 
   const popoutScreens = popoutMode === "all" ? allScreens : [previewScreen];
   const previewPortal = previewWindow && !previewWindow.closed && previewWindow.document.getElementById("lantern-live-preview-root")
@@ -6404,9 +6453,10 @@ function LivePreviewPanel({
         {phoneSettingsOpen && <div className="phone-broadcast-fields">
           <LabeledInput label="Your name" value={state.live.title} onChange={(title) => patchLive({ title })} />
           <LabeledInput label="Message" value={state.live.lowerThird} onChange={(lowerThird) => patchLive({ lowerThird })} />
-          <LabeledSelect label="Broadcast to" value={state.live.target} options={targetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => patchLive({ target: target as TargetScreen })} />
+          <LabeledSelect label="Broadcast to" value={openTargetOptions.includes(state.live.target as ScreenId) ? state.live.target : ""} options={["", ...openTargetOptions]} optionLabels={{ "": openTargetOptions.length ? "Choose an open display" : "No displays are open" , ...openTargetLabels }} onChange={(target) => target && patchLive({ target: target as TargetScreen })} />
           <label className="switch-row phone-background-removal"><input type="checkbox" checked={backgroundRemoval.enabled} onChange={(event) => setBackgroundRemovalEnabled(event.target.checked)} /><span>Remove background</span></label>
         </div>}
+        {phoneMode && state.live.active && <PhoneBroadcastDelivery screen={previewScreen} delivery={previewScreen ? displayDelivery[previewScreen.id] : undefined} />}
         <footer className="phone-broadcast-actions">
           <button type="button" className="phone-round-control" onClick={() => setPhoneSettingsOpen((open) => !open)} title="Broadcast settings"><Settings2 size={20} /><span>Settings</span></button>
           <button type="button" className={previewStream ? "phone-round-control active" : "phone-round-control"} disabled={previewBusy} onClick={previewStream ? () => stopPreviewStream() : () => void startPreview("camera")}><Camera size={21} /><span>{previewStream ? "Camera" : "Start camera"}</span></button>
@@ -6987,6 +7037,21 @@ function SoundPicker({ label, value, onChange }: { label: string; value?: string
     reader.readAsDataURL(file);
   };
   return <div className="sound-picker"><span className="sound-picker-label"><Music2 size={14} />{label}</span><label className="sound-upload" title={value ? `Replace ${label.toLowerCase()}` : `Choose ${label.toLowerCase()}`}><Upload size={14} /><span>{value ? "Replace" : "Choose"}</span><input type="file" accept="audio/*" onChange={(event) => loadSound(event.target.files?.[0])} /></label><button type="button" className="icon-button" disabled={!value} onClick={() => value && playSound(value)} title="Preview sound"><Play size={15} /></button>{value && <button type="button" className="icon-button danger-icon" onClick={() => onChange(undefined)} title="Remove sound"><X size={15} /></button>}</div>;
+}
+
+function PhoneBroadcastDelivery({ screen, delivery }: { screen?: DisplayProfile; delivery?: Extract<HostMessage, { type: "display-video-status" }> }) {
+  const status = delivery?.status ?? "connecting";
+  const title = status === "receiving"
+    ? `${screen?.label ?? "Display"} is receiving video`
+    : status === "reconnecting"
+      ? `${screen?.label ?? "Display"} is reconnecting`
+      : status === "unavailable"
+        ? `${screen?.label ?? "Display"} is not receiving video`
+        : `Connecting to ${screen?.label ?? "display"}`;
+  return <div className={`phone-delivery-status ${status}`} role="status">
+    <Radio size={15} />
+    <div><strong>{title}</strong><small>{delivery?.fps ? `${Math.round(delivery.fps)} fps received` : delivery?.detail ?? "Waiting for the display to confirm the stream."}</small></div>
+  </div>;
 }
 
 function MediaStreamVideo({ stream, muted, className, elementRef }: { stream: MediaStream | null; muted: boolean; className?: string; elementRef?: { current: HTMLVideoElement | null } }) {

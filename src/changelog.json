@@ -1,5 +1,39 @@
 [
   {
+    "id": "DEV-0332",
+    "title": "Improve phone broadcast reliability",
+    "summary": "Phone broadcasting now targets open displays only, confirms when a display is receiving video, uses mobile-safe camera framing, and supports optional TURN relay configuration.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 4:44 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Mobile",
+      "Live displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/videoBridge.ts",
+      "src/types.ts",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check; npm run build invoked"
+  },
+  {
+    "id": "DEV-0330",
+    "title": "Isolate camera mirroring",
+    "summary": "Keep 3D broadcast mirroring scoped to the camera feed instead of applying stored flags to other sources.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 1:21 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Live displays"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0329",
     "title": "Isolate camera mirroring",
     "summary": "Keep 3D broadcast mirroring scoped to the camera feed instead of applying stored flags to other sources.",

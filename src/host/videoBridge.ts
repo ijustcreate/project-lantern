@@ -9,6 +9,17 @@ interface DemoStream extends MediaStream {
   __cleanup?: () => void;
 }
 
+const iceServers: RTCIceServer[] = [
+  { urls: "stun:stun.cloudflare.com:3478" },
+  ...(import.meta.env.VITE_LANTERN_TURN_URL
+    ? [{
+        urls: import.meta.env.VITE_LANTERN_TURN_URL,
+        username: import.meta.env.VITE_LANTERN_TURN_USERNAME,
+        credential: import.meta.env.VITE_LANTERN_TURN_CREDENTIAL
+      }]
+    : [])
+];
+
 export class DirectorVideoBridge {
   private channel = createHostChannel((message) => { void this.handleMessage(message); });
   private stream: DemoStream | null = null;
@@ -52,12 +63,15 @@ export class DirectorVideoBridge {
       return;
     }
 
-    const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+    const peer = new RTCPeerConnection({ iceServers });
     this.peers.set(screenId, peer);
     this.pendingRemoteCandidates.set(screenId, []);
     this.stream.getTracks().forEach((track) => {
       if (this.stream) {
-        peer.addTrack(track, this.stream);
+        const sender = peer.addTrack(track, this.stream);
+        if (track.kind === "video") {
+          void sender.setParameters({ ...sender.getParameters(), degradationPreference: "maintain-framerate" }).catch(() => undefined);
+        }
       }
     });
     peer.addEventListener("icecandidate", (event) => {
@@ -75,7 +89,7 @@ export class DirectorVideoBridge {
         const reconnectTimer = this.reconnectTimers.get(screenId);
         if (reconnectTimer) window.clearTimeout(reconnectTimer);
         this.reconnectTimers.delete(screenId);
-        this.onStatus("live", `${labelFor(screenId)} video connected.`);
+        this.onStatus("live", `${labelFor(screenId)} video connected at up to 30 fps.`);
       } else if (peer.connectionState === "disconnected") {
         const previousTimer = this.reconnectTimers.get(screenId);
         if (previousTimer) window.clearTimeout(previousTimer);
@@ -85,7 +99,7 @@ export class DirectorVideoBridge {
           this.peers.delete(screenId);
           this.pendingRemoteCandidates.delete(screenId);
           void this.connect(screenId);
-        }, 2500));
+        }, 1200));
       } else if (peer.connectionState === "failed") {
         if (this.peers.get(screenId) === peer) this.peers.delete(screenId);
         this.pendingRemoteCandidates.delete(screenId);
@@ -190,12 +204,17 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
       activeOfferKey = offerKey;
       void (async () => {
         const previousPeer = peer;
-        const nextPeer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+        const nextPeer = new RTCPeerConnection({ iceServers });
         peer = nextPeer;
         previousPeer?.close();
+        const report = (status: "connecting" | "receiving" | "reconnecting" | "unavailable", detail?: string, fps?: number, bitrateKbps?: number) => channel.post({
+          type: "display-video-status", screenId, status, detail, fps, bitrateKbps, timestamp: new Date().toISOString()
+        } satisfies HostMessage);
+        report("connecting", "Connecting to the broadcast source.");
         nextPeer.addEventListener("track", (trackEvent) => {
           if (peer !== nextPeer) return;
           onStream(trackEvent.streams[0] ?? null);
+          report("receiving", "Display is receiving video.");
         });
         nextPeer.addEventListener("icecandidate", (candidateEvent) => {
           if (candidateEvent.candidate) {
@@ -208,7 +227,13 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
           }
         });
         nextPeer.addEventListener("connectionstatechange", () => {
-          if (peer === nextPeer && nextPeer.connectionState === "failed") onStream(null);
+          if (peer !== nextPeer) return;
+          if (nextPeer.connectionState === "connected") report("receiving", "Display is receiving video.");
+          if (nextPeer.connectionState === "disconnected") report("reconnecting", "Connection was interrupted; retrying.");
+          if (nextPeer.connectionState === "failed") {
+            report("unavailable", "Display could not receive the broadcast.");
+            onStream(null);
+          }
         });
         try {
           await nextPeer.setRemoteDescription(message.sdp);
@@ -251,10 +276,26 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
     }
   });
   const presenceTimer = window.setInterval(announcePresence, 1800);
+  const telemetryTimer = window.setInterval(() => {
+    if (!peer || peer.connectionState !== "connected") return;
+    void peer.getStats().then((stats) => {
+      let fps: number | undefined;
+      let bitrateKbps: number | undefined;
+      stats.forEach((report) => {
+        if (report.type === "inbound-rtp" && report.kind === "video") {
+          fps = typeof report.framesPerSecond === "number" ? report.framesPerSecond : undefined;
+          bitrateKbps = typeof report.bytesReceived === "number" && typeof report.timestamp === "number"
+            ? undefined : bitrateKbps;
+        }
+      });
+      channel.post({ type: "display-video-status", screenId, status: "receiving", timestamp: new Date().toISOString(), detail: "Display is receiving video.", fps, bitrateKbps } satisfies HostMessage);
+    }).catch(() => undefined);
+  }, 2500);
   announcePresence();
 
   return () => {
     window.clearInterval(presenceTimer);
+    window.clearInterval(telemetryTimer);
     peer?.close();
     channel.close();
   };

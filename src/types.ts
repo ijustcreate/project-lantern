@@ -811,6 +811,7 @@ export type HostMessage =
   | { type: "identify-screen"; screenId: ScreenId }
   | { type: "live-stop"; target: TargetScreen }
   | { type: "display-presence"; screenId: ScreenId; timestamp: string }
+  | { type: "display-video-status"; screenId: ScreenId; status: "connecting" | "receiving" | "reconnecting" | "unavailable"; timestamp: string; detail?: string; fps?: number; bitrateKbps?: number }
   | { type: "webrtc-offer"; target: ScreenId; source: "control"; sdp: RTCSessionDescriptionInit }
   | { type: "webrtc-answer"; target: "control"; source: ScreenId; sdp: RTCSessionDescriptionInit }
   | { type: "webrtc-candidate"; target: ScreenId | "control"; source: ScreenId | "control"; candidate: RTCIceCandidateInit };
