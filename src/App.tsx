@@ -5129,12 +5129,17 @@ function DirectLiveStage({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [frameDraft, setFrameDraft] = useState<LanternState["live"]["frame"] | null>(null);
   const frameDraftRef = useRef<LanternState["live"]["frame"] | null>(null);
+  const [textDraft, setTextDraft] = useState<{ kind: "title" | "lower-third"; position: { x: number; y: number } } | null>(null);
+  const textDraftRef = useRef<{ kind: "title" | "lower-third"; position: { x: number; y: number } } | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [confirmPolygonReset, setConfirmPolygonReset] = useState(false);
   const [controlHeld, setControlHeld] = useState(false);
   const [broadcastSurface, setBroadcastSurface] = useState<HTMLCanvasElement | HTMLVideoElement | null>(null);
   const displayLive = liveCompositionForDisplay(live, screen.id);
-  const composedLive = normalizeBroadcastComposition(frameDraft ? { ...displayLive, frame: frameDraft } : displayLive);
+  const displayLiveWithTextDraft = textDraft
+    ? { ...displayLive, [textDraft.kind === "title" ? "titlePosition" : "lowerThirdPosition"]: textDraft.position }
+    : displayLive;
+  const composedLive = normalizeBroadcastComposition(frameDraft ? { ...displayLiveWithTextDraft, frame: frameDraft } : displayLiveWithTextDraft);
   const scheduledBoard = resolveCurrentBoardSchedule(state, screen.id);
   // A manually chosen preview board is useful while editing; otherwise the studio
   // should faithfully show the board that is actually scheduled for this display.
@@ -5328,13 +5333,19 @@ function DirectLiveStage({
       x: clamp(drag.position.x + ((event.clientX - drag.x) / Math.max(bounds.width, 1)) * 100, 0, 90),
       y: clamp(drag.position.y + ((event.clientY - drag.y) / Math.max(bounds.height, 1)) * 100, 0, 94)
     };
-    if (drag.kind === "title") onTitlePositionChange(position);
-    else onLowerThirdPositionChange(position);
+    const nextDraft = { kind: drag.kind, position };
+    textDraftRef.current = nextDraft;
+    setTextDraft(nextDraft);
   };
 
   const finishTextDrag = (event: React.PointerEvent<HTMLElement>) => {
     if (textDragRef.current?.pointerId !== event.pointerId) return;
+    const finalDraft = textDraftRef.current;
     textDragRef.current = null;
+    textDraftRef.current = null;
+    setTextDraft(null);
+    if (finalDraft?.kind === "title") onTitlePositionChange(finalDraft.position);
+    else if (finalDraft?.kind === "lower-third") onLowerThirdPositionChange(finalDraft.position);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 

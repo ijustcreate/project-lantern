@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0325",
+    "title": "Make broadcast text dragging responsive",
+    "summary": "Broadcast title and lower-third positions now update locally while dragging and persist only after release, avoiding expensive whole-display updates on every pointer move.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:46 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
     "id": "DEV-0324",
     "title": "Remove announcement composer guide line",
     "summary": "Removed the temporary pink divider while preserving the fixed announcement controls and scrolling editor.",
