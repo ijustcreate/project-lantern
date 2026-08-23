@@ -9933,22 +9933,6 @@ textarea:focus-visible,
 }
 .source-connection-card.ready { border-color: rgba(92, 221, 159, .38); }
 .source-connection-card.error { border-color: rgba(239, 102, 102, .42); }
-.source-camera-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid rgba(95, 224, 235, .22);
-  border-radius: 8px;
-  background: rgba(95, 224, 235, .055);
-}
-.source-camera-action > div { min-width: 0; }
-.source-camera-action strong,
-.source-camera-action span { display: block; }
-.source-camera-action strong { color: var(--text); font-size: 10px; }
-.source-camera-action span { margin-top: 2px; color: var(--muted); font-size: 8px; line-height: 1.35; }
-.source-camera-action .command-button { flex: 0 0 auto; }
 .source-connection-status { display: flex; align-items: flex-start; gap: 8px; min-width: 0; color: #65dce7; }
 .source-connection-card.ready .source-connection-status { color: #8af0b9; }
 .source-connection-card.error .source-connection-status { color: #ff8f8f; }
@@ -12069,9 +12053,6 @@ textarea:focus-visible,
 .theme-light .source-connection-card.error .source-connection-status { color: #a52f45; }
 .theme-light .source-connection-status strong { color: #243149; }
 .theme-light .source-connection-status span { color: #526077; }
-.theme-light .source-camera-action { border-color: rgba(0, 119, 148, .2); background: #edf7fa; }
-.theme-light .source-camera-action strong { color: #243149; }
-.theme-light .source-camera-action span { color: #526077; }
 .theme-light .source-connection-card .command-button.danger:disabled {
   border-color: #e7aab5;
   color: #9e3348;

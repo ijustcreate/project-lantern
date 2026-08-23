@@ -6383,13 +6383,6 @@ function LivePreviewPanel({
           <LabeledSelect label="Microphone" info={recordingActive ? "Microphone selection is locked while recording." : "Microphone used for live mode when the browser allows it."} value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} />
         </>}
       </div>
-      <div className="source-camera-action">
-        <div><strong>{state.live.source === "camera" && previewStream ? "Camera preview is on" : "Ready to use your camera"}</strong><span>Uses the selected camera and microphone above.</span></div>
-        <button type="button" className={state.live.source === "camera" && previewStream ? "command-button danger compact" : "command-button primary compact"} disabled={previewBusy || recordingActive} onClick={() => state.live.source === "camera" && previewStream ? stopPreviewStream() : selectSource("camera")}>
-          {state.live.source === "camera" && previewStream ? <Square size={15} /> : <Camera size={15} />}
-          {recordingActive ? "Camera locked" : previewBusy ? "Connecting…" : state.live.source === "camera" && previewStream ? "Stop camera" : "Start camera"}
-        </button>
-      </div>
       <section className={previewError || popupBlocked ? "source-connection-card error" : previewStream ? "source-connection-card ready" : "source-connection-card"}>
         <div className="source-connection-status">
           {previewStream ? <CheckCircle2 size={17} /> : previewError || popupBlocked ? <AlertTriangle size={17} /> : <Camera size={17} />}

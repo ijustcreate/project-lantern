@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0326",
+    "title": "Remove duplicate camera action",
+    "summary": "Removed the redundant Broadcast Source camera card so the existing connection card remains the single start/stop camera control.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:49 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check"
+  },
+  {
     "id": "DEV-0325",
     "title": "Make broadcast text dragging responsive",
     "summary": "Broadcast title and lower-third positions now update locally while dragging and persist only after release, avoiding expensive whole-display updates on every pointer move.",
