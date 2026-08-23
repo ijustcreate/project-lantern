@@ -956,7 +956,8 @@ function ControlCenter() {
               </div>
             )}
             <label className="header-user-control">
-              <span><Users size={15} /> User <small>Local mode</small></span>
+              <Users size={15} />
+              <span>User</span>
               <select aria-label="Current user (local non-secure mode)" value={activeUser?.id ?? ""} onChange={(event) => event.target.value === "__new__" ? addMenuUser() : selectActiveUser(event.target.value)}>
                 {state.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
                 <option value="__new__">+ Create user…</option>
@@ -1663,7 +1664,6 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   const [commentTab, setCommentTab] = useState<"user" | "ai">("user");
   const [message, setMessage] = useState("");
   const [pendingBugDelete, setPendingBugDelete] = useState<BugRecord | null>(null);
-  const [bugUserPromptOpen, setBugUserPromptOpen] = useState(false);
   const load = useCallback(async () => {
     if (isTauri()) {
       try { setBugs(await invoke<BugRecord[]>("list_bug_reports")); }
@@ -1859,13 +1859,6 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
     }
   };
   const counts = { open: bugs.filter((bug) => bug.status === "open").length, testing: bugs.filter((bug) => bug.status === "ready-for-test").length, closed: bugs.filter((bug) => bug.status === "closed" || bug.status === "verified").length };
-  const addUser = (name: string) => {
-    const normalized = name.trim();
-    if (!normalized) return;
-    setUsers((current) => current.some((user) => user.toLowerCase() === normalized.toLowerCase()) ? current : [...current, normalized]);
-    setActiveUser(normalized);
-    setBugUserPromptOpen(false);
-  };
   const addComment = () => {
     if (!selected || !comment.trim()) return;
     const parent = replyTo === null ? undefined : selected.agentWork?.[replyTo];
@@ -1881,7 +1874,7 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
   return <section className="bugs-page">
     <div className="bugs-toolbar">
       <div><h2>Bug catalogue</h2><p>Track reports from discovery through verification.</p></div>
-      <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><label className="bug-user-picker"><Users size={15} /><span>User</span><select aria-label="Current user" value={activeUser} onChange={(event) => { if (event.target.value === "__new__") setBugUserPromptOpen(true); else setActiveUser(event.target.value); }}>{users.map((user) => <option key={user} value={user}>{user}</option>)}<option value="__new__">+ Add new user…</option></select></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
+      <div><label className="bug-launcher-toggle"><input type="checkbox" checked={launcherVisible} onChange={(event) => onLauncherVisibleChange(event.target.checked)} /><Bug size={14} /><span>Show bug button</span></label><button className="command-button secondary" onClick={() => void exportAll()}><Download size={16} /> Export all</button><button className="command-button primary" onClick={onNewBug}><Plus size={16} /> Report bug</button></div>
     </div>
     <div className="bug-metrics"><article><Bug /><span><b>{counts.open}</b>Open</span></article><article><BadgeCheck /><span><b>{counts.testing}</b>Ready for test</span></article><article><CheckCircle2 /><span><b>{counts.closed}</b>Verified / closed</span></article></div>
     <div className="bugs-controls"><div className="bug-filter-pills" aria-label="Filter bugs by status">{statusOrder.map((value) => <button className={statusFilters.includes(value) ? "active" : ""} aria-pressed={statusFilters.includes(value)} key={value} onClick={() => toggleStatusFilter(value)}>{statusLabel(value)}</button>)}<button className={!statusFilters.length ? "active" : ""} aria-pressed={!statusFilters.length} onClick={() => setStatusFilters([])}>All</button></div><div className="bugs-view-options"><label className="bug-entered-by-filter"><Users size={14} /><span>Entered by</span><select aria-label="Filter bugs by entered by" value={enteredByFilter} onChange={(event) => setEnteredByFilter(event.target.value)}><option value="all">All users</option>{reporterUsers.map((user) => <option key={user} value={user}>{user}</option>)}</select></label><label className="bug-group-toggle"><input type="checkbox" checked={groupByStatus} onChange={(event) => setGroupByStatus(event.target.checked)} /><span>Separate by status</span></label><label>Sort <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="status">Status</option></select></label></div></div>
@@ -1926,7 +1919,6 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
     {message && <div className="bugs-message">{message}</div>}
     {selected && viewingEvidence && <EvidenceViewer bugId={selected.bugId} evidence={viewingEvidence} onClose={() => setViewingEvidence(null)} />}
     {pendingBugDelete && <LanternConfirmDialog eyebrow="Permanent deletion" title={`Delete ${displayBugId(pendingBugDelete.bugId)} permanently?`} description={<><p><strong>{pendingBugDelete.summary}</strong></p><p>This removes the report and its attachments for every tester. This action cannot be undone.</p></>} confirmLabel="Delete bug" onCancel={() => setPendingBugDelete(null)} onConfirm={() => { const bug = pendingBugDelete; setPendingBugDelete(null); void deleteBug(bug); }} />}
-    {bugUserPromptOpen && <LanternTextPromptDialog eyebrow="Bug catalogue user" title="Add a user" description="This name is saved locally and identifies who entered or updated bug reports." label="User name" placeholder="Name" submitLabel="Add user" onCancel={() => setBugUserPromptOpen(false)} onSubmit={addUser} />}
   </section>;
 }
 
@@ -2222,10 +2214,10 @@ function Dashboard({
                 <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}`}>
                   {activeBoard ? <>
                     <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
-                    <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={activeBoard?.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} />
+                    <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={activeBoard?.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} blipOverlay={preview3d[screen.id] ? displayBlip?.blip : undefined} />
                     <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
                   </> : !displayBlip && <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
-                  {displayBlip && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
+                  {displayBlip && !preview3d[screen.id] && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
                 </div>
                 {immediateBlip && <DashboardBlipControl
                   blip={immediateBlip.blip}
@@ -3187,16 +3179,27 @@ function boardPreviewPalette(palette: DonorBoardProgram["palette"]) {
   return { text: "#f5f2eb", accent: "#d9a657", secondary: "#79cac6", muted: "#bdc7c7" };
 }
 
+const boardFolderOptions = ["Honor rolls", "Supporter spotlights", "Program information", "Good deeds", "Custom boards"];
+
+function boardFolderFor(program: DonorBoardProgram) {
+  if (program.folder) return program.folder;
+  if (program.templatePurpose === "story") return "Supporter spotlights";
+  if (program.templatePurpose === "roster" || program.templatePurpose === "level") return "Honor rolls";
+  if (program.templatePurpose === "invitation") return "Program information";
+  if (program.templatePurpose === "good-deeds") return "Good deeds";
+  return "Custom boards";
+}
+
+function groupBoardPrograms(programs: DonorBoardProgram[]) {
+  return boardFolderOptions
+    .map((label) => ({ label, programs: programs.filter((program) => boardFolderFor(program) === label) }))
+    .filter((group) => group.programs.length);
+}
+
 function ScheduleBoardPicker({ programs, value, onChange }: { programs: DonorBoardProgram[]; value: string; onChange: (boardId: string) => void }) {
   const pickerRef = useRef<HTMLDetailsElement>(null);
   const [search, setSearch] = useState("");
-  const groups = [
-    { label: "Supporter spotlights", programs: programs.filter((program) => program.templatePurpose === "story") },
-    { label: "Honor rolls", programs: programs.filter((program) => program.templatePurpose === "roster" || program.templatePurpose === "level") },
-    { label: "Program information", programs: programs.filter((program) => program.templatePurpose === "invitation") },
-    { label: "Good deeds", programs: programs.filter((program) => program.templatePurpose === "good-deeds") },
-    { label: "Custom boards", programs: programs.filter((program) => !program.templatePurpose) }
-  ].filter((group) => group.programs.length);
+  const groups = groupBoardPrograms(programs);
   const current = programs.find((program) => program.id === value) ?? programs[0];
   const currentGroup = groups.find((group) => group.programs.some((program) => program.id === current?.id));
   const displayName = (program: DonorBoardProgram) => program.name.replace(/\s*(?:Â·|-|·)\s*(?:portrait|landscape)\s*$/i, "").trim();
@@ -3299,6 +3302,8 @@ function ThemeStudio({
   const [pendingPanelDelete, setPendingPanelDelete] = useState<{ programId: string; ids: string[]; removed: Array<{ panel: BoardPanel; index: number }>; x: number; y: number } | null>(null);
   const [lastDeletedPanels, setLastDeletedPanels] = useState<{ programId: string; removed: Array<{ panel: BoardPanel; index: number }> } | null>(null);
   const boardPickerRef = useRef<HTMLDetailsElement>(null);
+  const boardActionsMenuRef = useRef<HTMLDetailsElement>(null);
+  const boardAddMenuRef = useRef<HTMLDetailsElement>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const pendingProgramDelete = state.boardPrograms.find((program) => program.id === pendingProgramDeleteId);
   const boardDisplay = selectedProgram ? { ...display, orientation: selectedProgram.orientation } : display;
@@ -3315,6 +3320,16 @@ function ThemeStudio({
     setDraftState(structuredClone(savedState));
     setSavedDraftSnapshot(incomingSavedSnapshot);
   }, [hasUnsavedChanges, incomingSavedSnapshot, savedState]);
+  useEffect(() => {
+    const closeBoardPopovers = (event: PointerEvent) => {
+      const target = event.target as Node;
+      [boardPickerRef.current, boardActionsMenuRef.current, boardAddMenuRef.current].forEach((menu) => {
+        if (menu?.open && !menu.contains(target)) menu.open = false;
+      });
+    };
+    document.addEventListener("pointerdown", closeBoardPopovers);
+    return () => document.removeEventListener("pointerdown", closeBoardPopovers);
+  }, []);
   useEffect(() => setDonorPage(0), [donorSearch]);
   useEffect(() => {
     if (donorPage >= donorPageCount) setDonorPage(donorPageCount - 1);
@@ -3505,6 +3520,7 @@ function ThemeStudio({
       active: false,
       donorIds: [],
       donorStyles: undefined,
+      folder: boardFolderFor(selectedProgram),
       panels: []
     };
     updateDraftState((current) => ({ ...current, boardPrograms: [...current.boardPrograms, next] }));
@@ -3578,12 +3594,12 @@ function ThemeStudio({
     }));
   };
 
-  const patchBoardPresentation = (patch: Partial<BoardDonorPresentation>) => {
-    patchProgram({ donorPresentation: { ...(selectedProgram.donorPresentation ?? {}), ...patch } });
+  const patchPanelPresentation = (panel: BoardPanel, patch: Partial<BoardDonorPresentation>) => {
+    patchPanel(panel.id, { donorPresentation: { ...(panel.donorPresentation ?? {}), ...patch } });
   };
 
-  const patchDonorPresentation = (donorId: string, patch: Partial<BoardDonorPresentation>) => {
-    patchProgram({ donorStyles: patchBoardDonorStyle(selectedProgram, donorId, patch) });
+  const patchPanelDonorPresentation = (panel: BoardPanel, donorId: string, patch: Partial<BoardDonorPresentation>) => {
+    patchPanel(panel.id, { donorStyles: patchBoardDonorStyle(panel, donorId, patch) });
   };
 
   const renameDonor = (donorId: string, name: string) => {
@@ -3637,13 +3653,7 @@ function ThemeStudio({
     window.setTimeout(() => setSaveStatus("idle"), 2600);
   };
 
-  const groupedBoardPrograms = [
-    { label: "Supporter spotlights", programs: state.boardPrograms.filter((program) => program.templatePurpose === "story") },
-    { label: "Honor rolls", programs: state.boardPrograms.filter((program) => program.templatePurpose === "roster" || program.templatePurpose === "level") },
-    { label: "Program information", programs: state.boardPrograms.filter((program) => program.templatePurpose === "invitation") },
-    { label: "Good deeds", programs: state.boardPrograms.filter((program) => program.templatePurpose === "good-deeds") },
-    { label: "Custom boards", programs: state.boardPrograms.filter((program) => !program.templatePurpose) }
-  ].filter((group) => group.programs.length);
+  const groupedBoardPrograms = groupBoardPrograms(state.boardPrograms);
   const selectedBoardGroup = groupedBoardPrograms.find((group) => group.programs.some((program) => program.id === selectedProgram?.id));
   const boardPickerName = (program: DonorBoardProgram) => program.name.replace(/\s*(?:·|-)\s*(?:portrait|landscape)\s*$/i, "").trim();
   const normalizedBoardSearch = boardSearch.trim().toLowerCase();
@@ -3679,7 +3689,7 @@ function ThemeStudio({
               </div>
             </div>
           </details>
-          <details className="board-toolbar-menu">
+          <details className="board-toolbar-menu" ref={boardActionsMenuRef}>
             <summary className="command-button secondary compact"><SlidersHorizontal size={15} /> Board actions <ChevronDown size={14} /></summary>
             <div className="board-toolbar-popover">
               <button type="button" onClick={duplicateProgram}><ClipboardCopy size={15} /> Make a copy</button>
@@ -3729,7 +3739,7 @@ function ThemeStudio({
           <div className="inspector-sticky-head">
             <div className="inspector-title-block"><p className="eyebrow">{selectedPanel ? "Selected element" : "Board settings"}</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "Edit this board"}</h2><label className="board-element-picker"><span className="sr-only">Choose board element</span><select value={selectedPanel?.id ?? ""} onChange={(event) => { setSelectedPanelId(event.target.value); setSelectedPanelIds(event.target.value ? [event.target.value] : []); }}><option value="">Board settings</option>{panels.map((panel, index) => <option value={panel.id} key={panel.id}>{index + 1}. {boardPanelLabel(panel.type)}{panel.title ? ` · ${panel.title.slice(0, 28)}` : ""}</option>)}</select></label></div>
             <div className="panel-icon-actions">
-              <details className="board-add-menu">
+              <details className="board-add-menu" ref={boardAddMenuRef}>
                 <summary className="command-button secondary compact"><Plus size={15} /> Add content</summary>
                 <div className="board-add-popover">
                   <label><span>Content type</span><select value={newPanelType} onChange={(event) => setNewPanelType(event.target.value as BoardPanelType)}>{boardPanelTypes.map((type) => <option value={type} key={type}>{boardPanelLabel(type)}</option>)}</select></label>
@@ -3745,7 +3755,7 @@ function ThemeStudio({
           <div className="board-inspector-scroll">
             {selectedPanel ? <div className="inspector-block">
               <section className="inspector-primary-section">
-                <header><strong>Content</strong><small>Edit here or click text directly on the board.</small></header>
+                <header><strong>Content</strong></header>
                 {selectedPanel.type === "text" && <label className="field"><span>Text <InfoDot text="Use line breaks to arrange all copy inside this one text panel." /></span><textarea rows={7} value={selectedPanel.title} onChange={(event) => patchPanel(selectedPanel.id, { title: event.target.value })} /></label>}
                 {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> {selectedPanel.imageUrl ? "Replace image" : "Choose PNG or image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the element." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
               </section>
@@ -3759,6 +3769,22 @@ function ThemeStudio({
                     <p className="field-note">Board-wide credits controls are available here whenever a donor-list element is selected.</p>
                   </div>
                 </details>
+                <details className="inspector-details" open><summary>Donor presentation</summary><div className="inspector-block">
+                  <BoardDonorPresentationEditor
+                    scope={selectedPanel}
+                    donors={selectedProgram.donorIds.map((donorId) => state.donors.find((donor) => donor.id === donorId)).filter((donor): donor is Donor => Boolean(donor))}
+                    fallbacks={{ fontFamily: selectedPanel.fontFamily ?? "Montserrat", nameColor: selectedPanel.textColor ?? boardPreviewPalette(selectedProgram.palette).text, accentColor: boardPreviewPalette(selectedProgram.palette).accent }}
+                    fontOptions={boardFontOptions}
+                    fontLabels={boardFontLabels}
+                    iconsVisible={selectedPanel.showIcons ?? false}
+                    onIconsVisibleChange={(showIcons) => patchPanel(selectedPanel.id, { showIcons })}
+                    onPatchDefaults={(patch) => patchPanelPresentation(selectedPanel, patch)}
+                    onPatchDonor={(donorId, patch) => patchPanelDonorPresentation(selectedPanel, donorId, patch)}
+                    onClearDefaults={() => patchPanel(selectedPanel.id, { donorPresentation: undefined })}
+                    onClearDonor={(donorId) => patchPanel(selectedPanel.id, { donorStyles: clearBoardDonorStyle(selectedPanel, donorId) })}
+                  />
+                  <p className="field-note">These settings affect only this donor-list panel. Donor profile data remains unchanged.</p>
+                </div></details>
                 <div className="field panel-tier-filter"><span>Show recognition levels <InfoDot text="Level filters update automatically when a donor's pledge level changes." /></span><div><button type="button" className={!selectedPanel.donorTierFilter?.length ? "selected" : ""} aria-pressed={!selectedPanel.donorTierFilter?.length} onClick={() => patchPanel(selectedPanel.id, { donorTierFilter: undefined })}>All levels</button>{state.recognitionSettings.tiers.map((tier) => { const selected = selectedPanel.donorTierFilter?.includes(tier) ?? false; return <button type="button" className={selected ? "selected" : ""} aria-pressed={selected} key={tier} onClick={() => { const current = selectedPanel.donorTierFilter ?? []; const next = selected ? current.filter((item) => item !== tier) : [...current, tier]; patchPanel(selectedPanel.id, { donorTierFilter: next.length ? next : undefined }); }}>{tier}</button>; })}</div></div>
                 <details className="inspector-details roster-details">
                   <summary>Choose board roster <span>{selectedProgram.donorIds.length} selected</span></summary>
@@ -3793,6 +3819,7 @@ function ThemeStudio({
             </div> : <>
             <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
+              <LabeledSelect label="Board folder" info="Choose where this board appears in board pickers." value={boardFolderFor(selectedProgram)} options={boardFolderOptions} onChange={(folder) => patchProgram({ folder })} />
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
               <LabeledSelect label="Board palette" info="A saved visitor-facing color system for this board." value={selectedProgram.palette ?? "classic"} options={["classic", "brigade-blue", "brigade-red", "brigade-sunshine", "brigade-cream", "legacy-navy", "legacy-sky"]} optionLabels={{ classic: "Lantern classic", "brigade-blue": "Brigade blue", "brigade-red": "Brigade red", "brigade-sunshine": "Brigade sunshine", "brigade-cream": "Brigade cream", "legacy-navy": "Legacy navy wall", "legacy-sky": "Legacy sky wall" }} onChange={(palette) => patchProgram({ palette: palette as DonorBoardProgram["palette"] })} />
             </div></details>
@@ -3809,26 +3836,7 @@ function ThemeStudio({
               </>}
               <p className="field-note">Board images are saved with this template and do not change other displays.</p>
             </div></details>
-            <details className="inspector-details" open><summary>Donor presentation</summary><div className="inspector-block">
-              <BoardDonorPresentationEditor
-                program={selectedProgram}
-                donors={selectedProgram.donorIds.map((donorId) => state.donors.find((donor) => donor.id === donorId)).filter((donor): donor is Donor => Boolean(donor))}
-                fallbacks={{
-                  fontFamily: "Montserrat",
-                  nameColor: boardPreviewPalette(selectedProgram.palette).text,
-                  accentColor: boardPreviewPalette(selectedProgram.palette).accent
-                }}
-                fontOptions={boardFontOptions}
-                fontLabels={boardFontLabels}
-                iconsVisible={selectedProgram.showIcons ?? display.showIcons ?? false}
-                onIconsVisibleChange={(showIcons) => patchProgram({ showIcons })}
-                onPatchDefaults={patchBoardPresentation}
-                onPatchDonor={patchDonorPresentation}
-                onClearDefaults={() => patchProgram({ donorPresentation: undefined })}
-                onClearDonor={(donorId) => patchProgram({ donorStyles: clearBoardDonorStyle(selectedProgram, donorId) })}
-              />
-              <p className="field-note">These settings belong only to this board. Donor profile data remains unchanged.</p>
-            </div></details></>}
+            </>}
           </div>
         </aside>
       </div>
@@ -4143,7 +4151,7 @@ function DirectBoardCanvas({
         {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize} fontFamily={panel.fontFamily ?? "Montserrat"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "supporters-heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-section-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
-        {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} program={program} palette={palette} fontFamily={panel.fontFamily ?? "Montserrat"} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
+        {panel.type === "donors" && <div className="direct-donor-grid" style={directDonorGridStyle(panelDonors(panel), panel.columns ?? program.columns, panel.rows, display)}>{panelDonors(panel).slice(0, (panel.rows ?? Math.max(1, Math.ceil(panelDonors(panel).length / (panel.columns ?? program.columns)))) * (panel.columns ?? program.columns)).map((donor) => <DirectBoardDonorName donor={donor} display={display} panel={panel} palette={palette} onRename={onRenameDonor} key={donor.id} />)}{!panelDonors(panel).length && <button className="empty-board-action" type="button">Select donors or recognition levels in the inspector</button>}</div>}
         {panel.type === "message" && <AutoFitBoardContent className="direct-message-content"><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></AutoFitBoardContent>}
         {panel.type === "story" && <><div className="direct-story-image" style={state.board.storyImageUrl ? { backgroundImage: `url(${state.board.storyImageUrl})` } : undefined}><ImageIcon size={22} /></div><AutoFitBoardContent className="direct-story-copy"><EditableBoardText className="board-eyebrow" value={panel.eyebrow ?? ""} onCommit={(value) => commitText(panel, "eyebrow", value)} /><EditableBoardText className="board-message-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /><EditableBoardText className="board-copy" value={panel.body ?? ""} onCommit={(value) => commitText(panel, "body", value)} /></AutoFitBoardContent></>}
         {panel.type === "image" && <div className={`direct-image-panel fit-${panel.imageFit ?? "contain"}`}>{panel.imageUrl ? <img src={resolveProjectAssetUrl(panel.imageUrl)} alt="" /> : <><ImagePlus size={28} /><span>Choose an image in the right menu</span></>}</div>}
@@ -4180,20 +4188,19 @@ function directDonorGridStyle(donors: Donor[], columns: number, requestedRows: n
   } as React.CSSProperties;
 }
 
-function DirectBoardDonorName({ donor, display, program, palette, fontFamily, onRename }: {
+function DirectBoardDonorName({ donor, display, panel, palette, onRename }: {
   donor: Donor;
   display: DisplayProfile;
-  program: DonorBoardProgram;
+  panel: BoardPanel;
   palette: ReturnType<typeof boardPreviewPalette>;
-  fontFamily: NonNullable<BoardPanel["fontFamily"]>;
   onRename: (donorId: string, name: string) => void;
 }) {
-  const presentation = resolveBoardDonorPresentation(program, donor.id, {
-    fontFamily,
+  const presentation = resolveBoardDonorPresentation(panel, donor.id, {
+    fontFamily: panel.fontFamily ?? "Montserrat",
     nameColor: palette.text,
     accentColor: palette.accent
   });
-  const showIcon = (program.showIcons ?? display.showIcons) && presentation.recognitionIcon !== "none";
+  const showIcon = Boolean(panel.showIcons) && presentation.recognitionIcon !== "none";
   return <div
     className={`direct-donor-name board-highlight-${presentation.highlight} board-animation-${presentation.animation}`}
     style={{
@@ -4851,16 +4858,28 @@ function AnnouncementsView({
       <div className="workspace-tabbar"><span>Compose, save, schedule, and broadcast messages to your displays.</span></div>
       <div className="announcement-deck">
         <div className="form-panel announcement-form">
-          <div className="panel-heading composer-heading"><div><p className="eyebrow">Message composer</p><h2>Create an announcement <InfoDot text="Short messages that temporarily appear on selected displays." /></h2><small>Write the message, choose where it appears, then preview or send it.</small></div>{state.announcement.active && <span className="state-dot active">Broadcasting</span>}</div>
-          <section className="composer-section primary-section">
-            <header><span>1</span><div><strong>Message</strong><small>Keep it short enough to read at a glance.</small></div></header>
+          <div className="announcement-form-fixed">
+            <div className="panel-heading composer-heading"><div><p className="eyebrow">Message composer</p><h2>Create an announcement <InfoDot text="Short messages that temporarily appear on selected displays." /></h2><small>Write the message, choose where it appears, then preview or send it.</small></div><div className="composer-header-actions">{state.announcement.active && <span className="state-dot active">Broadcasting</span>}<button className={state.announcement.active ? "command-button danger" : "command-button primary"} onClick={toggleAnnouncement}><Megaphone size={18} />{state.announcement.active ? "End announcement" : "Send announcement"}</button></div></div>
+            <section className="saved-announcement-picker" aria-label="Saved announcements">
+              <span><Save size={15} /> Saved announcements</span>
+              <select aria-label="Choose saved announcement" value={selectedSavedId ?? ""} onChange={(event) => event.target.value ? loadSavedAnnouncement(event.target.value) : newAnnouncement()}>
+                <option value="">Unsaved draft</option>
+                {state.savedAnnouncements.map((item) => <option key={item.id} value={item.id}>{item.title || "Untitled announcement"}</option>)}
+              </select>
+              <small>{state.savedAnnouncements.length} saved</small>
+              <div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={newAnnouncement}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div>
+            </section>
+          </div>
+          <div className="announcement-form-scroll">
+          <details className="composer-section primary-section" open>
+            <summary><span>1</span><div><strong>Message</strong><small>Keep it short enough to read at a glance.</small></div><ChevronDown size={16} /></summary>
             <div className="composer-message-grid"><LabeledInput label="Headline" info="Large headline shown on the announcement." value={state.announcement.title} onChange={(value) => patchAnnouncement({ title: value })} /><LabeledInput label="Supporting message" info="Supporting text below the headline." value={state.announcement.message} onChange={(value) => patchAnnouncement({ message: value })} /></div>
             <label className="field announcement-details-field"><span>Details <InfoDot text="Optional smaller text displayed in a bordered detail panel." /></span><textarea rows={4} value={state.announcement.details ?? ""} onChange={(event) => patchAnnouncement({ details: event.target.value })} placeholder="Add supporting details…" /></label>
             <div className="announcement-color-row"><ColorControl label="Text color" value={state.announcement.textColor ?? "#10131f"} onChange={(textColor) => patchAnnouncement({ textColor })} /><ColorControl label="Background" value={state.announcement.backgroundColor ?? "#f3efe0"} onChange={(backgroundColor) => patchAnnouncement({ backgroundColor })} /></div>
             {state.announcement.imageUrl && !isTicker && <div className="three-col compact-image-controls"><Slider label="Image X" info="Move the announcement image horizontally." value={state.announcement.imageX ?? 72} min={0} max={100} onChange={(imageX) => patchAnnouncement({ imageX })} /><Slider label="Image Y" info="Move the announcement image vertically." value={state.announcement.imageY ?? 50} min={0} max={100} onChange={(imageY) => patchAnnouncement({ imageY })} /><Slider label="Image size" info="Adjust the announcement image width." value={state.announcement.imageWidth ?? 22} min={5} max={70} onChange={(imageWidth) => patchAnnouncement({ imageWidth })} /></div>}
-          </section>
-          <section className="composer-section delivery-section">
-            <header><span>3</span><div><strong>Delivery</strong><small>Choose the audience, layout, schedule, and how long it stays visible.</small></div></header>
+          </details>
+          <details className="composer-section delivery-section">
+            <summary><span>3</span><div><strong>Delivery</strong><small>Choose the audience, layout, schedule, and how long it stays visible.</small></div><ChevronDown size={16} /></summary>
             <div className="announcement-target-picker"><span>Send to</span>{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={selectedTargets.includes(screen.id)} onChange={() => toggleAnnouncementTarget(screen.id)} />{screen.label}</label>)}</div>
             <div className="two-col">
               <LabeledSelect label="Layout" info="The announcement layout used on the display." value={state.announcement.style} options={["Ribbon", "Temporary Card", "Lower Third", "News Ticker"]} onChange={(value) => {
@@ -4909,7 +4928,7 @@ function AnnouncementsView({
                 <Slider label="Text width" info="Width of the draggable announcement text box." value={state.announcement.layoutWidth ?? (state.announcement.style === "News Ticker" ? 96 : state.announcement.style === "Ribbon" ? 90 : 78)} min={20} max={96} onChange={(layoutWidth) => patchAnnouncement({ layoutWidth })} />
               </div>
             </div>
-          </section>
+          </details>
           <details className="composer-section optional-section">
             <summary><span>2</span><div><strong>Optional enhancements</strong><small>{isTicker ? "Countdown, sounds, and walk-on character" : "Image, countdown, sounds, and walk-on character"}</small></div><ChevronDown size={16} /></summary>
             <div className="optional-section-body">
@@ -4953,26 +4972,16 @@ function AnnouncementsView({
               <div className="sound-pickers"><SoundPicker label="Sound at start" value={state.announcement.startSoundUrl} onChange={(value) => patchAnnouncement({ startSoundUrl: value })} /><SoundPicker label="Sound at finish" value={state.announcement.endSoundUrl} onChange={(value) => patchAnnouncement({ endSoundUrl: value })} /></div>
             </div>
           </details>
-          <div className="announcement-actions composer-actions"><div><small>{previewLabel} · {state.announcement.durationMinutes ? `${state.announcement.durationMinutes} minutes` : "Manual end"}</small></div><button className={state.announcement.active ? "command-button danger" : "command-button primary"} onClick={toggleAnnouncement}><Megaphone size={18} />{state.announcement.active ? "End announcement" : "Send announcement"}</button></div>
-          <section className="saved-announcement-picker" aria-label="Saved announcements">
-            <span><Save size={15} /> Saved announcements</span>
-            <select aria-label="Choose saved announcement" value={selectedSavedId ?? ""} onChange={(event) => event.target.value ? loadSavedAnnouncement(event.target.value) : newAnnouncement()}>
-              <option value="">Unsaved draft</option>
-              {state.savedAnnouncements.map((item) => <option key={item.id} value={item.id}>{item.title || "Untitled announcement"}</option>)}
-            </select>
-            <small>{state.savedAnnouncements.length} saved</small>
-            <div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={newAnnouncement}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div>
-          </section>
+          </div>
         </div>
         <div className="announcement-preview-card">
           <header className="announcement-preview-header">
-            <div className="announcement-preview-tools"><label className="announcement-preview-display-select"><Monitor size={15} /><span>Preview format</span><select aria-label="Preview format" value={previewScreen.id} onChange={(event) => setPreviewScreenId(event.target.value as ScreenId)}>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label} · {screen.orientation}</option>)}</select></label><div className="announcement-preview-aspect" role="group" aria-label="Announcement layout aspect"><button type="button" className={previewScreen.orientation === "Portrait" ? "active" : ""} onClick={() => { const screen = Object.values(state.screens).find((item) => item.orientation === "Portrait"); if (screen) setPreviewScreenId(screen.id); }}>Portrait</button><button type="button" className={previewScreen.orientation === "Landscape" ? "active" : ""} onClick={() => { const screen = Object.values(state.screens).find((item) => item.orientation === "Landscape"); if (screen) setPreviewScreenId(screen.id); }}>Landscape</button></div><div className="announcement-preview-header-actions"><div className="announcement-preview-actions"><button type="button" className="command-button secondary compact" onClick={openAnnouncementDemo}><ExternalLink size={15} /> Preview</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save announcement"}</button></div><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div></div>
+            <div className="announcement-preview-tools"><div className="announcement-preview-format-label"><Monitor size={15} /><span>Preview format</span></div><div className="announcement-preview-aspect" role="group" aria-label="Announcement layout aspect"><button type="button" className={previewScreen.orientation === "Portrait" ? "active" : ""} onClick={() => { const screen = Object.values(state.screens).find((item) => item.orientation === "Portrait"); if (screen) setPreviewScreenId(screen.id); }}>Portrait</button><button type="button" className={previewScreen.orientation === "Landscape" ? "active" : ""} onClick={() => { const screen = Object.values(state.screens).find((item) => item.orientation === "Landscape"); if (screen) setPreviewScreenId(screen.id); }}>Landscape</button></div><div className="announcement-preview-header-actions"><div className="announcement-preview-actions"><button type="button" className="command-button secondary compact" onClick={openAnnouncementDemo}><ExternalLink size={15} /> Preview</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save announcement"}</button></div><button className="icon-button" onClick={() => document.querySelector<HTMLElement>(".announcement-preview-stage")?.requestFullscreen()} title="Full screen preview"><Maximize2 size={16} /></button></div></div>
           </header>
           <p className="eyebrow">Live preview · {previewLabel}</p>
           <div className={`announcement-preview-stage ${orientationClass(previewScreen)}`}>
             <AnnouncementMonitorSurface state={state} screen={previewScreen} announcement={state.announcement} onPatch={patchAnnouncement} />
           </div>
-          <div className="preview-meta"><span><Monitor size={15} />{previewScreen.label}</span><span><History size={15} />{state.announcement.durationMinutes ? `${state.announcement.durationMinutes} min` : "Manual"}</span></div>
         </div>
       </div>
       {scheduleAnnouncementId && createPortal(<div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setScheduleAnnouncementId(null); }}>
@@ -5084,6 +5093,7 @@ function DirectLiveStage({
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [confirmPolygonReset, setConfirmPolygonReset] = useState(false);
   const [controlHeld, setControlHeld] = useState(false);
+  const [broadcastSurface, setBroadcastSurface] = useState<HTMLCanvasElement | HTMLVideoElement | null>(null);
   const displayLive = liveCompositionForDisplay(live, screen.id);
   const composedLive = normalizeBroadcastComposition(frameDraft ? { ...displayLive, frame: frameDraft } : displayLive);
   const scheduledBoard = resolveCurrentBoardSchedule(state, screen.id);
@@ -5092,6 +5102,7 @@ function DirectLiveStage({
   const backgroundBoardId = boardProgramId ?? scheduledBoard?.boardId;
   const hasBoardBackground = showBoard && Boolean(backgroundBoardId);
   const hasUnscheduledDisplayBackground = showBoard && !backgroundBoardId;
+  const textureBacked3d = hasBoardBackground && boardViewMode === "3d";
   const activeCostume = state.effectStudio.costumes.find((costume) => costume.id === composedLive.effects.costumeId);
   const activeCalibration = state.effectStudio.calibrationProfiles.find((profile) => profile.id === composedLive.effects.calibrationProfileId);
   const trackedCostumeRenderer = useMemo(() => composedLive.effects.costumeEnabled && activeCostume
@@ -5311,7 +5322,7 @@ function DirectLiveStage({
       <div ref={stageRef} className={`direct-live-stage ${orientationClass(screen)}`}>
         <div className="direct-stage-board">
           {hasBoardBackground
-            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={backgroundBoardId} interactive={interactive && boardViewMode === "3d"} fitToScreen viewMode={boardViewMode} />
+            ? <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={backgroundBoardId} interactive={interactive && boardViewMode === "3d"} fitToScreen viewMode={boardViewMode} broadcastOverlay={textureBacked3d ? { live: composedLive, surface: broadcastSurface } : undefined} />
             : hasUnscheduledDisplayBackground
               ? <div className="direct-unscheduled-backdrop"><span>No scheduled boards or events</span></div>
             : composedLive.backgroundMode === "none"
@@ -5319,7 +5330,8 @@ function DirectLiveStage({
               : <div className="broadcast-only-backdrop"><Radio size={24} /><span>Broadcast only</span></div>}
         </div>
         {!hasBoardBackground && !hasUnscheduledDisplayBackground && <BroadcastBackgroundLayer live={composedLive} orientation={screen.orientation} className="direct-broadcast-background" />}
-        <div
+        {textureBacked3d && stream && <div className="broadcast-texture-source" aria-hidden="true"><ChromaVideo stream={stream} chromaKey={composedLive.chromaKey} effects={composedLive.effects} crop={composedLive.frame.crop} fitMode={composedLive.frame.fitMode} onTrackingStatus={onTrackingStatus} onMediaSurfaceChange={setBroadcastSurface} renderTrackedOverlay={trackedCostumeRenderer} /></div>}
+        {!textureBacked3d && <><div
           className={`direct-live-frame ${interactionMode === "crop" ? "crop-mode" : ""}`}
           style={{ left: `${composedLive.frame.x}%`, top: `${composedLive.frame.y}%`, width: `${composedLive.frame.width}%`, height: `${composedLive.frame.height}%` }}
           onPointerDown={(event) => {
@@ -5400,7 +5412,7 @@ function DirectLiveStage({
           {interactive && <span className="direct-frame-size">{Math.round(composedLive.frame.width)} × {Math.round(composedLive.frame.height)}</span>}
         </div>
         <div className="direct-broadcast-text direct-broadcast-title" aria-label={interactive ? "Move broadcast title" : "Broadcast title"} style={{ left: `${composedLive.titlePosition.x}%`, top: `${composedLive.titlePosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "title") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><strong>{composedLive.title}</strong></div>
-        <div className="direct-broadcast-text direct-broadcast-lower-third" aria-label={interactive ? "Move broadcast lower third" : "Broadcast lower third"} style={{ left: `${composedLive.lowerThirdPosition.x}%`, top: `${composedLive.lowerThirdPosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "lower-third") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={interactive ? finishTextDrag : undefined} onPointerCancel={interactive ? finishTextDrag : undefined}><span>{composedLive.lowerThird}</span></div>
+        <div className="direct-broadcast-text direct-broadcast-lower-third" aria-label={interactive ? "Move broadcast lower third" : "Broadcast lower third"} style={{ left: `${composedLive.lowerThirdPosition.x}%`, top: `${composedLive.lowerThirdPosition.y}%` }} onPointerDown={interactive ? (event) => beginTextDrag(event, "lower-third") : undefined} onPointerMove={interactive ? moveTextDrag : undefined} onPointerUp={finishTextDrag} onPointerCancel={finishTextDrag}><span>{composedLive.lowerThird}</span></div></>}
       </div>
       {confirmPolygonReset && <LanternConfirmDialog
         eyebrow="Custom camera mask"
@@ -6377,7 +6389,8 @@ function LivePreviewPanel({
         </div>
       </div>}
       {liveTab === "effects" && <div className="live-toolbox live-tab-panel effects-tab">
-        <div className="effect-section-heading"><h3>Background Removal</h3><span>One local pipeline at a time</span></div>
+        <section className="effect-settings-card background-removal-card">
+        <div className="effect-card-heading"><div><strong>Background removal</strong><span>One local pipeline at a time</span></div><b>LOCAL</b></div>
         <label className="switch-row background-removal-toggle">
           <input type="checkbox" checked={backgroundRemoval.enabled} onChange={(event) => setBackgroundRemovalEnabled(event.target.checked)} />
           <span><strong>Background Removal</strong><small>{backgroundRemoval.enabled ? `On — ${selectedRemovalMethod === "chroma" ? "Chroma Key" : "Screenless Removal"}` : "Off — the camera background remains visible"}</small></span>
@@ -6388,6 +6401,7 @@ function LivePreviewPanel({
           <p className="background-removal-help"><strong>Chroma Key</strong> removes a chosen backdrop color. <strong>Screenless Removal</strong> uses {SCREENLESS_REMOVAL_TECHNOLOGY.name} ({SCREENLESS_REMOVAL_TECHNOLOGY.model}) locally in this browser. They are separate pipelines and cannot be combined; camera frames are not sent to a background-removal service.</p>
         </div>}
 
+        </section>
         {backgroundRemoval.enabled && selectedRemovalMethod === "chroma" && <section className="effect-settings-card chroma-settings-card">
           <div className="effect-card-heading"><div><strong>Chroma Key</strong><span>Choose or sample the color of a physical backdrop</span></div><b>LOCAL</b></div>
           <div className="chroma-preset-row" role="group" aria-label="Chroma Key color presets">
@@ -6532,7 +6546,7 @@ function AnnouncementMonitorSurface({
     <div className="monitor-view-controls">
       {onPatch && <button type="button" className={editing ? "active edit-toggle" : "edit-toggle"} onClick={() => setEditing((current) => !current)}><Pencil size={14} /> {editing ? "Finish editing" : "Edit"}</button>}
       <button type="button" className={viewMode === "2d" ? "active" : ""} onClick={() => setMode("2d")}><Monitor size={14} /> 2D</button>
-      <button type="button" className={viewMode === "3d" ? "active" : ""} onClick={() => setMode("3d")}><Rotate3d size={14} /> 3D</button>
+      <button type="button" className={viewMode === "3d" ? "active" : ""} onClick={() => { setEditing(false); setMode("3d"); }}><Rotate3d size={14} /> 3D</button>
       <button type="button" onClick={() => setView((current) => ({ ...current, zoom: clamp(current.zoom - .12, .45, 2.5) }))} title="Zoom out"><ZoomOut size={14} /></button>
       <span>{Math.round(view.zoom * 100)}%</span>
       <button type="button" onClick={() => setView((current) => ({ ...current, zoom: clamp(current.zoom + .12, .45, 2.5) }))} title="Zoom in"><ZoomIn size={14} /></button>
@@ -6543,8 +6557,8 @@ function AnnouncementMonitorSurface({
       setView((current) => ({ ...current, zoom: clamp(current.zoom + (event.deltaY < 0 ? .1 : -.1), .45, 2.5) }));
     }}>
       <div className={`announcement-monitor-surface ${orientationClass(screen)}`} style={{ transform }}>
-        <BabylonDonorWall state={state} screenId={screen.id} interactive={viewMode === "3d" && !editing} fitToScreen viewMode={viewMode} announcementCharacter={announcement.character} announcementActive announcementCharacterAsset={announcement} />
-        <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} editing={editing} onPatch={onPatch} />
+        <BabylonDonorWall state={state} screenId={screen.id} interactive={viewMode === "3d" && !editing} fitToScreen viewMode={viewMode} announcementCharacter={announcement.character} announcementActive announcementCharacterAsset={announcement} announcementOverlay={viewMode === "3d" ? announcement : undefined} />
+        {viewMode === "2d" && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} editing={editing} onPatch={onPatch} />}
       </div>
     </div>
     <div className="monitor-view-hint">{editing ? <><Move size={13} /> Drag the text box, timer, or image · click text to edit</> : viewMode === "3d" ? <><Move3d size={13} /> Drag to orbit · Shift-drag to pan · wheel to zoom</> : <><Move size={13} /> Drag to pan · wheel to zoom</>}</div>
@@ -8223,6 +8237,7 @@ function RecognitionSettingsView({ state, updateState, appearance, onAppearanceC
   onAppearanceChange: (appearance: LanternState["recognitionSettings"]["appearance"]) => void;
   onAddDisplay: () => void;
 }) {
+  const [vocabularyExpanded, setVocabularyExpanded] = useState(true);
   const changeVocabulary = (kind: "tiers" | "categories" | "tags", next: string[], previous?: string, replacement?: string) => {
     updateState((current) => ({
       ...current,
@@ -8268,22 +8283,18 @@ function RecognitionSettingsView({ state, updateState, appearance, onAppearanceC
         </div>
         <button type="button" className="command-button primary" onClick={onAddDisplay}><Plus size={16} /> Add display</button>
       </section>
-      <div className="settings-intro">
+      <button type="button" className={`settings-intro vocabulary-toggle${vocabularyExpanded ? " expanded" : ""}`} onClick={() => setVocabularyExpanded((expanded) => !expanded)} aria-expanded={vocabularyExpanded} aria-controls="donor-vocabulary-options">
         <div>
           <p className="eyebrow">Recognition controls</p>
           <h2>Donor vocabulary</h2>
         </div>
-        <div className="settings-summary-strip" aria-label="Vocabulary totals">
-          <span><b>{state.recognitionSettings.tiers.length}</b> tiers</span>
-          <span><b>{state.recognitionSettings.categories.length}</b> categories</span>
-          <span><b>{state.recognitionSettings.tags.length}</b> tags</span>
-        </div>
-      </div>
-      <div className="settings-columns">
-        <VocabularyEditor title="Tiers" description="Recognition levels" values={state.recognitionSettings.tiers} onChange={(next, previous, replacement) => changeVocabulary("tiers", next, previous, replacement)} />
-        <VocabularyEditor title="Categories" description="Donor types" values={state.recognitionSettings.categories} onChange={(next, previous, replacement) => changeVocabulary("categories", next, previous, replacement)} />
-        <VocabularyEditor title="Tags" description="Search labels" values={state.recognitionSettings.tags} onChange={(next, previous, replacement) => changeVocabulary("tags", next, previous, replacement)} />
-      </div>
+        <ChevronDown size={20} aria-hidden="true" />
+      </button>
+      {vocabularyExpanded && <div className="settings-columns" id="donor-vocabulary-options">
+          <VocabularyEditor title="Tiers" description="Recognition levels" values={state.recognitionSettings.tiers} onChange={(next, previous, replacement) => changeVocabulary("tiers", next, previous, replacement)} />
+          <VocabularyEditor title="Categories" description="Donor types" values={state.recognitionSettings.categories} onChange={(next, previous, replacement) => changeVocabulary("categories", next, previous, replacement)} />
+          <VocabularyEditor title="Tags" description="Search labels" values={state.recognitionSettings.tags} onChange={(next, previous, replacement) => changeVocabulary("tags", next, previous, replacement)} />
+        </div>}
       <GivingProgramsEditor state={state} updateState={updateState} />
     </section>
   );

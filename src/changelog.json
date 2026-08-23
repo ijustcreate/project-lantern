@@ -1,5 +1,334 @@
 [
   {
+    "id": "DEV-0317",
+    "title": "Refine Broadcast effects inspector",
+    "summary": "Nest related Broadcast effects controls into clearer cards and provide palette-specific contrast across every portal theme.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:02 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit; git diff --check"
+  },
+  {
+    "id": "DEV-0316",
+    "title": "Anchor Broadcast 3D composition",
+    "summary": "Render Broadcast/Stream video, effects, frame, title, and lower-third in the rotating display texture for 3D previews.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:58 AM",
+    "areas": [
+      "Broadcast/Stream",
+      "3D previews"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; TypeScript and production build started without errors before local timeout"
+  },
+  {
+    "id": "DEV-0315",
+    "title": "Theme Giving programs for light mode",
+    "summary": "Added a complete light palette for Giving programs and levels so cards, expanded bodies, labels, and level editors no longer retain dark fallbacks.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:53 AM",
+    "areas": [
+      "Settings",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "git diff --check"
+  },
+  {
+    "id": "DEV-0314",
+    "title": "Collapse donor vocabulary controls",
+    "summary": "Removed the Donor vocabulary totals and added a header toggle so Tiers, Categories, and Tags can be shown or hidden as needed.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:52 AM",
+    "areas": [
+      "Settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Confirmed removed summary styles have no remaining source references; git diff --check"
+  },
+  {
+    "id": "DEV-0313",
+    "title": "Improve light-theme delete bug contrast",
+    "summary": "Gave the Bug Catalogue Delete bug action a readable light-theme destructive treatment with a distinct hover state.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:49 AM",
+    "areas": [
+      "Bugs",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "git diff --check"
+  },
+  {
+    "id": "DEV-0312",
+    "title": "Unify operator selector",
+    "summary": "Reformatted the global operator selector to match the Bug Catalogue control and removed the redundant active-user selector from Bugs.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:25 AM",
+    "areas": [
+      "Global navigation",
+      "Bugs"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Confirmed removed picker and prompt references have no remaining source matches; git diff --check"
+  },
+  {
+    "id": "DEV-0311",
+    "title": "Free announcement preview space",
+    "summary": "Removed the display and duration footer from the announcement preview, allowing the monitor stage to use the released vertical space.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:22 AM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Confirmed removed preview metadata and selector styles have no remaining references; git diff --check"
+  },
+  {
+    "id": "DEV-0310",
+    "title": "Remove duplicate preview selector",
+    "summary": "Removed the announcement preview display dropdown because its portrait and landscape choices duplicated the adjacent format buttons.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:19 AM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; TypeScript check started without errors before local timeout"
+  },
+  {
+    "id": "DEV-0309",
+    "title": "Remove duplicate preview selector",
+    "summary": "Removed the announcement preview display dropdown because its portrait and landscape choices duplicated the adjacent format buttons.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:18 AM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; TypeScript check started without errors before local timeout"
+  },
+  {
+    "id": "DEV-0308",
+    "title": "Anchor 3D display overlays",
+    "summary": "Render announcement and Blip overlays in the 3D display texture so they remain inside the physical frame and rotate with the monitor.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:15 AM",
+    "areas": [
+      "Announcements",
+      "Dashboard displays",
+      "3D previews"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "git diff --check; TypeScript and production build started without errors before local timeout"
+  },
+  {
+    "id": "DEV-0307",
+    "title": "Make announcement sections collapsible",
+    "summary": "Message and Delivery now share Optional enhancements' expand and hide control in the Announcements composer.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:08 AM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Focused source inspection and git diff --check; npm run build showed no errors before the local 30-second command window"
+  },
+  {
+    "id": "DEV-0306",
+    "title": "Fix announcement dropdown theme colors",
+    "summary": "Announcements composer dropdowns, including Countdown, now use native option colors that match the active theme.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:06 AM",
+    "areas": [
+      "Announcements",
+      "Site themes"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Focused style inspection and git diff --check"
+  },
+  {
+    "id": "DEV-0305",
+    "title": "Theme announcement preview workspace",
+    "summary": "Announcement preview controls and surrounding chrome now match every site theme, while the simulated display remains dark.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:05 AM",
+    "areas": [
+      "Announcements",
+      "Site themes"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Focused style inspection and git diff --check"
+  },
+  {
+    "id": "DEV-0304",
+    "title": "Refine announcement composer layout",
+    "summary": "Send announcement now stays in the composer header while the title and saved-announcement controls remain fixed above a scrolling form area.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 11:03 AM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Focused source inspection and git diff --check; npm run build showed no errors before the local 30-second command window"
+  },
+  {
+    "id": "DEV-0303",
+    "title": "Fix Schedule display filter colors",
+    "summary": "The Dark-theme display filter now uses a dark native dropdown and readable option colors.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:57 AM",
+    "areas": [
+      "Schedule",
+      "Dark theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Focused style inspection and git diff --check"
+  },
+  {
+    "id": "DEV-0302",
+    "title": "Fix Schedule light-theme calendar views",
+    "summary": "Month and agenda views now use readable light surfaces and high-contrast event cards while retaining event-type colors.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:55 AM",
+    "areas": [
+      "Schedule",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Focused style inspection and git diff --check"
+  },
+  {
+    "id": "DEV-0301",
+    "title": "Improve Board Editor light-theme contrast",
+    "summary": "The selected-element Content heading is readable in Light mode, and its redundant direct-edit helper text has been removed.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:53 AM",
+    "areas": [
+      "Board Editor",
+      "Light theme"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Focused source inspection and git diff --check"
+  },
+  {
+    "id": "DEV-0300",
+    "title": "Organize boards into folders",
+    "summary": "Board settings now saves a folder assignment, board pickers honor it, and Board Editor popovers close when clicking outside.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:52 AM",
+    "areas": [
+      "Board Editor",
+      "Board navigation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts"
+    ],
+    "tests": "Focused source checks and git diff --check; npm run build started without compiler errors but exceeded the local 30-second command window"
+  },
+  {
+    "id": "DEV-0299",
+    "title": "Move donor presentation into donor-list panels",
+    "summary": "Removed donor presentation from Board settings and made donor styling and recognition icons specific to each donor-list panel.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:47 AM",
+    "areas": [
+      "Board Editor",
+      "Board rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/boardPresentation.ts",
+      "src/components/BoardDonorPresentationEditor.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "git diff --check; focused panel presentation source checks"
+  },
+  {
+    "id": "DEV-0298",
+    "title": "Improve light-theme typography controls",
+    "summary": "Made Board Editor typography steppers, formatting buttons, and alignment controls readable in the Light theme.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:42 AM",
+    "areas": [
+      "Board Editor",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; focused light-theme typography CSS source checks"
+  },
+  {
+    "id": "DEV-0297",
+    "title": "Improve light-theme donor roster contrast",
+    "summary": "Made Board Editor donor roster names, selected rows, actions, and paging readable in the Light theme.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 10:40 AM",
+    "areas": [
+      "Board Editor",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "git diff --check; focused light-theme CSS source checks"
+  },
+  {
     "id": "DEV-0296",
     "title": "Use dashboard 3D renderer for announcements",
     "summary": "Updated the Announcements preview to use the same Babylon 3D board mode and camera interaction as dashboard display previews.",

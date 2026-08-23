@@ -881,9 +881,8 @@ function migrateLegacyDonorPresentation(
 }
 
 function migrateUnifiedBoardPanels(programs: LanternState["boardPrograms"], donors: Donor[]): LanternState["boardPrograms"] {
-  return programs.map((program) => ({
-    ...program,
-    panels: program.panels?.flatMap((panel): BoardPanel[] => {
+  return programs.map((program) => {
+    const panels = program.panels?.flatMap((panel): BoardPanel[] => {
       if (["text", "donors", "image"].includes(panel.type)) return [panel];
       if (panel.type === "donor-star") {
         const groupId = panel.groupId ?? `group-${panel.id}`;
@@ -894,8 +893,22 @@ function migrateUnifiedBoardPanels(programs: LanternState["boardPrograms"], dono
         ];
       }
       return [{ ...panel, type: "text", title: [panel.eyebrow, panel.title, panel.body].filter(Boolean).join("\n"), eyebrow: undefined, body: undefined, donorId: undefined }];
-    })
-  }));
+    });
+    const hasDonorPanel = panels?.some((panel) => panel.type === "donors");
+    return {
+      ...program,
+      // Older boards stored one presentation on the board. Move that data into
+      // each donor-list panel once so individual lists can now be styled independently.
+      donorPresentation: hasDonorPanel ? undefined : program.donorPresentation,
+      donorStyles: hasDonorPanel ? undefined : program.donorStyles,
+      panels: panels?.map((panel) => panel.type === "donors" ? {
+        ...panel,
+        donorPresentation: panel.donorPresentation ?? program.donorPresentation,
+        donorStyles: panel.donorStyles ?? program.donorStyles,
+        showIcons: panel.showIcons ?? program.showIcons
+      } : panel)
+    };
+  });
 }
 
 function donorIdentityKey(value: string) {

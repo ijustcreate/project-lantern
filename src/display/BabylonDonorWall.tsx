@@ -20,7 +20,7 @@ import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import "@babylonjs/core/Meshes/Builders/tubeBuilder";
-import type { Announcement, BoardDonorAnimation, BoardDonorHighlight, DisplayProfile, Donor, LanternState, RecognitionIcon, ScreenId } from "../types";
+import type { Announcement, Blip, BoardDonorAnimation, BoardDonorHighlight, DisplayProfile, Donor, LanternState, RecognitionIcon, ScreenId } from "../types";
 import { boardUsesDonorAnimation, resolveBoardDonorPresentation, type ResolvedBoardDonorPresentation } from "../boardPresentation";
 import { buildDonorNameGridLayout, splitDonorNameLines } from "../donorNameLayout";
 import { resolveActiveBoardProgram } from "../scheduleResolution";
@@ -36,6 +36,12 @@ interface BabylonDonorWallProps {
   announcementCharacter?: Announcement["character"];
   announcementCharacterAsset?: Announcement;
   announcementActive?: boolean;
+  /** Baked into the panel texture so it remains physically attached in 3D. */
+  announcementOverlay?: Announcement;
+  /** Baked into the panel texture so it remains physically attached in 3D. */
+  blipOverlay?: Blip;
+  /** Broadcast composition rendered into the panel texture for 3D previews. */
+  broadcastOverlay?: { live: LanternState["live"]; surface?: HTMLCanvasElement | HTMLVideoElement | null };
 }
 
 const backgroundMediaCache = new Map<string, HTMLImageElement | HTMLVideoElement>();
@@ -46,7 +52,7 @@ const boardPanelImageCache = new Map<string, HTMLImageElement>();
 // dashboard console. Rendering failures still surface as Babylon errors.
 Logger.LogLevels = Logger.ErrorLogLevel;
 
-export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId) }: BabylonDonorWallProps) {
+export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), announcementOverlay, blipOverlay, broadcastOverlay }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previousAnnouncementActive = useRef(announcementActive);
   const [scheduleMinute, setScheduleMinute] = useState(() => Math.floor(Date.now() / 60_000));
@@ -102,10 +108,39 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
             characterWalkSeconds: announcementCharacterAsset.characterWalkSeconds,
             characterWaitSeconds: announcementCharacterAsset.characterWaitSeconds
           } : null,
-        announcementActive
+        announcementActive,
+        announcementOverlay: announcementOverlay ? {
+          title: announcementOverlay.title,
+          message: announcementOverlay.message,
+          details: announcementOverlay.details,
+          style: announcementOverlay.style,
+          textColor: announcementOverlay.textColor,
+          backgroundColor: announcementOverlay.backgroundColor,
+          layoutX: announcementOverlay.layoutX,
+          layoutY: announcementOverlay.layoutY,
+          layoutWidth: announcementOverlay.layoutWidth
+        } : null,
+        blipOverlay: blipOverlay ? {
+          kind: blipOverlay.kind,
+          headline: blipOverlay.headline,
+          prompt: blipOverlay.prompt,
+          answer: blipOverlay.answer,
+          subtext: blipOverlay.subtext,
+          backgroundColor: blipOverlay.backgroundColor,
+          accentColor: blipOverlay.accentColor
+        } : null,
+        broadcastOverlay: broadcastOverlay ? {
+          source: broadcastOverlay.live.source,
+          title: broadcastOverlay.live.title,
+          lowerThird: broadcastOverlay.live.lowerThird,
+          frame: broadcastOverlay.live.frame,
+          titlePosition: broadcastOverlay.live.titlePosition,
+          lowerThirdPosition: broadcastOverlay.live.lowerThirdPosition,
+          surfaceReady: Boolean(broadcastOverlay.surface)
+        } : null
       });
     },
-    [state.revision, state.donors, state.board, state.boardPrograms, state.theme, state.screens, screenId, activeProgram?.id, announcementCharacter, announcementCharacterAsset, announcementActive]
+    [state.revision, state.donors, state.board, state.boardPrograms, state.theme, state.screens, screenId, activeProgram?.id, announcementCharacter, announcementCharacterAsset, announcementActive, announcementOverlay, blipOverlay, broadcastOverlay]
   );
 
   useEffect(() => {
@@ -249,7 +284,8 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     const textureNeedsContinuousRedraw = animatedBackground
       || (!reduceMotion && donorScrollEnabled)
       || animatedDonors
-      || animatedParticles;
+      || animatedParticles
+      || Boolean(broadcastOverlay?.surface);
     // A 4K board can be reduced to only a few hundred pixels in dashboard and
     // schedule previews. Static 2D boards get a mip pyramid so thin lettering
     // is properly prefiltered instead of being sampled straight from 4K. Keep
@@ -259,7 +295,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       && viewMode === "2d"
       && !textureNeedsContinuousRedraw
       && !engine.needPOTTextures;
-    const panelTexture = makePanelTexture(scene, state, screenId, screen, activeProgram?.id, generateStaticPreviewMipMaps);
+    const panelTexture = makePanelTexture(scene, state, screenId, screen, activeProgram?.id, generateStaticPreviewMipMaps, announcementOverlay, blipOverlay, broadcastOverlay);
     const texture = panelTexture.texture;
     texture.updateSamplingMode(generateStaticPreviewMipMaps ? Texture.LINEAR_LINEAR_MIPNEAREST : Texture.TRILINEAR_SAMPLINGMODE);
     texture.anisotropicFilteringLevel = 16;
@@ -399,7 +435,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
   </>;
 }
 
-function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, programId?: string, generateMipMaps = false) {
+function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId, screen: DisplayProfile, programId?: string, generateMipMaps = false, announcementOverlay?: Announcement, blipOverlay?: Blip, broadcastOverlay?: BabylonDonorWallProps["broadcastOverlay"]) {
   const isPortrait = screen.orientation === "Portrait";
   const width = isPortrait ? 2160 : 3840;
   const height = isPortrait ? 3840 : 2160;
@@ -408,7 +444,7 @@ function makePanelTexture(scene: Scene, state: LanternState, screenId: ScreenId,
 
   texture.hasAlpha = false;
   const redraw = (animationTime = performance.now()) => {
-    drawTextureContent(context, width, height, state, screenId, screen, programId, animationTime);
+    drawTextureContent(context, width, height, state, screenId, screen, programId, animationTime, announcementOverlay, blipOverlay, broadcastOverlay);
     texture.update(false);
   };
   redraw();
@@ -423,7 +459,10 @@ function drawTextureContent(
   screenId: ScreenId,
   screen: DisplayProfile,
   programId?: string,
-  animationTime = performance.now()
+  animationTime = performance.now(),
+  announcementOverlay?: Announcement,
+  blipOverlay?: Blip,
+  broadcastOverlay?: BabylonDonorWallProps["broadcastOverlay"]
 ) {
   const isPortrait = screen.orientation === "Portrait";
   const activeProgram = programId ? state.boardPrograms.find((program) => program.id === programId) : undefined;
@@ -458,6 +497,13 @@ function drawTextureContent(
       drawMuseumBoard(context, width, height, state, donors, isPortrait, screen.layoutScale, displayProgram, renderScreen, animationTime);
     }
 
+    // HTML overlays cannot share the perspective transform of a Babylon mesh.
+    // Draw active preview messages into the panel texture in 3D instead: the
+    // physical trim remains in front and the content now rotates with screen.
+    if (announcementOverlay) drawAnnouncementOverlay(context, width, height, announcementOverlay);
+    if (blipOverlay) drawBlipOverlay(context, width, height, blipOverlay);
+    if (broadcastOverlay) drawBroadcastOverlay(context, width, height, broadcastOverlay);
+
     // Composable boards are authored with exact colors in the board editor.
     // Legacy display layouts retain their output-level brightness control.
     if (!activeProgram?.panels?.length) applyBrightness(context, width, height, screen.brightness);
@@ -465,6 +511,207 @@ function drawTextureContent(
   };
 
   draw();
+}
+
+function drawAnnouncementOverlay(context: CanvasRenderingContext2D, width: number, height: number, announcement: Announcement) {
+  const isTicker = announcement.style === "News Ticker";
+  const defaultY = announcement.style === "Temporary Card" ? 50 : isTicker ? 91 : 88;
+  const defaultWidth = isTicker ? 96 : announcement.style === "Ribbon" ? 90 : 78;
+  const overlayWidth = width * clamp(announcement.layoutWidth ?? defaultWidth, 20, 96) / 100;
+  const centerX = width * clamp(announcement.layoutX ?? 50, 3, 97) / 100;
+  const centerY = height * clamp(announcement.layoutY ?? defaultY, 6, 94) / 100;
+  const background = announcement.backgroundColor || "#f8f0de";
+  const foreground = announcement.textColor || "#173f61";
+  const title = announcement.title || "Announcement title";
+  const message = announcement.message || "Your message appears here.";
+
+  context.save();
+  context.shadowColor = "rgba(0, 0, 0, 0.34)";
+  context.shadowBlur = Math.max(10, width * 0.012);
+  context.shadowOffsetY = Math.max(4, height * 0.008);
+  if (isTicker) {
+    const tickerHeight = height * 0.105;
+    const x = centerX - overlayWidth / 2;
+    const y = centerY - tickerHeight / 2;
+    roundedTextureRect(context, x, y, overlayWidth, tickerHeight, tickerHeight * 0.18);
+    context.fillStyle = background;
+    context.fill();
+    context.shadowColor = "transparent";
+    context.fillStyle = foreground;
+    context.font = `700 ${Math.round(tickerHeight * 0.28)}px Inter, Arial, sans-serif`;
+    context.textBaseline = "middle";
+    context.fillText([title, message, announcement.details].filter(Boolean).join("  •  "), x + tickerHeight * 0.32, centerY, overlayWidth - tickerHeight * 0.64);
+    context.restore();
+    return;
+  }
+
+  const titleSize = Math.max(28, Math.round(height * 0.036));
+  const bodySize = Math.max(20, Math.round(height * 0.022));
+  const detailSize = Math.max(16, Math.round(height * 0.016));
+  const contentWidth = overlayWidth * 0.82;
+  context.font = `700 ${titleSize}px Inter, Arial, sans-serif`;
+  const titleLines = textureLines(context, title, contentWidth, 2);
+  context.font = `600 ${bodySize}px Inter, Arial, sans-serif`;
+  const messageLines = textureLines(context, message, contentWidth, 3);
+  context.font = `${detailSize}px Inter, Arial, sans-serif`;
+  const detailLines = announcement.details ? textureLines(context, announcement.details, contentWidth, 2) : [];
+  const padding = Math.max(32, height * 0.032);
+  const lineHeight = bodySize * 1.3;
+  const cardHeight = Math.max(height * 0.18, padding * 2 + titleLines.length * titleSize * 1.18 + messageLines.length * lineHeight + detailLines.length * detailSize * 1.35 + (detailLines.length ? padding * 0.25 : 0));
+  const x = centerX - overlayWidth / 2;
+  const y = centerY - cardHeight / 2;
+  roundedTextureRect(context, x, y, overlayWidth, cardHeight, Math.min(42, cardHeight * 0.08));
+  context.fillStyle = background;
+  context.fill();
+  context.shadowColor = "transparent";
+  context.strokeStyle = "rgba(17, 38, 56, 0.18)";
+  context.lineWidth = Math.max(2, width * 0.0014);
+  context.stroke();
+  let textY = y + padding;
+  context.fillStyle = foreground;
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.font = `700 ${titleSize}px Inter, Arial, sans-serif`;
+  titleLines.forEach((line) => { context.fillText(line, x + overlayWidth * 0.09, textY); textY += titleSize * 1.18; });
+  textY += bodySize * 0.2;
+  context.font = `600 ${bodySize}px Inter, Arial, sans-serif`;
+  messageLines.forEach((line) => { context.fillText(line, x + overlayWidth * 0.09, textY); textY += lineHeight; });
+  if (detailLines.length) {
+    textY += detailSize * 0.35;
+    context.globalAlpha = 0.82;
+    context.font = `${detailSize}px Inter, Arial, sans-serif`;
+    detailLines.forEach((line) => { context.fillText(line, x + overlayWidth * 0.09, textY); textY += detailSize * 1.35; });
+  }
+  context.restore();
+}
+
+function drawBlipOverlay(context: CanvasRenderingContext2D, width: number, height: number, blip: Blip) {
+  const cardWidth = width * 0.8;
+  const cardHeight = height * 0.22;
+  const x = (width - cardWidth) / 2;
+  const y = height * 0.7;
+  context.save();
+  context.shadowColor = "rgba(0, 0, 0, 0.36)";
+  context.shadowBlur = width * 0.018;
+  context.shadowOffsetY = height * 0.012;
+  roundedTextureRect(context, x, y, cardWidth, cardHeight, Math.min(42, cardHeight * 0.12));
+  context.fillStyle = blip.backgroundColor || "#173f61";
+  context.fill();
+  context.shadowColor = "transparent";
+  context.fillStyle = blip.accentColor || "#75dcf6";
+  context.fillRect(x, y, Math.max(12, width * 0.008), cardHeight);
+  context.fillStyle = "#ffffff";
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  const insetX = x + cardWidth * 0.09;
+  let textY = y + cardHeight * 0.17;
+  context.globalAlpha = 0.76;
+  context.font = `700 ${Math.max(16, Math.round(height * 0.016))}px Inter, Arial, sans-serif`;
+  context.fillText(blip.kind === "celebration" ? "MUSEUM MOMENT" : blip.kind === "quiz" ? "THINK FAST" : "JUST FOR FUN", insetX, textY);
+  textY += cardHeight * 0.2;
+  context.globalAlpha = 1;
+  context.font = `700 ${Math.max(28, Math.round(height * 0.033))}px Inter, Arial, sans-serif`;
+  textureLines(context, blip.headline, cardWidth * 0.8, 2).forEach((line) => { context.fillText(line, insetX, textY); textY += height * 0.042; });
+  context.globalAlpha = 0.9;
+  context.font = `600 ${Math.max(18, Math.round(height * 0.02))}px Inter, Arial, sans-serif`;
+  textureLines(context, blip.prompt, cardWidth * 0.8, 2).forEach((line) => { context.fillText(line, insetX, textY); textY += height * 0.026; });
+  context.restore();
+}
+
+function drawBroadcastOverlay(context: CanvasRenderingContext2D, width: number, height: number, overlay: NonNullable<BabylonDonorWallProps["broadcastOverlay"]>) {
+  const { live, surface } = overlay;
+  const frame = live.frame;
+  const x = width * frame.x / 100;
+  const y = height * frame.y / 100;
+  const frameWidth = width * frame.width / 100;
+  const frameHeight = height * frame.height / 100;
+  context.save();
+  roundedTextureRect(context, x, y, frameWidth, frameHeight, Math.min(28, frameHeight * 0.035));
+  context.clip();
+  if (surface && ((surface instanceof HTMLCanvasElement && surface.width > 0) || (surface instanceof HTMLVideoElement && surface.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA))) {
+    context.save();
+    context.translate(x + frameWidth / 2, y + frameHeight / 2);
+    context.scale(frame.mirrorX ? -1 : 1, frame.mirrorY ? -1 : 1);
+    context.rotate((frame.rotation ?? 0) * Math.PI / 180);
+    context.drawImage(surface, -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight);
+    context.restore();
+  } else {
+    const fill = context.createLinearGradient(x, y, x + frameWidth, y + frameHeight);
+    fill.addColorStop(0, "#254a55");
+    fill.addColorStop(1, "#112d3d");
+    context.fillStyle = fill;
+    context.fillRect(x, y, frameWidth, frameHeight);
+    context.fillStyle = "#f6fbff";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = `800 ${Math.max(24, Math.round(frameHeight * 0.08))}px Inter, Arial, sans-serif`;
+    context.fillText(live.source === "demo" ? "DIRECTOR LIVE" : "CONNECTING VIDEO", x + frameWidth / 2, y + frameHeight * 0.48);
+    context.font = `600 ${Math.max(15, Math.round(frameHeight * 0.035))}px Inter, Arial, sans-serif`;
+    context.globalAlpha = .72;
+    context.fillText(live.source === "demo" ? "Generated test feed" : "Preparing the selected source", x + frameWidth / 2, y + frameHeight * 0.57);
+  }
+  context.restore();
+
+  context.save();
+  context.strokeStyle = "rgba(111, 230, 241, .76)";
+  context.lineWidth = Math.max(2, width * .0014);
+  roundedTextureRect(context, x, y, frameWidth, frameHeight, Math.min(28, frameHeight * .035));
+  context.stroke();
+  drawBroadcastText(context, live.title, live.titlePosition, width, height, "title");
+  drawBroadcastText(context, live.lowerThird, live.lowerThirdPosition, width, height, "lower-third");
+  context.restore();
+}
+
+function drawBroadcastText(context: CanvasRenderingContext2D, value: string, position: { x: number; y: number }, width: number, height: number, kind: "title" | "lower-third") {
+  if (!value.trim()) return;
+  const size = kind === "title" ? Math.max(24, Math.round(height * .036)) : Math.max(18, Math.round(height * .025));
+  context.save();
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.font = `800 ${size}px Inter, Arial, sans-serif`;
+  const paddingX = size * .55;
+  const boxHeight = size * 1.65;
+  const boxWidth = Math.min(width * .72, context.measureText(value).width + paddingX * 2);
+  const x = width * position.x / 100;
+  const y = height * position.y / 100 - boxHeight / 2;
+  roundedTextureRect(context, x, y, boxWidth, boxHeight, size * .24);
+  context.fillStyle = kind === "title" ? "rgba(10, 17, 31, .88)" : "rgba(12, 29, 48, .92)";
+  context.fill();
+  context.strokeStyle = kind === "title" ? "rgba(214, 194, 255, .72)" : "rgba(111, 230, 241, .58)";
+  context.lineWidth = Math.max(1.5, width * .0009);
+  context.stroke();
+  context.fillStyle = "#f7fbff";
+  context.fillText(value, x + paddingX, y + boxHeight / 2);
+  context.restore();
+}
+
+function roundedTextureRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const r = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + width, y, x + width, y + height, r);
+  context.arcTo(x + width, y + height, x, y + height, r);
+  context.arcTo(x, y + height, x, y, r);
+  context.arcTo(x, y, x + width, y, r);
+  context.closePath();
+}
+
+function textureLines(context: CanvasRenderingContext2D, value: string, maxWidth: number, maxLines: number) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  words.forEach((word) => {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && context.measureText(candidate).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else line = candidate;
+  });
+  if (line) lines.push(line);
+  if (lines.length <= maxLines) return lines;
+  const visible = lines.slice(0, maxLines);
+  visible[maxLines - 1] = `${visible[maxLines - 1].replace(/\s+\S+$/, "")}…`;
+  return visible;
 }
 
 function drawMuseumBoard(
@@ -748,7 +995,7 @@ function drawComposableBoard(
         const hasSubtext = showSubtext && Boolean(donor.subtext || donor.note);
         const baseline = rowTop + rowHeight * (hasSubtext ? .43 : .5);
         const baseSize = sharedBaseSize;
-        const presentation = resolveBoardDonorPresentation(program, donor.id, {
+        const presentation = resolveBoardDonorPresentation(panel, donor.id, {
           fontFamily: font,
           nameColor: panelTextColor || ivory,
           accentColor: gold
@@ -757,7 +1004,7 @@ function drawComposableBoard(
         drawBoardDonorHighlight(context, presentation.highlight, x, baseline, cellWidth * 0.72, baseSize * Math.max(1, lines.length * .92) * scale, presentation.accentColor);
         context.font = `500 ${Math.round(baseSize * scale)}px ${presentation.fontFamily}, Inter, sans-serif`;
         drawBoardDonorName(context, donor.name, x, baseline, cellWidth * 0.88, Math.round(baseSize * scale), 7, presentation, animationTime, donor.id);
-        if (screen?.showIcons && presentation.recognitionIcon !== "none") drawBoardRecognitionIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, presentation, screen, Math.max(7, baseSize * 0.35));
+        if (panel.showIcons && presentation.recognitionIcon !== "none") drawBoardRecognitionIcons(context, left + cellWidth * column + cellWidth * 0.05, left + cellWidth * column + cellWidth * 0.95, baseline - baseSize * 0.25, presentation, screen, Math.max(7, baseSize * 0.35));
         if (showSubtext && (donor.subtext || donor.note)) {
           context.fillStyle = muted;
           context.font = `400 ${Math.max(8, Math.round(baseSize * 0.48))}px ${presentation.fontFamily}, Inter, sans-serif`;
@@ -810,7 +1057,7 @@ function drawComposableBoard(
       // changing the image's size or position.
       context.textAlign = "center";
       const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / authoredCanvasHeight));
-      const presentation = resolveBoardDonorPresentation(program, panel.id, {
+      const presentation = resolveBoardDonorPresentation(panel, panel.id, {
         fontFamily: panel.fontFamily ?? font,
         nameColor: panelTextColor ?? "#201708",
         accentColor: panelTextColor ?? "#201708"
@@ -870,7 +1117,7 @@ function drawComposableBoard(
       context.restore();
       context.textAlign = "center";
       const starFontSize = Math.max(8, Math.round((panel.fontSize ?? 12) * height / authoredCanvasHeight));
-      const presentation = resolveBoardDonorPresentation(program, donor?.id ?? panel.id, {
+      const presentation = resolveBoardDonorPresentation(panel, donor?.id ?? panel.id, {
         fontFamily: panel.fontFamily ?? font,
         nameColor: panelTextColor ?? "#201708",
         accentColor: panelTextColor ?? "#201708"

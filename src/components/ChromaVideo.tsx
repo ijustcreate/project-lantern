@@ -32,6 +32,8 @@ export interface ChromaVideoProps {
   fitMode?: "fit" | "fill";
   className?: string;
   onTrackingStatus?: (status: TrackingRuntimeStatus) => void;
+  /** Exposes the exact rendered media surface for a texture-backed preview. */
+  onMediaSurfaceChange?: (surface: HTMLCanvasElement | HTMLVideoElement | null) => void;
   /** Costume/effect-studio hook. Receives normalized landmarks after stabilization. */
   renderTrackedOverlay?: TrackingOverlayRenderer;
 }
@@ -72,7 +74,7 @@ function hexRgb(value: string) {
   return [0, 2, 4].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255);
 }
 
-export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill", className, onTrackingStatus, renderTrackedOverlay }: ChromaVideoProps) {
+export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill", className, onTrackingStatus, onMediaSurfaceChange, renderTrackedOverlay }: ChromaVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const settingsRef = useRef({ chromaKey, effects, crop });
@@ -99,6 +101,12 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
     transformOrigin: "center"
   };
   const processingActive = chromaActive || aiBackgroundActive || faceEffectsActive;
+
+  useEffect(() => {
+    const surface = processingActive ? canvasRef.current : videoRef.current;
+    onMediaSurfaceChange?.(surface);
+    return () => onMediaSurfaceChange?.(null);
+  }, [onMediaSurfaceChange, processingActive]);
 
   useEffect(() => {
     const video = videoRef.current;

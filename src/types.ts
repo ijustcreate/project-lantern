@@ -262,6 +262,8 @@ export interface DonorBoardProgram {
   backgroundCrop?: ImageCrop;
   showFrame?: boolean;
   givingProgramId?: string;
+  /** Folder shown in board pickers. When absent, the legacy template grouping is used. */
+  folder?: string;
   templatePurpose?: "roster" | "level" | "story" | "invitation" | "good-deeds";
   palette?: "classic" | "brigade-blue" | "brigade-red" | "brigade-sunshine" | "brigade-cream" | "legacy-navy" | "legacy-sky";
 }
@@ -283,6 +285,12 @@ export interface BoardPanel {
   donorId?: string;
   /** Dynamically includes matching tiers from the board roster as membership changes. */
   donorTierFilter?: string[];
+  /** Default donor-name presentation for this donor-list panel. */
+  donorPresentation?: BoardDonorPresentation;
+  /** Optional donor-name overrides that apply only within this donor-list panel. */
+  donorStyles?: Record<string, BoardDonorPresentation>;
+  /** Recognition icons are shown only within this donor-list panel. */
+  showIcons?: boolean;
   footerIconPlacement?: "left" | "both";
   x?: number;
   y?: number;
