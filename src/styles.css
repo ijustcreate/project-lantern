@@ -9200,14 +9200,18 @@ textarea:focus-visible,
   outline-color: #e7279d;
   box-shadow: 0 0 0 4px rgba(36, 200, 223, .18);
 }
-.sparkle-click-burst { position: fixed; z-index: 9999; pointer-events: none; color: #ff2fa6; font-size: 22px; font-style: normal; letter-spacing: 7px; text-shadow: 0 0 8px #fff, 0 0 16px #53d9ff; transform: translate(-50%, -50%); animation: sparkle-click-burst .7s ease-out forwards; }
-@keyframes sparkle-click-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.5) rotate(0deg); } to { opacity: 0; transform: translate(-50%, -120%) scale(2.4) rotate(130deg); } }
+.sparkle-click-burst { position: fixed; z-index: 9999; width: 1px; height: 1px; pointer-events: none; transform: translate(-50%, -50%); }
+.sparkle-click-burst i { position: absolute; width: 6px; height: 10px; border-radius: 2px 5px 2px 5px; background: var(--confetti-color); box-shadow: 0 0 5px color-mix(in srgb, var(--confetti-color) 64%, white); transform: rotate(var(--confetti-angle)) translateY(-4px); animation: sparkle-confetti-pop .7s cubic-bezier(.16,.8,.28,1) var(--confetti-delay) forwards; }
+@keyframes sparkle-confetti-pop { from { opacity: 1; transform: rotate(var(--confetti-angle)) translateY(-4px) scale(.7); } 75% { opacity: 1; } to { opacity: 0; transform: rotate(var(--confetti-angle)) translateY(calc(var(--confetti-distance) * -1)) rotate(180deg) scale(.45); } }
 
-.app-shell.theme-children { color-scheme: light; --ink: #173f61; --muted: #5b7184; --navy: #fdf7e9; --panel: #fffdf5; --panel-2: #e8f7ff; --line: rgba(23, 63, 97, .18); --line-bright: rgba(228, 59, 56, .55); --teal: #02a9c7; --cyan: #1565d8; --violet: #7256c8; --magenta: #e34278; --coral: #e9433e; --gold: #f4b527; background: linear-gradient(135deg, #fff9df, #e8f7ff 45%, #fff0f0); }
+.app-shell.theme-children { color-scheme: light; --ink: #173f61; --muted: #5b7184; --navy: #fdf7e9; --panel: #fffdf5; --panel-2: #e8f7ff; --line: rgba(23, 63, 97, .18); --line-bright: rgba(228, 59, 56, .55); --teal: #02a9c7; --cyan: #1565d8; --violet: #7256c8; --magenta: #e34278; --coral: #e9433e; --gold: #f4b527; background: radial-gradient(circle at 8% 10%, rgba(233, 67, 62, .18) 0 38px, transparent 39px), radial-gradient(circle at 93% 18%, rgba(244, 181, 39, .2) 0 52px, transparent 53px), radial-gradient(circle at 77% 88%, rgba(2, 169, 199, .18) 0 68px, transparent 69px), linear-gradient(135deg, #fff9df, #e8f7ff 45%, #fff0f0); }
 .theme-children .sidebar, .theme-children .topbar { background: rgba(255, 253, 245, .94); }
 .theme-children h1, .theme-children h2, .theme-children h3, .theme-children .brand-lockup, .theme-children .nav-item b { font-family: "Cabin Sketch", "Comic Sans MS", cursive; letter-spacing: .02em; }
 .theme-children .command-button.primary, .theme-children .segmented button.selected, .theme-children .editor-tabs button.selected { color: #fff; border-color: #e9433e; background: linear-gradient(135deg, #e9433e, #f4b527 48%, #02a9c7); box-shadow: 0 7px 16px rgba(228, 59, 56, .22); }
 .theme-children .nav-item.active { border-color: rgba(2, 169, 199, .38); background: linear-gradient(90deg, rgba(2,169,199,.16), rgba(244,181,39,.18)); box-shadow: inset 4px 0 #e9433e; }
+.theme-children .sidebar { border-right-color: rgba(233, 67, 62, .26); background-image: linear-gradient(180deg, rgba(255,255,255,.76), rgba(232,247,255,.72)); }
+.theme-children .panel, .theme-children .form-panel, .theme-children .screen-card, .theme-children .metric-card { border-color: rgba(2, 169, 199, .26); box-shadow: 0 12px 28px rgba(21, 101, 216, .09), inset 0 3px 0 #f4b527; }
+.theme-children .eyebrow { color: #e9433e; }
 
 .app-shell.theme-contrast {
   color-scheme: dark;
@@ -14132,3 +14136,26 @@ textarea:focus-visible,
 @media (max-width: 760px) {
   .announcement-tool-explainer { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Portal accent contract: selected and primary controls always use the active
+   portal palette. This prevents a later component rule from leaking Dark's
+   purple action color into a bright, warm, or high-contrast workspace. */
+.theme-light { --portal-action-start: #147fc4; --portal-action-end: #35bce2; --portal-action-border: #147fc4; --portal-action-text: #fff; --portal-action-shadow: rgba(20, 127, 196, .25); }
+.theme-warm { --portal-action-start: #bf5b43; --portal-action-end: #df8b4c; --portal-action-border: #bf5b43; --portal-action-text: #fff; --portal-action-shadow: rgba(191, 91, 67, .25); }
+.theme-contrast { --portal-action-start: #ffe900; --portal-action-end: #ffe900; --portal-action-border: #ffe900; --portal-action-text: #000; --portal-action-shadow: transparent; }
+.theme-sparkle { --portal-action-start: #ef2ca6; --portal-action-end: #20cbe0; --portal-action-border: #e7279d; --portal-action-text: #fff; --portal-action-shadow: rgba(205, 43, 169, .28); }
+.theme-children { --portal-action-start: #e9433e; --portal-action-end: #02a9c7; --portal-action-border: #e9433e; --portal-action-text: #fff; --portal-action-shadow: rgba(228, 59, 56, .23); }
+
+:is(.theme-light, .theme-warm, .theme-contrast, .theme-sparkle, .theme-children) :is(.command-button.primary, .segmented button.selected, .editor-tabs button.selected, .schedule-days button.selected, .group-chip.selected, .effects-tab .accessory-options button.selected, .typography-choice-row .segmented button.selected, .live-inspector > .editor-tabs button.selected) {
+  border-color: var(--portal-action-border) !important;
+  color: var(--portal-action-text) !important;
+  background: linear-gradient(135deg, var(--portal-action-start), var(--portal-action-end)) !important;
+  box-shadow: 0 6px 18px var(--portal-action-shadow) !important;
+}
+.theme-sparkle :is(.command-button.primary, .segmented button.selected, .editor-tabs button.selected, .effects-tab .accessory-options button.selected) { background: linear-gradient(135deg, #ef2ca6, #8b45e8 43%, #20cbe0 72%, #ffd841) !important; }
+.theme-children :is(.command-button.primary, .segmented button.selected, .editor-tabs button.selected, .effects-tab .accessory-options button.selected) { background: linear-gradient(135deg, #e9433e, #f4b527 48%, #02a9c7) !important; }
+.theme-light .bug-status-group-heading b { color: #fff; background: #147fc4; }
+.theme-light .change-badge.publish { border-color: rgba(20, 127, 196, .24); color: #176ca4; background: #e7f4fb; }
+.theme-light .announcement-tool-explainer > button.active { border-color: rgba(20, 127, 196, .5); background: linear-gradient(135deg, rgba(20, 127, 196, .15), rgba(53, 188, 226, .12)); box-shadow: inset 3px 0 #147fc4; }
+.theme-warm .announcement-tool-explainer > button.active { border-color: rgba(191, 91, 67, .48); background: linear-gradient(135deg, rgba(191, 91, 67, .15), rgba(223, 139, 76, .12)); box-shadow: inset 3px 0 #bf5b43; }
+.theme-contrast .announcement-tool-explainer > button.active { border-color: #ffe900; color: #000; background: #ffe900; box-shadow: none; }

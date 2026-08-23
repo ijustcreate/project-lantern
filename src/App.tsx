@@ -860,13 +860,21 @@ function ControlCenter() {
   useEffect(() => {
     if (portalAppearance !== "sparkle") return;
     const sparkleAt = (event: PointerEvent) => {
-      const burst = document.createElement("i");
+      const burst = document.createElement("span");
       burst.className = "sparkle-click-burst";
       burst.style.left = `${event.clientX}px`;
       burst.style.top = `${event.clientY}px`;
-      burst.textContent = "✦ ✧ ✦ ✧";
+      const colors = ["#ff477e", "#ff9f1c", "#ffe66d", "#2ec4b6", "#4ea8de", "#9b5de5"];
+      for (let index = 0; index < 11; index += 1) {
+        const particle = document.createElement("i");
+        particle.style.setProperty("--confetti-angle", `${(360 / 11) * index + Math.random() * 18 - 9}deg`);
+        particle.style.setProperty("--confetti-distance", `${30 + Math.random() * 34}px`);
+        particle.style.setProperty("--confetti-color", colors[index % colors.length]);
+        particle.style.setProperty("--confetti-delay", `${Math.random() * 80}ms`);
+        burst.appendChild(particle);
+      }
       document.body.appendChild(burst);
-      window.setTimeout(() => burst.remove(), 720);
+      window.setTimeout(() => burst.remove(), 820);
     };
     window.addEventListener("pointerdown", sparkleAt);
     return () => window.removeEventListener("pointerdown", sparkleAt);

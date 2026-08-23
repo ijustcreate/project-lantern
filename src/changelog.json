@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0323",
+    "title": "Unify portal theme accents",
+    "summary": "Primary and selected controls now inherit blue, orange, yellow, rainbow, or museum-primary styling from the active portal theme; Sparkle Unicorn also uses a compact rainbow-confetti click effect.",
+    "author": "Codex",
+    "createdAt": "Aug 23, 2026, 12:39 PM",
+    "areas": [
+      "Site themes",
+      "Interaction feedback"
+    ],
+    "files": [
+      "src/styles.css",
+      "src/App.tsx"
+    ],
+    "tests": "npx tsc --noEmit"
+  },
+  {
     "id": "DEV-0322",
     "title": "Fix GitHub Pages deployment blocker",
     "summary": "Repair TypeScript errors in the 3D board renderer so the accumulated portal changes can deploy to GitHub Pages.",
