@@ -9252,6 +9252,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
           state={state}
           screenId={screenId}
           fitToScreen={fitToScreen}
+          fitPadding={isFullscreen ? 1 : undefined}
           viewMode="2d"
           announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
         />}

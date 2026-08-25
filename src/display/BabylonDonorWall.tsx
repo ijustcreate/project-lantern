@@ -26,6 +26,8 @@ interface BabylonDonorWallProps {
   screenId: ScreenId;
   interactive?: boolean;
   fitToScreen?: boolean;
+  /** Extra scale used by contained 2D views. 1 is a true edge-to-edge contain fit. */
+  fitPadding?: number;
   viewMode?: "2d" | "3d";
   resetKey?: number;
   previewProgramId?: string;
@@ -46,7 +48,7 @@ const boardPanelImageCache = new Map<string, HTMLImageElement>();
 // dashboard console. Rendering failures still surface as Babylon errors.
 Logger.LogLevels = Logger.ErrorLogLevel;
 
-export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), announcementOverlay, blipOverlay, broadcastOverlay }: BabylonDonorWallProps) {
+export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, fitPadding = 1.07, viewMode = "3d", resetKey = 0, previewProgramId, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), announcementOverlay, blipOverlay, broadcastOverlay }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [scheduleMinute, setScheduleMinute] = useState(() => Math.floor(Date.now() / 60_000));
   const previewProgram = useMemo(
@@ -236,9 +238,9 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       const frameInset = showFrame ? 0.2 : 0;
       // Include the physical trim plus a small, consistent safety margin so a
       // reset always contains the entire board instead of touching an edge.
-      const fitPadding = 1.07;
-      let halfWidth = ((panelWidth + frameInset) / 2) * fitPadding;
-      let halfHeight = ((panelHeight + frameInset) / 2) * fitPadding;
+      const containPadding = Math.max(1, fitPadding);
+      let halfWidth = ((panelWidth + frameInset) / 2) * containPadding;
+      let halfHeight = ((panelHeight + frameInset) / 2) * containPadding;
       const viewportWidth = Math.max(1, engine.getRenderWidth());
       const viewportHeight = Math.max(1, engine.getRenderHeight());
       const viewportAspect = viewportWidth / viewportHeight;
@@ -412,7 +414,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       scene.dispose();
       engine.dispose();
     };
-  }, [sceneStateKey, screenId, interactive, fitToScreen, viewMode, resetKey]);
+  }, [sceneStateKey, screenId, interactive, fitToScreen, fitPadding, viewMode, resetKey]);
 
   return <>
     <canvas className="wall-canvas" ref={canvasRef} tabIndex={interactive ? 0 : -1} role="img" aria-label={`${activeProgram?.name ?? "Recognition board"}. ${accessibleDonors.length} recognized supporters.`} />

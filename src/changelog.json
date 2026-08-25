@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0394",
+    "title": "Fill TV presentation without stretching",
+    "summary": "Present on TV now uses a true zero-margin contain fit, filling the screen as far as the board aspect ratio allows while remaining centered and undistorted.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:55 PM",
+    "areas": [
+      "TV presentation",
+      "Display output"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
     "id": "DEV-0393",
     "title": "Contain boards correctly in Dashboard 2D view",
     "summary": "Dashboard reset view now uses the selected board's true portrait or landscape aspect ratio with a containment margin, keeping boards centered without stretching or clipping.",
