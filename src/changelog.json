@@ -15,6 +15,23 @@
     "tests": "TypeScript and production build started; diff validation passed"
   },
   {
+    "id": "DEV-0334",
+    "title": "Refresh How to use walkthrough",
+    "summary": "Reworked the guided Control Center walkthrough with a museum-gallery hero, clearer current workflow copy, and distinct visual accents for each workspace.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 8:40 AM",
+    "areas": [
+      "Help center",
+      "Presentation"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "public/assets/help/lantern-gallery-hero.png"
+    ],
+    "tests": "Vite dev shell HTTP check; walkthrough data/theme and asset checks; git diff --check; npm run build"
+  },
+  {
     "id": "DEV-0333",
     "title": "Preserve saved board formatting",
     "summary": "Prevented board selection and display measurement from rewriting saved panel layout or typography. Only explicit user edits now change a board draft.",

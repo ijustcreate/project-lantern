@@ -10935,6 +10935,8 @@ textarea:focus-visible,
 .help-presentation { padding: 22px; }
 
 .help-slide {
+  --help-accent: #70dfdc;
+  --help-glow: rgba(82, 217, 211, .24);
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, .86fr) minmax(370px, 1.14fr);
@@ -10946,9 +10948,19 @@ textarea:focus-visible,
   border: 1px solid rgba(112, 221, 220, .16);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 84% 44%, rgba(82, 217, 211, .24), transparent 25%),
+    radial-gradient(circle at 84% 44%, var(--help-glow), transparent 28%),
     linear-gradient(135deg, #111f31 0%, #0a1522 58%, #07101a 100%);
 }
+
+.help-slide-dashboard { --help-accent: #70dfdc; --help-glow: rgba(82, 217, 211, .25); }
+.help-slide-donors { --help-accent: #f5c96a; --help-glow: rgba(245, 201, 106, .22); }
+.help-slide-editor { --help-accent: #ff9a7a; --help-glow: rgba(255, 126, 109, .20); }
+.help-slide-schedule { --help-accent: #a8b9ff; --help-glow: rgba(139, 159, 255, .22); }
+.help-slide-announcements { --help-accent: #ffb2b7; --help-glow: rgba(255, 138, 150, .20); }
+.help-slide-broadcast { --help-accent: #a68dff; --help-glow: rgba(150, 119, 255, .22); }
+.help-slide-settings { --help-accent: #a9df87; --help-glow: rgba(148, 218, 111, .20); }
+.help-slide-feedback { --help-accent: #f8c87d; --help-glow: rgba(247, 171, 95, .21); }
+.help-slide-welcome { --help-accent: #f7ca70; --help-glow: rgba(247, 171, 77, .2); background: linear-gradient(112deg, rgba(4, 15, 30, .97) 0%, rgba(5, 16, 31, .87) 38%, rgba(10, 24, 42, .7) 100%); }
 
 .help-slide::after {
   content: "";
@@ -10976,12 +10988,12 @@ textarea:focus-visible,
 .help-slide-copy > h3 { animation-delay: 60ms; }
 .help-slide-copy > p { animation-delay: 120ms; }
 .help-slide-copy > ul { animation-delay: 180ms; }
-.help-kicker { margin: 0 0 13px !important; color: #70dfdc !important; font-size: 11px !important; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+.help-kicker { margin: 0 0 13px !important; color: var(--help-accent) !important; font-size: 11px !important; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
 .help-slide h3 { max-width: 560px; margin: 0 0 18px; color: #f4fbff; font-size: clamp(30px, 4vw, 50px); line-height: 1.03; letter-spacing: -.045em; }
 .help-slide-copy > p { max-width: 580px; margin: 0; color: #a9bac8; font-size: 15px; line-height: 1.65; }
 .help-slide ul { display: grid; gap: 11px; margin: 26px 0 0; padding: 0; list-style: none; }
 .help-slide li { display: flex; align-items: center; gap: 10px; color: #dbe8ef; font-size: 13px; }
-.help-slide li svg { flex: 0 0 auto; color: #69dbd8; }
+.help-slide li svg { flex: 0 0 auto; color: var(--help-accent); }
 
 .help-slide-visual {
   position: relative;
@@ -10992,7 +11004,7 @@ textarea:focus-visible,
 
 .help-slide-browser {
   overflow: hidden;
-  border: 1px solid rgba(125, 229, 225, .38);
+  border: 1px solid color-mix(in srgb, var(--help-accent) 52%, transparent);
   border-radius: 15px;
   background: #080f18;
   box-shadow: 0 24px 70px rgba(0, 0, 0, .45), 0 0 0 6px rgba(105, 219, 216, .035);
@@ -11000,6 +11012,8 @@ textarea:focus-visible,
   transition: transform 350ms ease, box-shadow 350ms ease;
 }
 .help-slide-visual:hover .help-slide-browser { transform: perspective(1000px) rotateY(0) rotateX(0) translateY(-4px); box-shadow: 0 30px 80px rgba(0, 0, 0, .54), 0 0 0 7px rgba(105, 219, 216, .055); }
+.help-slide-welcome .help-slide-browser { border-radius: 18px; box-shadow: 0 28px 80px rgba(0, 0, 0, .55), 0 0 0 7px rgba(247, 202, 112, .06); }
+.help-slide-welcome .help-slide-browser img { object-position: center; }
 .help-slide-browser-bar { display: flex; align-items: center; gap: 5px; height: 27px; padding: 0 10px; border-bottom: 1px solid rgba(255,255,255,.08); background: #101d2b; }
 .help-slide-browser-bar i { width: 6px; height: 6px; border-radius: 50%; background: #3d5366; }
 .help-slide-browser-bar i:first-child { background: #ff7d82; }
@@ -11015,9 +11029,9 @@ textarea:focus-visible,
   align-items: center;
   gap: 7px;
   padding: 9px 12px;
-  border: 1px solid rgba(115, 231, 226, .45);
+  border: 1px solid color-mix(in srgb, var(--help-accent) 60%, transparent);
   border-radius: 10px;
-  color: #dffcfb;
+  color: color-mix(in srgb, var(--help-accent) 20%, white);
   background: rgba(10, 29, 40, .94);
   box-shadow: 0 12px 30px rgba(0,0,0,.34);
   font-size: 10px;
