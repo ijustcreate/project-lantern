@@ -1973,94 +1973,103 @@ function fileToDataUrl(file: File): Promise<string> {
 
 const helpSlides = [
   {
-    kicker: "Welcome",
-    title: "Meet the recognition boards",
-    copy: "Project Lantern brings donor records, board design, display previews, scheduling, announcements, broadcasts, and feedback into one staff-friendly workspace.",
-    points: ["Prepare and preview safely", "Control portrait and landscape displays", "Publish only when you are ready"],
+    kicker: "A guided tour",
+    title: "Make every thank-you feel at home.",
+    copy: "Project Lantern is the calm, shared control center for the museum's donor recognition displays—from a donor record to a beautiful moment on the gallery floor.",
+    points: ["Create and preview with confidence", "Run portrait and landscape displays together", "Publish when the experience feels right"],
     accent: "01",
-    image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
-    imageAlt: "Dashboard with two display previews",
-    callout: "Start from the Dashboard"
+    image: `${import.meta.env.BASE_URL}assets/help/lantern-gallery-hero.png`,
+    imageAlt: "Illustration of portrait and landscape donor recognition displays in a museum gallery",
+    callout: "A better way to recognize generosity",
+    theme: "welcome"
   },
   {
-    kicker: "Dashboard",
-    title: "Monitor and open every display",
-    copy: "Each display card shows its assigned board, orientation, connection state, schedule, live preview, and room-camera tools. Open displays when the exhibit screens are ready.",
-    points: ["Check attached and live status", "Preview boards in 2D or 3D", "Add displays, schedules, or room cameras"],
+    kicker: "01 · Start here",
+    title: "See the whole floor at a glance.",
+    copy: "Dashboard is your starting point. Check what is attached, see the next scheduled content, preview the experience, and open the display when the gallery is ready.",
+    points: ["Confirm every display is ready", "Preview boards in 2D or 3D", "Open, schedule, or add a display"],
     accent: "02",
     image: `${import.meta.env.BASE_URL}assets/help/dashboard.png`,
     imageAlt: "Dashboard with portrait and landscape display management cards",
-    callout: "One card per physical display"
+    callout: "One home for every physical display",
+    theme: "dashboard"
   },
   {
-    kicker: "Donors",
-    title: "Build the recognition roster",
-    copy: "Create donor profiles with names, tiers, categories, tags, giving details, stories, icons, and presentation treatments. Donors are assigned to boards, so one profile can be reused consistently.",
-    points: ["Search, filter, group, and reorder", "Assign each donor to the right boards", "Use Active to control recognition visibility"],
+    kicker: "02 · Shape the roster",
+    title: "Keep every donor detail in one trusted place.",
+    copy: "Create profiles with recognition names, tiers, stories, icons, and board assignments. The same record can appear consistently across every board that needs it.",
+    points: ["Find, filter, group, and order profiles", "Assign recognition to the right boards", "Use Active to control visibility"],
     accent: "03",
     image: `${import.meta.env.BASE_URL}assets/help/donors.png`,
     imageAlt: "Donors workspace with searchable donor profiles and board assignments",
-    callout: "Manage people once"
+    callout: "Update a person once, use them anywhere",
+    theme: "donors"
   },
   {
-    kicker: "Board Editor",
-    title: "Design reusable recognition boards",
-    copy: "Create portrait or landscape board programs, choose the donor roster, edit text directly, and tune layout, typography, colors, backgrounds, logos, cameras, and 2D or 3D presentation.",
-    points: ["Choose or add a board program", "Edit against the live preview", "Assign the finished board to displays or schedules"],
+    kicker: "03 · Design the moment",
+    title: "Build boards worth stopping for.",
+    copy: "Create reusable portrait or landscape programs, then edit directly against a live preview. Tune donor lists, typography, color, art, cameras, and 2D or 3D presentation.",
+    points: ["Start with a board program", "Design against a live preview", "Reuse a finished board on displays or schedules"],
     accent: "04",
     image: `${import.meta.env.BASE_URL}assets/help/board-editor.png`,
     imageAlt: "Board Editor with board controls and a live museum recognition preview",
-    callout: "Boards are reusable designs"
+    callout: "Reusable designs, gallery-ready results",
+    theme: "editor"
   },
   {
-    kicker: "Schedule",
-    title: "Plan boards, messages, Blips, and broadcasts",
-    copy: "Use week, month, or agenda views to place content on specific displays. Color, icon, label, and border treatment distinguish each content type; only overlapping items of the same type are conflicts.",
-    points: ["Add a Board, Announcement, Blip, or Broadcast", "Set display, date, time, duration, and recurrence", "Resolve same-type conflicts before showtime"],
+    kicker: "04 · Put it on the calendar",
+    title: "Plan the day without second-guessing it.",
+    copy: "Use week, month, or agenda views to place boards, messages, Blips, and broadcasts on the right display at the right time. Only overlapping items of the same kind conflict.",
+    points: ["Choose Board, Announcement, Blip, or Broadcast", "Set timing, target, duration, and recurrence", "Resolve same-type conflicts before showtime"],
     accent: "05",
     image: `${import.meta.env.BASE_URL}assets/help/schedule.png`,
     imageAlt: "Schedule calendar containing boards, announcements, and broadcast entries",
-    callout: "Plan every display by time"
+    callout: "A clear plan for every screen",
+    theme: "schedule"
   },
   {
-    kicker: "Announcements",
-    title: "Overlay timely messages",
-    copy: "Compose a headline, supporting message, details, colors, sounds, enhancements, target displays, layout, duration, and optional schedule. Announcements can run over a board without replacing it.",
-    points: ["Save reusable announcements", "Preview on the selected display", "Send now or choose a date"],
+    kicker: "05 · Add a timely message",
+    title: "Say what matters, exactly when it matters.",
+    copy: "Compose a headline, supporting detail, color, sound, enhancement, target display, duration, and optional schedule. An announcement can appear over a board without replacing it.",
+    points: ["Save messages you will use again", "Preview on the selected display", "Send now or schedule for later"],
     accent: "06",
     image: `${import.meta.env.BASE_URL}assets/help/announcements.png`,
     imageAlt: "Announcement composer with delivery controls and live display preview",
-    callout: "Messages layer over boards"
+    callout: "Messages layer gracefully over boards",
+    theme: "announcements"
   },
   {
-    kicker: "Broadcast / Stream",
-    title: "Compose camera and screen broadcasts",
-    copy: "Choose a camera, screen share, or test feed; move the title and lower third directly; crop and position video; style the panel, frame, and canvas; then add background removal or face effects.",
-    points: ["Source connects the feed", "Frame & crop shapes the composition", "Effects and recording finish the production"],
+    kicker: "06 · Go live with care",
+    title: "Turn a feed into a finished broadcast.",
+    copy: "Choose a camera, screen share, or test feed; place the title and lower third directly; crop the video; then refine the frame, canvas, background removal, effects, and recording.",
+    points: ["Connect the source", "Frame and crop the composition", "Finish with effects or recording"],
     accent: "07",
     image: `${import.meta.env.BASE_URL}assets/help/broadcast.png`,
     imageAlt: "Broadcast and Stream studio with camera composition and inspector controls",
-    callout: "Preview before going on air"
+    callout: "Preview before the audience sees it",
+    theme: "broadcast"
   },
   {
-    kicker: "Settings",
-    title: "Choose the portal theme and vocabulary",
-    copy: "Switch among Dark, Light, Ocean, Warm, High contrast, and Sparkle Unicorn themes. Maintain the recognition tiers, donor categories, and tags used throughout the control center.",
-    points: ["Themes affect the control portal only", "Board designs keep their saved colors", "Vocabulary changes flow into donor forms and filters"],
+    kicker: "07 · Make it yours",
+    title: "Set the workspace up for your team.",
+    copy: "Choose a portal theme and maintain the recognition tiers, donor categories, and tags your team uses day to day. Your saved board designs keep their own visual identity.",
+    points: ["Pick a readable portal theme", "Keep recognition vocabulary consistent", "See terms flow into forms and filters"],
     accent: "08",
     image: `${import.meta.env.BASE_URL}assets/help/settings.png`,
     imageAlt: "Settings workspace with portal theme and donor vocabulary controls",
-    callout: "Personalize the staff workspace"
+    callout: "A workspace that fits its operators",
+    theme: "settings"
   },
   {
-    kicker: "Bugs & feedback",
-    title: "Capture actionable reports",
-    copy: "Report a bug from any page with a description, reproduction details, expected result, frequency, severity, tags, and annotated evidence. Technical context is attached automatically for a Codex-ready handoff.",
-    points: ["Capture, paste, annotate, or attach evidence", "Track status, type, comments, and testing progress", "Group and filter the catalogue to focus the work"],
+    kicker: "08 · Keep improving",
+    title: "Turn feedback into a better experience.",
+    copy: "Report a problem from any page with its details and evidence. Project Lantern adds technical context automatically, so the team can reproduce, test, and improve the work without guesswork.",
+    points: ["Attach captures or annotate evidence", "Track status, discussion, and testing", "Focus the catalogue with filters and groups"],
     accent: "09",
     image: `${import.meta.env.BASE_URL}assets/help/bugs.png`,
     imageAlt: "Bug catalogue with status filters and report details",
-    callout: "Turn feedback into fixes"
+    callout: "Your feedback moves the work forward",
+    theme: "feedback"
   }
 ];
 
@@ -2098,7 +2107,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
 
         {mode === "slides" ? (
           <div className="help-presentation">
-            <div className="help-slide" key={current.accent}>
+            <div className={`help-slide help-slide-${current.theme}`} key={current.accent}>
               <div className="help-slide-number" aria-hidden="true">{current.accent}</div>
               <div className="help-slide-copy">
                 <p className="help-kicker">{current.kicker}</p>
@@ -2108,7 +2117,7 @@ function HelpCenterModal({ onClose }: { onClose: () => void }) {
               </div>
               <figure className="help-slide-visual">
                 <div className="help-slide-browser">
-                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>Recognition boards</span></div>
+                  <div className="help-slide-browser-bar" aria-hidden="true"><i /><i /><i /><span>{current.theme === "welcome" ? "Project Lantern" : "Recognition boards"}</span></div>
                   <img src={current.image} alt={current.imageAlt} />
                 </div>
                 <figcaption><Sparkles size={14} /> {current.callout}</figcaption>
@@ -3253,15 +3262,6 @@ function BoardOrientationIcon({ orientation }: { orientation: DonorBoardProgram[
   return <span className="board-orientation-icon" title={`${orientation} board`}><Icon size={14} aria-hidden="true" /><span className="sr-only">{orientation}</span></span>;
 }
 
-function defaultBoardPanels(program: LanternState["boardPrograms"][number]): BoardPanel[] {
-  return [
-    { id: `${program.id}-heading`, type: "text", title: [program.heading, program.subtitle].filter(Boolean).join("\n"), size: "standard", x: 4, y: 4, width: 92, height: 22 },
-    { id: `${program.id}-supporters-heading`, type: "text", title: "Our supporters", size: "compact", x: 5, y: 29, width: 90, height: 7 },
-    { id: `${program.id}-donors`, type: "donors", title: "", size: "feature", columns: program.columns, x: 5, y: 36, width: 90, height: 45 },
-    { id: `${program.id}-footer`, type: "text", title: program.footer, size: "compact", x: 5, y: 84, width: 90, height: 11 }
-  ];
-}
-
 function createBoardPanel(type: BoardPanelType, position = { x: 30, y: 35 }): BoardPanel {
   const id = `${type}-${Date.now()}`;
   const templates: Record<BoardPanelType, BoardPanel> = {
@@ -3374,37 +3374,10 @@ function ThemeStudio({
     if (donorPage >= donorPageCount) setDonorPage(donorPageCount - 1);
   }, [donorPage, donorPageCount]);
   useEffect(() => {
-    if (!selectedProgram?.panels?.some((panel) => panel.x == null || panel.y == null || panel.width == null || panel.height == null)) return;
-    const fallback = defaultBoardPanels(selectedProgram);
-    const migrated = selectedProgram.panels.map((panel, index) => {
-      if (panel.x != null && panel.y != null && panel.width != null && panel.height != null) return panel;
-      const base = fallback[index] ?? createBoardPanel(panel.type, { x: 8 + (index % 3) * 12, y: 8 + (index % 4) * 14 });
-      return { ...panel, x: base.x, y: base.y, width: base.width, height: base.height };
-    });
-    patchProgram({ panels: migrated });
-  }, [selectedProgram?.id, selectedProgram?.panels]);
-
-  useEffect(() => {
     setSelectedPanelId("");
     setBoardEditorZoom(1);
     setBoardEditorPan({ x: 0, y: 0 });
   }, [selectedProgramId]);
-
-  useEffect(() => {
-    if (!selectedProgram?.panels?.some((panel) => !["text", "donors", "image"].includes(panel.type))) return;
-    const migrated = selectedProgram.panels.flatMap((panel) => {
-      if (["text", "donors", "image"].includes(panel.type)) return [panel];
-      if (panel.type === "donor-star") {
-        const groupId = panel.groupId ?? `group-${panel.id}`;
-        return [
-          { ...panel, id: `${panel.id}-image`, type: "image" as const, title: "Recognition star", groupId, donorId: undefined, eyebrow: undefined, body: undefined },
-          { ...panel, type: "text" as const, title: state.donors.find((donor) => donor.id === panel.donorId)?.name ?? panel.title, groupId, imageUrl: undefined, imageFit: undefined, donorId: undefined, eyebrow: undefined, body: undefined }
-        ];
-      }
-      return [{ ...panel, type: "text" as const, title: [panel.eyebrow, panel.title, panel.body].filter(Boolean).join("\n"), eyebrow: undefined, body: undefined, donorId: undefined }];
-    });
-    patchProgram({ panels: migrated });
-  }, [selectedProgram?.id, selectedProgram?.panels, state.donors]);
 
   useEffect(() => {
     const displayedProgramId = resolveDisplayedBoardProgramId(state, display.id);
@@ -3971,7 +3944,6 @@ function DirectBoardCanvas({
   const [editorFitScale, setEditorFitScale] = useState(1);
   const manipulationRef = useRef<{ pointerId: number; moved: boolean; pending: Map<string, Partial<BoardPanel>> } | null>(null);
   const suppressPanelClickRef = useRef(false);
-  const fittedFontFamilyRef = useRef(new Map<string, string>());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -4013,31 +3985,6 @@ function DirectBoardCanvas({
     && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
   );
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });
-  const commitFittedFontSize = (panel: BoardPanel) => {
-    if (panel.type !== "text" || panel.textFlow !== "fit-one-line") return;
-    // Auto-fit runs after the resized DOM box is painted. Read its resulting
-    // size only after release so the inspector mirrors the panel without
-    // writing state during every pointer move.
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      const content = canvasRef.current?.querySelector<HTMLElement>(`[data-panel-id="${panel.id}"] .direct-single-text-content`);
-      const fittedSize = Number.parseFloat(content ? getComputedStyle(content).getPropertyValue("--panel-font-size") : "");
-      if (!Number.isFinite(fittedSize)) return;
-      const fontSize = Math.round(fittedSize * 10) / 10;
-      if (fontSize !== panel.fontSize) onPatch(panel.id, { fontSize });
-    }));
-  };
-  useEffect(() => {
-    const panelIds = new Set(panels.map((panel) => panel.id));
-    panels.forEach((panel) => {
-      const fontFamily = panel.fontFamily ?? "Montserrat";
-      const previousFontFamily = fittedFontFamilyRef.current.get(panel.id);
-      fittedFontFamilyRef.current.set(panel.id, fontFamily);
-      if (previousFontFamily !== undefined && previousFontFamily !== fontFamily) commitFittedFontSize(panel);
-    });
-    fittedFontFamilyRef.current.forEach((_, panelId) => {
-      if (!panelIds.has(panelId)) fittedFontFamilyRef.current.delete(panelId);
-    });
-  }, [panels]);
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -4092,7 +4039,6 @@ function DirectBoardCanvas({
       window.removeEventListener("pointercancel", stop);
       if (moved) {
         pending.forEach((patch, panelId) => onPatch(panelId, patch));
-        if (mode === "resize") commitFittedFontSize(panel);
         suppressPanelClickRef.current = true;
         window.setTimeout(() => { suppressPanelClickRef.current = false; }, 0);
       }
