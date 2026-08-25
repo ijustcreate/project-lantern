@@ -156,9 +156,13 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
     const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
     const showFrame = activeProgram?.showFrame ?? screen.showFrame ?? true;
-    const isPortrait = screen.orientation === "Portrait";
-    const panelWidth = isPortrait ? 4.8 : 11.4;
+    // The panel is an output surface, not an approximation of one. Keeping
+    // these dimensions at the actual board aspect ratio makes the 2D reset
+    // frame the selected artwork without stretching, cropping, or a vertical
+    // offset when a Dashboard tile has a different shape.
+    const isPortrait = (activeProgram?.orientation ?? screen.orientation) === "Portrait";
     const panelHeight = isPortrait ? 8.1 : 5.7;
+    const panelWidth = panelHeight * (isPortrait ? 9 / 16 : 16 / 9);
 
     // Leave enough room for a useful 3D orbit without clipping the board at
     // the edge of the dashboard card.
@@ -230,7 +234,9 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       camera.setTarget(Vector3.Zero());
       camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
       const frameInset = showFrame ? 0.2 : 0;
-      const fitPadding = 1.035;
+      // Include the physical trim plus a small, consistent safety margin so a
+      // reset always contains the entire board instead of touching an edge.
+      const fitPadding = 1.07;
       let halfWidth = ((panelWidth + frameInset) / 2) * fitPadding;
       let halfHeight = ((panelHeight + frameInset) / 2) * fitPadding;
       const viewportWidth = Math.max(1, engine.getRenderWidth());

@@ -1,5 +1,35 @@
 [
   {
+    "id": "DEV-0393",
+    "title": "Contain boards correctly in Dashboard 2D view",
+    "summary": "Dashboard reset view now uses the selected board's true portrait or landscape aspect ratio with a containment margin, keeping boards centered without stretching or clipping.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:50 PM",
+    "areas": [
+      "Dashboard",
+      "Board preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0392",
+    "title": "Contain boards correctly in Dashboard 2D view",
+    "summary": "Dashboard reset view now uses the selected board's true portrait or landscape aspect ratio with a containment margin, keeping boards centered without stretching or clipping.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:49 PM",
+    "areas": [
+      "Dashboard",
+      "Board preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
     "id": "DEV-0391",
     "title": "Repair production TypeScript build",
     "summary": "Resolved two TypeScript errors found by the GitHub Pages production build so the current release can publish.",
