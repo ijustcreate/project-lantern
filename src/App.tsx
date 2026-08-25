@@ -5959,6 +5959,28 @@ function LivePreviewPanel({
         pendingRecordingUrl = sourcePlayback.objectUrl;
         pendingRecordingPlayback = sourcePlayback.playback;
         stream = sourcePlayback.stream;
+      } else if (phoneMode) {
+        const phoneVideo: MediaTrackConstraints = {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          aspectRatio: { ideal: 16 / 9 },
+          facingMode: { ideal: "user" },
+          frameRate: { ideal: 30, max: 30 }
+        };
+        try {
+          // Phone mode must use this browser's devices rather than the camera
+          // IDs shared by the museum desktop. A single request also avoids
+          // competing camera/microphone permission prompts on mobile browsers.
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: phoneVideo,
+            audio: { echoCancellation: true, noiseSuppression: true }
+          });
+        } catch {
+          // A presenter may deny microphone access while still allowing the
+          // camera. Keep the visual demo usable and explain that it is muted.
+          stream = await navigator.mediaDevices.getUserMedia({ video: phoneVideo, audio: false });
+          setPreviewError("Camera connected without microphone; allow microphone access if live audio is needed.");
+        }
       } else {
         nextLease = await mediaDeviceManager.acquire("broadcast:preview", {
           video: {
@@ -5998,7 +6020,7 @@ function LivePreviewPanel({
       }, { once: true }));
       const previousLease = previewLeaseRef.current;
       const previousStream = previewStreamRef.current;
-      if (source === "screen" || source === "recording") {
+      if (source === "screen" || source === "recording" || phoneMode) {
         previousLease?.release();
         previewLeaseRef.current = null;
       } else {
@@ -6029,7 +6051,7 @@ function LivePreviewPanel({
       } else if (name === "NotAllowedError" || name === "SecurityError") {
         setPreviewError(source === "screen"
           ? "Screen sharing was cancelled or blocked. Click Open preview and choose Screen or window share to try again."
-          : "Webcam access was blocked. Allow Camera and Microphone for 127.0.0.1 in the browser address bar, then click Try camera again.");
+          : "Camera access was blocked. Allow Camera for this site in the browser address bar or phone settings, then try again.");
       } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
         setPreviewError(source === "screen" ? "No shareable screen or window was found." : "No webcam was found. Connect one and try again.");
       } else if (name === "NotReadableError" || name === "TrackStartError") {

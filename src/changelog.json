@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0336",
+    "title": "Restore phone camera access",
+    "summary": "Phone broadcast mode now ignores desktop-specific saved device IDs, asks mobile browsers for camera and microphone together, and falls back to camera-only when audio permission is unavailable.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 9:41 AM",
+    "areas": [
+      "Broadcast",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "Focused phone capture regression fixture; npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0335",
     "title": "Protect saved board layouts",
     "summary": "Run the unified board-panel conversion only for legacy records so opening or switching boards cannot alter current saved formatting.",
