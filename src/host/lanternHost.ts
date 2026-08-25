@@ -1449,9 +1449,13 @@ export function normalizeState(state: LanternState): LanternState {
         })
     };
   });
-  const boardProgramsBeforeToySoldierMigration = migrateUnifiedBoardPanels(needsDonorDomainMigration
-    ? migrateLegacyDonorPresentation(normalizedBoardPrograms, donors)
-    : normalizedBoardPrograms, donors);
+  // `migrateUnifiedBoardPanels` converts older specialized panel types into the
+  // unified text/donor/image format. It must run exactly once for legacy data.
+  // Running it for current data mutates a saved board merely by loading it,
+  // which can change its wrapping and layout after a user leaves and returns.
+  const boardProgramsBeforeToySoldierMigration = needsDonorDomainMigration
+    ? migrateUnifiedBoardPanels(migrateLegacyDonorPresentation(normalizedBoardPrograms, donors), donors)
+    : normalizedBoardPrograms;
   const boardPrograms = needsQuestioningToySoldierMigration
     ? boardProgramsBeforeToySoldierMigration.map((program) => program.id === "board-toy-about-portrait"
       ? { ...program, panels: program.panels?.map((panel) => panel.id === "about-p-soldier" && panel.imageUrl === "/assets/donor-icons/toy-soldier.png"

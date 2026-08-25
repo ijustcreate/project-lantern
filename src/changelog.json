@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0335",
+    "title": "Protect saved board layouts",
+    "summary": "Run the unified board-panel conversion only for legacy records so opening or switching boards cannot alter current saved formatting.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 9:20 AM",
+    "areas": [
+      "Board Editor",
+      "Data persistence"
+    ],
+    "files": [
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "TypeScript and production build started; diff validation passed"
+  },
+  {
     "id": "DEV-0333",
     "title": "Preserve saved board formatting",
     "summary": "Prevented board selection and display measurement from rewriting saved panel layout or typography. Only explicit user edits now change a board draft.",
