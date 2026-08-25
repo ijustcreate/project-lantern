@@ -3426,7 +3426,8 @@ function ThemeStudio({
   const filteredBoardDonors = state.donors.filter((donor) => donor.active && donor.name.toLowerCase().includes(donorSearch.trim().toLowerCase()) && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier)));
   const donorListRoster = selectedProgram?.donorIds
     .map((donorId) => state.donors.find((donor) => donor.id === donorId))
-    .filter((donor): donor is Donor => Boolean(donor?.active) && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier))) ?? [];
+    .filter((donor): donor is Donor => donor !== undefined)
+    .filter((donor) => donor.active && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier))) ?? [];
   const donorListColumns = selectedPanel?.type === "donors" ? selectedPanel.columns ?? selectedProgram?.columns ?? 1 : 1;
   const donorListRows = selectedPanel?.type === "donors" ? selectedPanel.rows ?? Math.max(1, Math.ceil(donorListRoster.length / donorListColumns)) : 1;
   const donorListCapacity = donorListRows * donorListColumns;
@@ -7420,7 +7421,7 @@ function ScreensView({
   useEffect(() => {
     if (!(window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return;
     void import("@tauri-apps/api/core").then(({ invoke }) => invoke<Array<{ id: number; name?: string; positionX: number; positionY: number; width: number; height: number }>>("available_displays")).then(setAvailableMonitors).catch(() => setAvailableMonitors([]));
-  }, [refreshMediaDevices]);
+  }, []);
   useEffect(() => {
     if (!editingId) return;
     const keepEditorOnScreen = () => {

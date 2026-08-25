@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0391",
+    "title": "Repair production TypeScript build",
+    "summary": "Resolved two TypeScript errors found by the GitHub Pages production build so the current release can publish.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:43 PM",
+    "areas": [
+      "Build",
+      "Board editor",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
     "id": "DEV-0390",
     "title": "Match dashboard messages to live displays",
     "summary": "Dashboard previews now place active Blips and messages inside the actual portrait or landscape display shape. Operators can end an active message; ending a scheduled message dismisses only the current occurrence without changing its future calendar schedule.",
