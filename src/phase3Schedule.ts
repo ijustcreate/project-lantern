@@ -1,6 +1,6 @@
 import type { SavedAnnouncement, ScheduleEntry, ScreenId } from "./types";
 
-export const PHASE3_CONTENT_VERSION = 18;
+export const PHASE3_CONTENT_VERSION = 19;
 
 /** Museum hours: Wednesday through Sunday. Regular boards run 07:00–18:00. */
 const ALL_WEEK = [0, 1, 2, 3, 4, 5, 6];
@@ -33,9 +33,9 @@ export const phase3Announcements: SavedAnnouncement[] = [
   {
     ...announcementBase,
     id: "art-center-countdown",
-    title: "Art Center opens at 10:00",
-    message: "Paintbrushes are waking up! The Art Center opens at 10:00 a.m.",
-    details: "Follow the hand-drawn paintbrush and get your next big idea ready.",
+    title: "Art Center opens at 10 AM",
+    message: "The Art Center opens at 10 AM.",
+    details: "Get ready to draw, paint, and make your next big idea.",
     style: "Temporary Card",
     backgroundColor: "#f8e7b7",
     layoutX: 36,
@@ -47,13 +47,42 @@ export const phase3Announcements: SavedAnnouncement[] = [
   {
     ...announcementBase,
     id: "art-center-open",
-    title: "The Art Center is Open",
+    title: "ART Center Open!",
     message: "The Art Center is now open—come draw, paint, and make something only you would make.",
-    details: "Look for the paintbrush signs in the main hall.",
+    details: "Come draw, paint, and make something only you would make.",
     style: "Ribbon",
     backgroundColor: "#7bc6bd",
     priority: "Elevated",
+    durationMinutes: 30,
     finishSfx: "chime"
+  },
+  {
+    ...announcementBase,
+    id: "museum-closing-countdown",
+    title: "Museum closes at 5 PM",
+    message: "The museum closes at 5 PM.",
+    details: "Please finish up your favorite exhibit and begin making your way to the front of the museum.",
+    style: "Temporary Card",
+    backgroundColor: "#f8e7b7",
+    layoutX: 36,
+    layoutY: 20,
+    layoutWidth: 58,
+    durationMinutes: 30,
+    timerStyle: "circular"
+  },
+  {
+    ...announcementBase,
+    id: "museum-closed",
+    title: "Museum is now closed",
+    message: "Thank you for spending your day with us at the Children's Museum. The museum is now closed. Please head to the front of the museum to exit.",
+    details: "We hope to see you again soon!",
+    style: "Temporary Card",
+    backgroundColor: "#173f61",
+    textColor: "#fff5dc",
+    layoutX: 36,
+    layoutY: 20,
+    layoutWidth: 58,
+    durationMinutes: 60
   },
   {
     ...announcementBase,
@@ -103,13 +132,15 @@ export function createPhase3DemoSchedule(reference = new Date()): ScheduleEntry[
   const weekly = (id: string, name: string, target: ScreenId, boardId: string, startTime: string, endTime: string, color: string, contentType: ScheduleEntry["contentType"] = "board", extra: Partial<ScheduleEntry> = {}): ScheduleEntry => ({ id, name, target, boardId, startTime, endTime, color, contentType, days: [...ALL_WEEK], recurrence: "weekly", scheduleDate: range.startDate, scheduleEndDate: range.endDate, active: true, ...extra });
   return [
     weekly("phase3-demo-welcome-01", "Morning welcome", "display-1", "board-toy-about-portrait", "09:00", "13:00", "#3579A6"),
-    weekly("phase3-demo-welcome-02", "Art Center opens", "display-1", "board-toy-about-portrait", "10:00", "10:05", "#D99005", "announcement", { announcementId: "art-center-open" }),
-    weekly("phase3-demo-welcome-03", "Afternoon supporter spotlight", "display-1", "board-supporter-spotlight-portrait", "13:00", "17:00", "#A95777"),
-    weekly("phase3-demo-welcome-04", "Visitor kindness blip", "display-1", "board-supporter-spotlight-portrait", "14:15", "14:17", "#26A89F", "blip", { blipId: "blip-brigade-good-deed" }),
+    weekly("phase3-demo-welcome-02", "Afternoon supporter spotlight", "display-1", "board-supporter-spotlight-portrait", "13:00", "17:00", "#A95777"),
+    weekly("phase3-demo-welcome-03", "Visitor kindness blip", "display-1", "board-supporter-spotlight-portrait", "14:15", "14:17", "#26A89F", "blip", { blipId: "blip-brigade-good-deed" }),
     weekly("phase3-demo-discovery-01", "Morning welcome", "display-2", "board-toy-about-landscape", "09:00", "13:00", "#3579A6"),
-    weekly("phase3-demo-discovery-02", "Art Center opens", "display-2", "board-toy-about-landscape", "10:00", "10:05", "#D99005", "announcement", { announcementId: "art-center-open" }),
-    weekly("phase3-demo-discovery-03", "Afternoon supporter spotlight", "display-2", "board-supporter-spotlight-landscape", "13:00", "17:00", "#A95777"),
-    weekly("phase3-demo-discovery-04", "Visitor kindness blip", "display-2", "board-supporter-spotlight-landscape", "14:15", "14:17", "#26A89F", "blip", { blipId: "blip-brigade-good-deed" }),
+    weekly("phase3-demo-discovery-02", "Afternoon supporter spotlight", "display-2", "board-supporter-spotlight-landscape", "13:00", "17:00", "#A95777"),
+    weekly("phase3-demo-discovery-03", "Visitor kindness blip", "display-2", "board-supporter-spotlight-landscape", "14:15", "14:17", "#26A89F", "blip", { blipId: "blip-brigade-good-deed" }),
+    weekly("phase3-demo-announcement-01", "Art Center opens at 10 AM", "all", "board-toy-about-portrait", "09:45", "10:00", "#D99005", "announcement", { announcementId: "art-center-countdown" }),
+    weekly("phase3-demo-announcement-02", "ART Center Open!", "all", "board-toy-about-portrait", "10:00", "10:30", "#2E9E91", "announcement", { announcementId: "art-center-open" }),
+    weekly("phase3-demo-announcement-03", "Museum closes at 5 PM", "all", "board-toy-about-portrait", "16:30", "17:00", "#D99005", "announcement", { announcementId: "museum-closing-countdown" }),
+    weekly("phase3-demo-announcement-04", "Museum is now closed", "all", "board-toy-about-portrait", "17:00", "18:00", "#173F61", "announcement", { announcementId: "museum-closed" }),
     { ...weekly("phase3-demo-test-01", "After-hours test board", "display-1", "board-toy-about-portrait", "18:15", "18:30", "#6B7280"), days: [1, 2] },
     { ...weekly("phase3-demo-test-02", "After-hours test board", "display-2", "board-toy-about-landscape", "18:15", "18:30", "#6B7280"), days: [1, 2] }
   ];
@@ -120,6 +151,12 @@ export function appendMissingPhase3Content<T extends { id: string }>(existing: T
   return [...existing, ...seeded.filter((item) => !ids.has(item.id)).map((item) => ({ ...item }))];
 }
 
+export function replacePhase3Announcements(existing: SavedAnnouncement[], incomingContentVersion: number): SavedAnnouncement[] {
+  if (incomingContentVersion >= PHASE3_CONTENT_VERSION) return existing;
+  const phase3Ids = new Set(phase3Announcements.map((announcement) => announcement.id));
+  return [...existing.filter((announcement) => !phase3Ids.has(announcement.id)), ...phase3Announcements.map((announcement) => ({ ...announcement }))];
+}
+
 export function migratePhase3Schedules(
   existing: readonly ScheduleEntry[],
   incomingContentVersion: number,
@@ -127,9 +164,10 @@ export function migratePhase3Schedules(
 ): ScheduleEntry[] {
   if (incomingContentVersion >= PHASE3_CONTENT_VERSION) return [...existing];
   // Phase 3 entries are generated demo content rather than curator-created
-  // schedules. Replace only those stable IDs so the compact v8 rotation takes
+  // schedules. Replace only those stable IDs so the compact rotation takes
   // effect without touching custom schedules or legacy content.
-  return createPhase3DemoSchedule(reference);
+  const phase3Entries = createPhase3DemoSchedule(reference);
+  return [...existing.filter((entry) => !isPhase3DemoScheduleId(entry.id)), ...phase3Entries];
 }
 
 /**
@@ -143,7 +181,7 @@ export function archiveUntouchedLegacyFullDaySchedules(entries: readonly Schedul
 }
 
 export function isPhase3DemoScheduleId(id: string): boolean {
-  return /^phase3-demo-(welcome|discovery)-\d{2}$|^phase3-demo-test-\d+$/.test(id);
+  return /^phase3-demo-(welcome|discovery|announcement)-\d{2}$|^phase3-demo-test-\d+$/.test(id);
 }
 
 function scheduleTrack(track: string, target: ScreenId, slots: DemoSlot[], range: Phase3DemoRange): ScheduleEntry[] {

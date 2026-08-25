@@ -19,7 +19,7 @@ export const ANNOUNCEMENT_LAYOUT_CONTENT_VERSION = 15;
 export const QUESTIONING_TOY_SOLDIER_CONTENT_VERSION = 16;
 /** Removes retired display attachment, heartbeat, and manual live-toggle state. */
 export const DISPLAY_STATUS_REMOVAL_CONTENT_VERSION = 17;
-export const SCHEDULE_RESET_CONTENT_VERSION = 18;
+export const SCHEDULE_RESET_CONTENT_VERSION = 19;
 export const LANTERN_CONTENT_VERSION = SCHEDULE_RESET_CONTENT_VERSION;
 
 const exploreNames = [

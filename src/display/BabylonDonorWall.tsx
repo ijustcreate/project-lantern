@@ -350,20 +350,21 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
 
     if (showFrame) {
       const trimMaterial = new StandardMaterial("trim", scene);
-      trimMaterial.diffuseColor = trimColor(state.theme.trim);
+      trimMaterial.diffuseColor = activeProgram?.frameColor ? Color3.FromHexString(activeProgram.frameColor) : trimColor(state.theme.trim);
       trimMaterial.specularColor = new Color3(0.82, 0.74, 0.52);
-      const topTrim = MeshBuilder.CreateBox("top-trim", { width: panelWidth + 0.16, height: 0.045, depth: 0.28 }, scene);
-      topTrim.position.y = panelHeight / 2 + 0.075;
+      const frameThickness = Math.max(0.015, (activeProgram?.frameThickness ?? 8) * 0.006);
+      const topTrim = MeshBuilder.CreateBox("top-trim", { width: panelWidth + frameThickness * 2, height: frameThickness, depth: 0.28 }, scene);
+      topTrim.position.y = panelHeight / 2 + frameThickness / 2;
       topTrim.position.z = -0.01;
       topTrim.material = trimMaterial;
       const bottomTrim = topTrim.clone("bottom-trim");
-      bottomTrim.position.y = -panelHeight / 2 - 0.075;
-      const leftTrim = MeshBuilder.CreateBox("left-trim", { width: 0.045, height: panelHeight + 0.16, depth: 0.28 }, scene);
-      leftTrim.position.x = -panelWidth / 2 - 0.075;
+      bottomTrim.position.y = -panelHeight / 2 - frameThickness / 2;
+      const leftTrim = MeshBuilder.CreateBox("left-trim", { width: frameThickness, height: panelHeight + frameThickness * 2, depth: 0.28 }, scene);
+      leftTrim.position.x = -panelWidth / 2 - frameThickness / 2;
       leftTrim.position.z = -0.01;
       leftTrim.material = trimMaterial;
       const rightTrim = leftTrim.clone("right-trim");
-      rightTrim.position.x = panelWidth / 2 + 0.075;
+      rightTrim.position.x = panelWidth / 2 + frameThickness / 2;
     }
 
     if (!reduceMotion && state.theme.motion > 15 && !fitToScreen && !interactive) {
@@ -580,24 +581,41 @@ function drawAnnouncementCountdown(context: CanvasRenderingContext2D, width: num
   const text = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
   const size = Math.max(42, Math.min(width, height) * .075);
   context.save();
-  context.fillStyle = "rgba(5, 15, 27, .78)";
-  context.strokeStyle = track;
-  context.lineWidth = Math.max(4, size * .1);
+  // Mirror the pale floating timer card used by the 2D announcement composer.
+  // The old dark backing made a selected timer look like a different component
+  // once the same announcement was viewed on the perspective board.
+  const cardWidth = announcement.timerStyle === "progress" ? size * 3.25 : announcement.timerStyle === "circular" ? size * 1.4 : size * 2.2;
+  const cardHeight = announcement.timerStyle === "progress" ? size * 1.15 : announcement.timerStyle === "circular" ? size * 1.4 : size * 1.1;
+  roundedTextureRect(context, x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight, Math.max(8, size * .14));
+  context.fillStyle = "rgba(246, 234, 211, .96)";
+  context.fill();
+  context.strokeStyle = "rgba(246, 234, 211, .5)";
+  context.lineWidth = Math.max(2, size * .035);
+  context.stroke();
   if (announcement.timerStyle === "circular") {
-    context.beginPath(); context.arc(x, y, size / 2, 0, Math.PI * 2); context.fill(); context.stroke();
-    context.strokeStyle = accent; context.beginPath(); context.arc(x, y, size / 2, -Math.PI / 2, Math.PI * 1.5); context.stroke();
+    context.strokeStyle = track;
+    context.lineWidth = Math.max(4, size * .1);
+    context.beginPath(); context.arc(x, y, size * .39, 0, Math.PI * 2); context.stroke();
+    context.strokeStyle = accent; context.beginPath(); context.arc(x, y, size * .39, -Math.PI / 2, Math.PI * 1.5); context.stroke();
   } else if (announcement.timerStyle === "progress") {
     const barWidth = size * 2.25; const barHeight = size * .32;
-    roundedTextureRect(context, x - barWidth / 2, y - barHeight / 2, barWidth, barHeight, barHeight / 2); context.fill();
+    roundedTextureRect(context, x - barWidth / 2, y - barHeight / 2, barWidth, barHeight, barHeight / 2); context.fillStyle = track; context.fill();
     context.fillStyle = accent; roundedTextureRect(context, x - barWidth / 2, y - barHeight / 2, barWidth, barHeight, barHeight / 2); context.fill();
-  } else {
-    const boxWidth = size * 1.7; const boxHeight = size * .8;
-    roundedTextureRect(context, x - boxWidth / 2, y - boxHeight / 2, boxWidth, boxHeight, boxHeight * .18); context.fill(); context.stroke();
   }
   context.fillStyle = accent;
-  context.font = `800 ${Math.round(size * .3)}px Inter, Arial, sans-serif`;
+  context.font = `850 ${Math.round(size * .15)}px Inter, Arial, sans-serif`;
   context.textAlign = "center"; context.textBaseline = "middle";
-  context.fillText(text, x, y);
+  context.font = `800 ${Math.round(size * .32)}px Inter, Arial, sans-serif`;
+  if (announcement.timerStyle === "circular") {
+    context.fillText(text, x, y);
+    context.font = `850 ${Math.round(size * .15)}px Inter, Arial, sans-serif`;
+    context.fillText("TIME LEFT", x, y + size * .62);
+  } else {
+    context.font = `850 ${Math.round(size * .15)}px Inter, Arial, sans-serif`;
+    context.fillText("TIME LEFT", x, y - size * .22);
+    context.font = `800 ${Math.round(size * .32)}px Inter, Arial, sans-serif`;
+    context.fillText(text, x, announcement.timerStyle === "progress" ? y + size * .24 : y + size * .16);
+  }
   context.restore();
 }
 
@@ -938,9 +956,21 @@ function drawComposableBoard(
   const authoredCanvasHeight = height > width ? 720 : 540;
 
   if (screen?.showFrame !== false) {
-    context.strokeStyle = palette.frame;
-    context.lineWidth = Math.max(2, 4 * scale);
+    const frameColor = program.frameColor ?? palette.frame;
+    const frameThickness = Math.max(2, (program.frameThickness ?? 8) * .55 * scale);
+    context.strokeStyle = frameColor;
+    context.lineWidth = frameThickness;
     context.strokeRect(width * 0.03, height * 0.022, width * 0.94, height * 0.956);
+    if (program.frameFinish === "bevel" || program.frameFinish === "ornate") {
+      context.strokeStyle = "rgba(255,255,255,.42)";
+      context.lineWidth = Math.max(1, frameThickness * .22);
+      context.strokeRect(width * .035, height * .027, width * .93, height * .946);
+    }
+    if (program.frameFinish === "ornate") {
+      context.strokeStyle = "rgba(0,0,0,.38)";
+      context.lineWidth = Math.max(1, frameThickness * .3);
+      context.strokeRect(width * .041, height * .033, width * .918, height * .934);
+    }
   }
 
   panels.forEach((panel, panelIndex) => {

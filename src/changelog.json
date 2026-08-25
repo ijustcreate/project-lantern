@@ -1,5 +1,386 @@
 [
   {
+    "id": "DEV-0390",
+    "title": "Match dashboard messages to live displays",
+    "summary": "Dashboard previews now place active Blips and messages inside the actual portrait or landscape display shape. Operators can end an active message; ending a scheduled message dismisses only the current occurrence without changing its future calendar schedule.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:38 PM",
+    "areas": [
+      "Dashboard",
+      "Messages",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0389",
+    "title": "Keep donor reorder hint visible",
+    "summary": "The donor drag-to-reorder hint now renders above the page instead of being clipped by the scrolling donor list.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:34 PM",
+    "areas": [
+      "Donors",
+      "Accessibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0388",
+    "title": "Keep donor reorder hint visible",
+    "summary": "The donor drag-to-reorder hint now renders above the page instead of being clipped by the scrolling donor list.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:33 PM",
+    "areas": [
+      "Donors",
+      "Accessibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0387",
+    "title": "Keep display tabs in sync with live boards",
+    "summary": "Open display and display-wall tabs now treat the published server state as authoritative, refresh it every five seconds, and bypass cached state responses so board and schedule changes made on another device appear without reopening the display.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:28 PM",
+    "areas": [
+      "Display output",
+      "Shared state sync",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0386",
+    "title": "Compact portrait-phone navigation",
+    "summary": "Made the portrait-phone primary navigation a single horizontal icon row while preserving desktop and landscape layouts.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:24 PM",
+    "areas": [
+      "Responsive navigation"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0385",
+    "title": "Improve destructive button contrast",
+    "summary": "Made pale destructive buttons readable across light-toned themes with high-contrast text and clearer disabled states.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:21 PM",
+    "areas": [
+      "Theming",
+      "Accessibility"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0384",
+    "title": "Add Broadcast Studio microphone refresh",
+    "summary": "Added a matching media-device refresh button beside the Microphone selector.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:19 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0383",
+    "title": "Add Broadcast Studio camera refresh",
+    "summary": "Added a compact refresh button beside the camera selector to reload available cameras and microphones.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:17 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0382",
+    "title": "Remove generated test feed from Broadcast Studio",
+    "summary": "Removed the generated test feed choice, migrate saved test selections to Camera, and made source dropdown options readable in every theme.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:14 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Theming"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0381",
+    "title": "Use Board Editor picker for broadcast previews",
+    "summary": "Replaced the native preview-board select with the searchable, folder-grouped board picker used by Board Editor.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:10 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0380",
+    "title": "Require a ready camera before broadcast",
+    "summary": "Start broadcast now appears unavailable until the selected source is connected and explains what to start when clicked.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:07 PM",
+    "areas": [
+      "Broadcast / Stream"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0379",
+    "title": "Center Board Editor orientation icons",
+    "summary": "Removed the boxed orientation icon treatment and restored centered portrait and landscape icons in the board picker.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:04 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0378",
+    "title": "Improve Board Editor donor list controls",
+    "summary": "Added working recognition-level filtering, a multi-select filter dropdown, row-by-row capacity names, and a Style font section.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 2:01 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0377",
+    "title": "Enable custom Board background colors",
+    "summary": "Made Pick a color open the color picker and apply the chosen custom Board background color.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:49 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0376",
+    "title": "Theme Dashboard display settings",
+    "summary": "Made the Dashboard display-settings popup follow the active site theme, including its tabs and control panels.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:43 PM",
+    "areas": [
+      "Dashboard",
+      "Theming"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0375",
+    "title": "Reposition Dashboard display controls",
+    "summary": "Placed Identify display in the display header and Configure room camera immediately before Edit Board.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:41 PM",
+    "areas": [
+      "Dashboard"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0374",
+    "title": "Match announcement timers in 2D and 3D",
+    "summary": "Made the 3D board timer use the same pale card, accent colors, labels, and style treatment as the 2D announcement preview.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:39 PM",
+    "areas": [
+      "Announcements",
+      "Board Preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0373",
+    "title": "Schedule daily museum announcements",
+    "summary": "Added daily Art Center opening and museum closing announcements with the requested timers and durations through September 30.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:36 PM",
+    "areas": [
+      "Schedule",
+      "Announcements"
+    ],
+    "files": [
+      "src/phase3Schedule.ts",
+      "src/host/lanternHost.ts",
+      "src/sampleData.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0372",
+    "title": "Theme Schedule display preview",
+    "summary": "Made the Schedule event preview shell, header, and surface follow the light theme.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:32 PM",
+    "areas": [
+      "Schedule",
+      "Theming"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0371",
+    "title": "Restore scrollable Week schedule",
+    "summary": "Restored a readable, vertically scrollable 24-hour Week schedule and open it focused at 7 AM.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:32 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0370",
+    "title": "Restore scrollable Week schedule",
+    "summary": "Restored a readable, vertically scrollable 24-hour Week schedule and open it focused at 7 AM.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:30 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0369",
+    "title": "Add Board Editor mouse navigation",
+    "summary": "Added mouse-wheel zoom and Shift plus right-drag panning to the Board Editor canvas.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:28 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0368",
+    "title": "Fix Board Editor context-menu contrast",
+    "summary": "Added readable light-theme styling for the right-click add-panel menu.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:24 PM",
+    "areas": [
+      "Board Editor",
+      "Theming"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0367",
+    "title": "Streamline Board Settings frame controls",
+    "summary": "Simplified folder editing, fixed light-theme selectors and frame visibility, and added color, thickness, finish, and separate board-image controls.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:22 PM",
+    "areas": [
+      "Board Editor",
+      "Theming"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/display/BabylonDonorWall.tsx",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0366",
+    "title": "Clarify Board Settings sections",
+    "summary": "Restyled Board Settings accordion sections with visible headers and right-aligned expand arrows.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 1:16 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0365",
     "title": "Improve Schedule live-now contrast",
     "summary": "Increased light-theme contrast for active and upcoming schedule labels.",

@@ -270,6 +270,10 @@ export interface DonorBoardProgram {
   showFrame?: boolean;
   /** Keeps the chosen frame with the board instead of the assigned display. */
   frameStyle?: BoardFrameStyle;
+  /** Frame controls authored per board. Legacy frameStyle values remain readable. */
+  frameColor?: string;
+  frameThickness?: number;
+  frameFinish?: "simple" | "bevel" | "ornate";
   /** Adds a light gallery mat inside the selected board frame. */
   showMatting?: boolean;
   givingProgramId?: string;
@@ -790,6 +794,8 @@ export interface LanternState {
   userPreferences: LanternUserPreferences[];
   auditHistory: AuditRecord[];
   broadcastReminderAcknowledgements: BroadcastReminderAcknowledgement[];
+  /** Scheduled announcement occurrences dismissed by an operator. Each key applies only to that date and start time. */
+  dismissedAnnouncementOccurrences?: string[];
   visitorMessages: VisitorMessage[];
   visitorMessageRotation: VisitorMessageRotation;
   givingPrograms: GivingProgram[];

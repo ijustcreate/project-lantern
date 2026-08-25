@@ -1,6 +1,6 @@
 import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION, QUESTIONING_TOY_SOLDIER_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
-import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION } from "../phase3Schedule";
+import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION, replacePhase3Announcements } from "../phase3Schedule";
 import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
 import { normalizeVisitorMessageRotation, normalizeVisitorMessages } from "../visitorMessages";
 import { normalizeBroadcastComposition } from "../broadcastComposition";
@@ -328,7 +328,12 @@ export type AuthoritativeLanternState = {
 /** Load the shared copy together with its write time so startup can avoid replacing newer work. */
 export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternStateSnapshot> {
   if (!LANTERN_READ_SERVICE_ROOT) return { state: null, updatedAt: null };
-  const response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, { headers: { "Accept": "application/json" } });
+  // A display can remain open for days. Never allow its browser HTTP cache to
+  // turn a server check into an older board or schedule snapshot.
+  const response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, {
+    cache: "no-store",
+    headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
+  });
   if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
   const body = await response.json() as { state?: LanternState | null; updatedAt?: string | null };
   return {
@@ -338,7 +343,7 @@ export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternSta
 }
 
 /** Load one authoritative startup state for every app surface. */
-export async function loadAuthoritativeLanternState(): Promise<AuthoritativeLanternState> {
+export async function loadAuthoritativeLanternState(options: { preferShared?: boolean } = {}): Promise<AuthoritativeLanternState> {
   // Capture this before normalization. A schema migration may save the local
   // copy, which must not make an older board appear newer than the site copy.
   const localUpdatedAtBeforeNormalization = await loadLanternStateUpdatedAt();
@@ -348,7 +353,10 @@ export async function loadAuthoritativeLanternState(): Promise<AuthoritativeLant
   }
   try {
     const sharedSnapshot = await loadSharedLanternStateSnapshot();
-    const useLocal = localStateIsNewer(localUpdatedAtBeforeNormalization, sharedSnapshot.updatedAt);
+    // Operator surfaces preserve a newer unsynced local edit. A display is a
+    // read-only output, though, so it must always show the currently published
+    // server snapshot rather than a stale per-browser cache.
+    const useLocal = !options.preferShared && localStateIsNewer(localUpdatedAtBeforeNormalization, sharedSnapshot.updatedAt);
     const selected = useLocal ? local : (sharedSnapshot.state ?? local);
     return {
       state: await hydrateLanternMedia(selected),
@@ -1479,7 +1487,7 @@ export function normalizeState(state: LanternState): LanternState {
     ? appendMissingById(retainedAnnouncements, brigadeAnnouncements)
     : retainedAnnouncements;
   const savedAnnouncementsBeforeLayoutMigration = needsPhase3ContentMigration
-    ? appendMissingPhase3Content(legacyMigratedAnnouncements, phase3Announcements)
+    ? replacePhase3Announcements(appendMissingPhase3Content(legacyMigratedAnnouncements, phase3Announcements), incomingContentVersion)
     : legacyMigratedAnnouncements;
   const savedAnnouncements = needsAnnouncementLayoutMigration
     ? savedAnnouncementsBeforeLayoutMigration.map((announcement) => normalizeAnnouncementPlacement(repairSeededAnnouncementPlacement(announcement)))
@@ -1605,6 +1613,7 @@ export function normalizeState(state: LanternState): LanternState {
     userPreferences,
     auditHistory,
     broadcastReminderAcknowledgements,
+    dismissedAnnouncementOccurrences: Array.from(new Set(state.dismissedAnnouncementOccurrences ?? [])).slice(-250),
     visitorMessages,
     visitorMessageRotation,
     effectStudio,

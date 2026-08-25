@@ -2244,14 +2244,23 @@ function Dashboard({
                 : null;
               const displayBlip = immediateBlip ?? resolveScheduledBlip(state, screen.id, now);
               const nextScheduledContent = resolveNextScheduledContent(state, screen.id);
-              const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
+              const immediateAnnouncementExpiresAt = state.announcement.startedAt && state.announcement.durationMinutes > 0
+                ? Date.parse(state.announcement.startedAt) + state.announcement.durationMinutes * 60_000
+                : null;
+              const immediateAnnouncementIsCurrent = immediateAnnouncementExpiresAt === null || now.getTime() < immediateAnnouncementExpiresAt;
+              const immediateAnnouncementTargetsDisplay = state.announcement.targets?.length
+                ? state.announcement.targets.includes(screen.id)
+                : targetIncludes(state.announcement.target, screen.id);
+              const showImmediateAnnouncement = !displayBlip && state.announcement.active && immediateAnnouncementIsCurrent && immediateAnnouncementTargetsDisplay;
+              const scheduledAnnouncement = displayBlip || showImmediateAnnouncement ? null : resolveScheduledAnnouncement(state, screen.id, now);
+              const liveMessage = showImmediateAnnouncement ? state.announcement : scheduledAnnouncement?.announcement;
               return (
               <article className="dashboard-display-tile" key={screen.id}>
-                <div className="dashboard-display-side-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button></div>
                 <header className="dashboard-display-label">
                   <div>
                     <div className="dashboard-display-heading">
                       <strong>{screen.label}</strong>
+                      <button className="icon-button dashboard-identify-button" onClick={() => identifyDisplay(screen.id)} title={`Identify ${screen.label}`} aria-label={`Identify ${screen.label}`}><Radio size={15} /></button>
                       <span className={`dashboard-assignment-pill ${activeBoard ? "board" : "unscheduled"}`} title={activeBoard ? `Active board: ${activeBoard.name}` : "No active board is scheduled"}>{activeBoard ? `Board · ${activeBoard.name}` : "Nothing scheduled"}</span>
                       {liveMessage && <span className="dashboard-assignment-pill live" title={`Live scheduled message: ${liveMessage.title || "Untitled message"}`}>Live · {liveMessage.title || "Message"}</span>}
                     </div>
@@ -2259,13 +2268,16 @@ function Dashboard({
                   </div>
                   <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button></div>
                 </header>
-                <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}`}>
+                <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}${liveMessage ? " announcement-active" : ""}`}>
                   {activeBoard ? <>
                     <button type="button" className={`preview-dimension-toggle${preview3d[screen.id] ? " active" : ""}`} onClick={() => setPreview3d((current) => ({ ...current, [screen.id]: !current[screen.id] }))} title={preview3d[screen.id] ? "Lock this preview to a straight-on 2D view" : "Unlock tilt and rotation for a 3D view"}>{preview3d[screen.id] ? <Unlock size={14} /> : <Lock size={14} />}<span>{preview3d[screen.id] ? "3D" : "2D"}</span></button>
                     <BabylonDonorWall state={state} screenId={screen.id} previewProgramId={activeBoard?.id} interactive fitToScreen viewMode={preview3d[screen.id] ? "3d" : "2d"} resetKey={previewReset[screen.id] ?? 0} blipOverlay={preview3d[screen.id] ? displayBlip?.blip : undefined} />
                     <button type="button" className="preview-reset-button" onClick={() => setPreviewReset((current) => ({ ...current, [screen.id]: (current[screen.id] ?? 0) + 1 }))}><RotateCcw size={13} /> Reset view</button>
                   </> : !displayBlip && <IdleDisplayNotice upcoming={nextScheduledContent} onAddSchedule={noScheduledBoard && assignedBoard ? () => scheduleBoardNow(screen.id, assignedBoard.id) : undefined} />}
-                  {displayBlip && !preview3d[screen.id] && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
+                  {(displayBlip || liveMessage) && !preview3d[screen.id] && <div className={`dashboard-live-overlay-surface ${orientationClass(screen)}`}>
+                    {displayBlip && <BlipComposition blip={displayBlip.blip} startedAt={displayBlip.startedAt} />}
+                    {!displayBlip && liveMessage && <FixedAnnouncementComposition screen={screen} announcement={liveMessage} startedAt={showImmediateAnnouncement ? state.announcement.startedAt : scheduledAnnouncement?.startedAt} />}
+                  </div>}
                 </div>
                 {immediateBlip && <DashboardBlipControl
                   blip={immediateBlip.blip}
@@ -2277,7 +2289,17 @@ function Dashboard({
                   })}
                   onEnd={() => updateState((current) => current.activeBlip.active ? { ...current, activeBlip: { ...current.activeBlip, active: false } } : current)}
                 />}
-                <div className="button-row dashboard-display-actions"><button className="command-button secondary compact" disabled={!editableBoard} onClick={() => editableBoard && editBoard(screen.id, editableBoard.id)} title={editableBoard ? `Edit ${editableBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
+                {(showImmediateAnnouncement || scheduledAnnouncement) && <DashboardAnnouncementControl
+                  announcement={liveMessage!}
+                  scheduled={Boolean(scheduledAnnouncement)}
+                  onEnd={() => updateState((current) => {
+                    if (showImmediateAnnouncement) return { ...current, announcement: { ...current.announcement, active: false } };
+                    const occurrenceKey = scheduledAnnouncement?.occurrenceKey;
+                    if (!occurrenceKey) return current;
+                    return { ...current, dismissedAnnouncementOccurrences: [occurrenceKey, ...(current.dismissedAnnouncementOccurrences ?? []).filter((key) => key !== occurrenceKey)].slice(0, 250) };
+                  })}
+                />}
+                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`} aria-label={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!editableBoard} onClick={() => editableBoard && editBoard(screen.id, editableBoard.id)} title={editableBoard ? `Edit ${editableBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
             );})}
           </div>
@@ -2363,6 +2385,7 @@ function DonorsView({
   const [draft, setDraft] = useState<Donor | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [reorderTooltip, setReorderTooltip] = useState<{ left: number; top: number; text: string } | null>(null);
   const [tagFilter, setTagFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -2409,6 +2432,14 @@ function DonorsView({
   const pageSize = Math.max(1, visibleDonors.length);
   const pageCount = 1;
   const setPage = () => undefined;
+  const showReorderTooltip = (event: React.PointerEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setReorderTooltip({
+      left: Math.max(8, rect.left - 4),
+      top: Math.min(window.innerHeight - 36, rect.bottom + 7),
+      text: sortOrder === "manual" ? "Drag to reorder" : "Choose Manual order to drag"
+    });
+  };
   useEffect(() => {
     setSortOrder(state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual");
   }, [activeUserId, state.userPreferences]);
@@ -2619,7 +2650,7 @@ function DonorsView({
               onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverId((current) => current === donor.id ? null : current); }}
               onDrop={(event) => { event.preventDefault(); moveDonor(donor.id); endDonorDrag(); }}
             >
-              <button className="icon-button drag-button themed-tooltip" data-tooltip={sortOrder === "manual" ? "Drag to reorder" : "Choose Manual order to drag"} draggable={!editing && sortOrder === "manual"} onDragStart={(event) => beginDonorDrag(event, donor)} onDragEnd={endDonorDrag} disabled={sortOrder !== "manual"} aria-label={`Reorder ${donor.name}`}>
+              <button className="icon-button drag-button" draggable={!editing && sortOrder === "manual"} onPointerEnter={showReorderTooltip} onPointerLeave={() => setReorderTooltip(null)} onFocus={showReorderTooltip} onBlur={() => setReorderTooltip(null)} onDragStart={(event) => beginDonorDrag(event, donor)} onDragEnd={endDonorDrag} disabled={sortOrder !== "manual"} aria-label={`Reorder ${donor.name}`}>
                 <GripVertical size={17} />
               </button>
               <div className="donor-main">
@@ -2689,6 +2720,8 @@ function DonorsView({
       </div>
       <div className="donor-filter-count">Showing all {visibleDonors.length} matching donor{visibleDonors.length === 1 ? "" : "s"}</div>
       <div className="collection-footer"><span>Showing {pageDonors.length ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, visibleDonors.length)} of {visibleDonors.length}</span><Pager page={page} pageCount={pageCount} onChange={setPage} /></div>
+
+      {reorderTooltip && createPortal(<div className="reorder-tooltip" style={{ left: reorderTooltip.left, top: reorderTooltip.top }} role="tooltip">{reorderTooltip.text}</div>, document.body)}
 
       {draft && editingId && createPortal(<div className="modal-backdrop donor-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeEditor(); }}>
         <section className="editor-modal donor-editor-modal" role="dialog" aria-modal="true" aria-labelledby="donor-editor-title">
@@ -3281,6 +3314,19 @@ function ScheduleBoardPicker({ programs, value, onChange }: { programs: DonorBoa
   return <div className="field schedule-board-picker"><span>Board <InfoDot text="Choose the donor board shown during this event." /></span><details className="board-picker" ref={pickerRef} onToggle={(event) => { if (!(event.currentTarget as HTMLDetailsElement).open) setSearch(""); }}><summary aria-label={`Choose board. Current board: ${current.name}`}><span className="board-picker-current"><BoardOrientationIcon orientation={current.orientation} /><span><strong>{displayName(current)}</strong><small>{currentGroup?.label ?? "Custom boards"} Â· {current.orientation}</small></span></span><ChevronDown size={16} /></summary><div className="board-picker-popover"><label className="board-picker-search"><Search size={15} /><span className="sr-only">Search boards</span><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search boards or folders" /></label><div className="board-picker-groups">{filteredGroups.map((group) => <section className="board-picker-group" key={group.label}><header><Folder size={14} /><strong>{group.label}</strong><span>{group.programs.length}</span></header>{group.programs.map((program) => <button type="button" className={program.id === current.id ? "selected board-picker-option" : "board-picker-option"} aria-current={program.id === current.id ? "true" : undefined} key={program.id} onClick={() => { onChange(program.id); pickerRef.current?.removeAttribute("open"); }}><BoardOrientationIcon orientation={program.orientation} /><span>{displayName(program)}</span><small>{program.orientation}</small></button>)}</section>)}{!filteredGroups.length && <div className="board-picker-empty"><Search size={18} /><span>No boards match â€œ{search}â€.</span></div>}</div></div></details></div>;
 }
 
+function PreviewBoardPicker({ programs, value, onChange }: { programs: DonorBoardProgram[]; value: "assigned" | string; onChange: (boardId: "assigned" | string) => void }) {
+  const pickerRef = useRef<HTMLDetailsElement>(null);
+  const [search, setSearch] = useState("");
+  const groups = groupBoardPrograms(programs);
+  const current = value === "assigned" ? undefined : programs.find((program) => program.id === value);
+  const currentGroup = groups.find((group) => group.programs.some((program) => program.id === current?.id));
+  const displayName = (program: DonorBoardProgram) => program.name.replace(/\s*(?:·|-)\s*(?:portrait|landscape)\s*$/i, "").trim();
+  const needle = search.trim().toLowerCase();
+  const assignedMatches = !needle || "assigned board for each display preview".includes(needle);
+  const filteredGroups = groups.map((group) => ({ ...group, programs: group.programs.filter((program) => !needle || program.name.toLowerCase().includes(needle) || program.orientation.toLowerCase().includes(needle) || group.label.toLowerCase().includes(needle)) })).filter((group) => group.programs.length);
+  return <div className="field preview-board-picker"><span>Preview board <InfoDot text="Choose the board behind the broadcast preview, or use the board assigned to each display." /></span><details className="board-picker" ref={pickerRef} onToggle={(event) => { if (!(event.currentTarget as HTMLDetailsElement).open) setSearch(""); }}><summary aria-label={`Choose preview board. Current board: ${current?.name ?? "Assigned board for each display"}`}><span className="board-picker-current">{current ? <BoardOrientationIcon orientation={current.orientation} /> : <Monitor size={16} aria-hidden="true" />}<span><strong>{current ? displayName(current) : "Assigned board for each display"}</strong><small>{current ? `${currentGroup?.label ?? "Custom boards"} · ${current.orientation}` : "Automatic"}</small></span></span><ChevronDown size={16} /></summary><div className="board-picker-popover"><label className="board-picker-search"><Search size={15} /><span className="sr-only">Search boards</span><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search boards or folders" /></label><div className="board-picker-groups">{assignedMatches && <section className="board-picker-group"><header><Monitor size={14} /><strong>Preview</strong><span>1</span></header><button type="button" className={value === "assigned" ? "selected board-picker-option" : "board-picker-option"} aria-current={value === "assigned" ? "true" : undefined} onClick={() => { onChange("assigned"); pickerRef.current?.removeAttribute("open"); }}><Monitor size={14} aria-hidden="true" /><span>Assigned board for each display</span><small>Auto</small></button></section>}{filteredGroups.map((group) => <section className="board-picker-group" key={group.label}><header><Folder size={14} /><strong>{group.label}</strong><span>{group.programs.length}</span></header>{group.programs.map((program) => <button type="button" className={program.id === current?.id ? "selected board-picker-option" : "board-picker-option"} aria-current={program.id === current?.id ? "true" : undefined} key={program.id} onClick={() => { onChange(program.id); pickerRef.current?.removeAttribute("open"); }}><BoardOrientationIcon orientation={program.orientation} /><span>{displayName(program)}</span><small>{program.orientation}</small></button>)}</section>)}{!assignedMatches && !filteredGroups.length && <div className="board-picker-empty"><Search size={18} /><span>No boards match “{search}”.</span></div>}</div></div></details></div>;
+}
+
 function BoardOrientationIcon({ orientation }: { orientation: DonorBoardProgram["orientation"] }) {
   const Icon = orientation === "Portrait" ? Smartphone : Monitor;
   return <span className="board-orientation-icon" title={`${orientation} board`}><Icon size={14} aria-hidden="true" /><span className="sr-only">{orientation}</span></span>;
@@ -3368,13 +3414,22 @@ function ThemeStudio({
   const boardPickerRef = useRef<HTMLDetailsElement>(null);
   const boardActionsMenuRef = useRef<HTMLDetailsElement>(null);
   const boardAddMenuRef = useRef<HTMLDetailsElement>(null);
+  const customBoardBackgroundColorRef = useRef<HTMLInputElement>(null);
   const selectedProgram = state.boardPrograms.find((program) => program.id === selectedProgramId) ?? state.boardPrograms[0];
   const pendingProgramDelete = state.boardPrograms.find((program) => program.id === pendingProgramDeleteId);
   const boardDisplay = selectedProgram ? { ...display, orientation: selectedProgram.orientation } : display;
   const panels = selectedProgram?.panels ?? [];
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
+  const selectedDonorTierFilters = selectedPanel?.type === "donors" ? selectedPanel.donorTierFilter ?? [] : [];
+  const selectedDonorTierFilterKey = selectedDonorTierFilters.join("\u0001");
   const donorPageSize = 8;
-  const filteredBoardDonors = state.donors.filter((donor) => donor.name.toLowerCase().includes(donorSearch.trim().toLowerCase()));
+  const filteredBoardDonors = state.donors.filter((donor) => donor.active && donor.name.toLowerCase().includes(donorSearch.trim().toLowerCase()) && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier)));
+  const donorListRoster = selectedProgram?.donorIds
+    .map((donorId) => state.donors.find((donor) => donor.id === donorId))
+    .filter((donor): donor is Donor => Boolean(donor?.active) && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier))) ?? [];
+  const donorListColumns = selectedPanel?.type === "donors" ? selectedPanel.columns ?? selectedProgram?.columns ?? 1 : 1;
+  const donorListRows = selectedPanel?.type === "donors" ? selectedPanel.rows ?? Math.max(1, Math.ceil(donorListRoster.length / donorListColumns)) : 1;
+  const donorListCapacity = donorListRows * donorListColumns;
   const boardImageLibrary = useMemo(() => {
     const entries = [
       { name: "Brass board accent", imageUrl: "/assets/board-accents/brass-arch.png" },
@@ -3404,7 +3459,7 @@ function ThemeStudio({
     document.addEventListener("pointerdown", closeBoardPopovers);
     return () => document.removeEventListener("pointerdown", closeBoardPopovers);
   }, []);
-  useEffect(() => setDonorPage(0), [donorSearch]);
+  useEffect(() => setDonorPage(0), [donorSearch, selectedPanel?.id, selectedDonorTierFilterKey]);
   useEffect(() => {
     if (donorPage >= donorPageCount) setDonorPage(donorPageCount - 1);
   }, [donorPage, donorPageCount]);
@@ -3797,6 +3852,8 @@ function ThemeStudio({
             onSaveWidget={saveWidget}
             editorZoom={boardEditorZoom}
             editorPan={boardEditorPan}
+            onZoom={setBoardEditorZoom}
+            onPan={setBoardEditorPan}
           />
           <div className="board-editor-view-controls" aria-label="Board editor view controls">
             <div className="board-editor-zoom-controls"><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value - .15, .75, 2.4))} title="Zoom out" aria-label="Zoom out"><ZoomOut size={15} /></button><button type="button" className="board-editor-zoom-value" onClick={() => { setBoardEditorZoom(1); setBoardEditorPan({ x: 0, y: 0 }); }} title="Reset zoom and pan">{Math.round(boardEditorZoom * 100)}%</button><button type="button" onClick={() => setBoardEditorZoom((value) => clamp(value + .15, .75, 2.4))} title="Zoom in" aria-label="Zoom in"><ZoomIn size={15} /></button></div>
@@ -3854,13 +3911,13 @@ function ThemeStudio({
                   />
                   <p className="field-note">These settings affect only this donor-list panel. Donor profile data remains unchanged.</p>
                 </div></details>
-                <div className="field panel-tier-filter"><span>Show recognition levels <InfoDot text="Level filters update automatically when a donor's pledge level changes." /></span><div><button type="button" className={!selectedPanel.donorTierFilter?.length ? "selected" : ""} aria-pressed={!selectedPanel.donorTierFilter?.length} onClick={() => patchPanel(selectedPanel.id, { donorTierFilter: undefined })}>All levels</button>{state.recognitionSettings.tiers.map((tier) => { const selected = selectedPanel.donorTierFilter?.includes(tier) ?? false; return <button type="button" className={selected ? "selected" : ""} aria-pressed={selected} key={tier} onClick={() => { const current = selectedPanel.donorTierFilter ?? []; const next = selected ? current.filter((item) => item !== tier) : [...current, tier]; patchPanel(selectedPanel.id, { donorTierFilter: next.length ? next : undefined }); }}>{tier}</button>; })}</div></div>
+                <div className="field panel-tier-filter"><span>Recognition levels <InfoDot text="Selected levels filter both the available supporter names and this donor-list panel." /></span><details className="donor-tier-filter-dropdown"><summary><strong>{selectedDonorTierFilters.length ? selectedDonorTierFilters.join(", ") : "All levels"}</strong><span aria-hidden="true">⌄</span></summary><div className="donor-tier-filter-options"><label><input type="checkbox" checked={!selectedDonorTierFilters.length} onChange={() => patchPanel(selectedPanel.id, { donorTierFilter: undefined })} /><span>All levels</span></label>{state.recognitionSettings.tiers.map((tier) => { const selected = selectedDonorTierFilters.includes(tier); return <label key={tier}><input type="checkbox" checked={selected} onChange={() => { const next = selected ? selectedDonorTierFilters.filter((item) => item !== tier) : [...selectedDonorTierFilters, tier]; patchPanel(selectedPanel.id, { donorTierFilter: next.length ? next : undefined }); }} /><span>{tier}</span></label>; })}</div></details></div>
                 <details className="inspector-details roster-details">
-                  <summary>Choose board roster <span>{selectedProgram.donorIds.length} selected</span></summary>
+                  <summary>Choose board roster <span>{donorListRoster.length} selected for this list</span></summary>
                   <div className="inspector-block">
                     <LabeledInput label="Find a supporter" info="Search the museum's supporter list." value={donorSearch} onChange={setDonorSearch} />
-                    <p className="field-note">Roster membership applies to every donor-list element on this board.</p>
-                    <div className="mini-actions"><button type="button" onClick={() => setProgramDonorIds(state.donors.filter((donor) => donor.active).map((donor) => donor.id))}>Use all active</button><button type="button" onClick={() => setProgramDonorIds([])}>Clear roster</button></div>
+                    <p className="field-note">Available names honor the selected recognition levels. Roster membership applies to every donor-list element on this board.</p>
+                    <div className="mini-actions"><button type="button" onClick={() => setProgramDonorIds(state.donors.filter((donor) => donor.active && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier))).map((donor) => donor.id))}>Use all matching</button><button type="button" onClick={() => setProgramDonorIds([])}>Clear roster</button></div>
                     <div className="board-donor-picker compact-picker">{donorPageItems.map((donor) => <label key={donor.id}><input type="checkbox" checked={selectedProgram.donorIds.includes(donor.id)} onChange={(event) => toggleProgramDonor(donor.id, event.target.checked)} /><span>{donor.name}</span></label>)}{!donorPageItems.length && <p className="field-note">No supporters match “{donorSearch}”.</p>}</div>
                     <Pager page={donorPage} pageCount={donorPageCount} onChange={setDonorPage} />
                   </div>
@@ -3868,11 +3925,14 @@ function ThemeStudio({
                 <details className="inspector-details">
                   <summary>Lines & capacity</summary>
                   <div className="inspector-block">
-                    <Slider label="Rows" info="Sets how many donor rows fit inside this element." value={selectedPanel.rows ?? Math.max(1, Math.ceil(selectedProgram.donorIds.length / (selectedPanel.columns ?? selectedProgram.columns)))} min={1} max={12} onChange={(rows) => patchPanel(selectedPanel.id, { rows })} />
+                    <Slider label="Rows" info="Sets how many donor rows fit inside this element." value={donorListRows} min={1} max={12} onChange={(rows) => patchPanel(selectedPanel.id, { rows })} />
+                    <div className="donor-capacity-summary"><strong>{donorListRoster.length} name{donorListRoster.length === 1 ? "" : "s"} · {donorListCapacity} line capacity</strong><span>{donorListRoster.length > donorListCapacity ? `${donorListRoster.length - donorListCapacity} name${donorListRoster.length - donorListCapacity === 1 ? "" : "s"} will not fit` : `${donorListCapacity - donorListRoster.length} open line${donorListCapacity - donorListRoster.length === 1 ? "" : "s"}`}</span></div>
+                    <div className="donor-capacity-rows">{Array.from({ length: donorListRows }, (_, rowIndex) => { const lineNames = donorListRoster.slice(rowIndex * donorListColumns, (rowIndex + 1) * donorListColumns); return <div className="donor-capacity-row" key={rowIndex}><strong>Line {rowIndex + 1}</strong><span>{lineNames.length ? lineNames.map((donor) => donor.name).join(" · ") : "Available"}</span></div>; })}</div>
                     <div className="donor-divider-controls"><div className="two-col"><Slider label="Line thickness" info="Choose 0 to hide divider lines." value={selectedPanel.donorDividerThickness ?? 1} min={0} max={6} onChange={(donorDividerThickness) => patchPanel(selectedPanel.id, { donorDividerThickness })} /><Slider label="Line visibility" info="Sets how faint or strong divider lines appear." value={selectedPanel.donorDividerOpacity ?? 18} min={0} max={100} onChange={(donorDividerOpacity) => patchPanel(selectedPanel.id, { donorDividerOpacity })} /></div><ColorOverrideField label="Line color" value={selectedPanel.donorDividerColor} fallback="#D9A657" onChange={(donorDividerColor) => patchPanel(selectedPanel.id, { donorDividerColor })} /></div>
                   </div>
                 </details>
               </>}
+              {selectedPanel.type === "donors" && <details className="inspector-details donor-style-section" open><summary>Style</summary><div className="inspector-block"><LabeledSelect label="Name font" info="Typeface used only by this donor-list element." value={selectedPanel.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /></div></details>}
               {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row">{selectedPanel.type === "text" && <div className="field"><span>Text flow <InfoDot text="Wrap is the default. Fit one line keeps a heading on one line and reduces its size only when needed." /></span><SegmentedControl value={selectedPanel.textFlow ?? "wrap"} options={[["wrap", "Wrap"], ["fit-one-line", "Fit one line"]]} onChange={(textFlow) => patchPanel(selectedPanel.id, { textFlow: textFlow as BoardPanel["textFlow"] })} /></div>}<div className="field"><span>Text alignment</span><SegmentedControl value={selectedPanel.textAlign ?? "center"} options={[["left", "Left"], ["center", "Center"], ["right", "Right"]]} onChange={(textAlign) => patchPanel(selectedPanel.id, { textAlign: textAlign as BoardPanel["textAlign"] })} /></div><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
               {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Text treatment</summary><div className="inspector-block">
                 <LabeledSelect label="Text finish" info="Applies only to this selected element." value={selectedPanel.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchPanel(selectedPanel.id, { textFinish: textFinish as BoardPanel["textFinish"] })} />
@@ -3887,15 +3947,26 @@ function ThemeStudio({
             </div> : <>
             <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
-              <div className="field"><span>Board folder <InfoDot text="Folders organize boards in board pickers. Rename updates every board currently in this folder." /></span><select value={boardFolderFor(selectedProgram)} onChange={(event) => { patchProgram({ folder: event.target.value }); setFolderNameDraft(event.target.value); }}>{folderOptions.map((folder) => <option value={folder} key={folder}>{folder}</option>)}</select><div className="board-folder-actions"><input value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} placeholder="New or renamed folder" /><button type="button" onClick={createBoardFolder} disabled={!folderNameDraft.trim()}>Add folder</button><button type="button" onClick={renameBoardFolder} disabled={!folderNameDraft.trim() || folderNameDraft.trim() === boardFolderFor(selectedProgram)}>Rename folder</button></div></div>
+              <div className="field"><span>Board folder <InfoDot text="Folders organize boards in board pickers. Rename updates every board currently in this folder." /></span><div className="board-folder-actions"><select value={boardFolderFor(selectedProgram)} onChange={(event) => { patchProgram({ folder: event.target.value }); setFolderNameDraft(event.target.value); }}>{folderOptions.map((folder) => <option value={folder} key={folder}>{folder}</option>)}</select><input value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} placeholder="New folder name" /><button type="button" onClick={createBoardFolder} disabled={!folderNameDraft.trim()}>Add</button><button type="button" onClick={renameBoardFolder} disabled={!folderNameDraft.trim() || folderNameDraft.trim() === boardFolderFor(selectedProgram)}>Rename</button></div></div>
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
-              <LabeledSelect label="Board background" info="Choose the color behind this board's content." value={boardBackgroundChoice(selectedProgram.backgroundColor)} options={["classic", "red", "orange", "yellow", "green", "blue", "purple", "pink", "navy", "coffee", "black", "white", "custom"]} optionLabels={{ classic: "Lantern classic", red: "Red", orange: "Orange", yellow: "Yellow", green: "Green", blue: "Blue", purple: "Purple", pink: "Pink", navy: "Navy", coffee: "Coffee", black: "Black", white: "White", custom: "Pick a color…" }} onChange={(choice) => patchProgram({ backgroundColor: choice === "classic" ? undefined : choice === "custom" ? selectedProgram.backgroundColor ?? "#385a7a" : BOARD_BACKGROUND_COLORS[choice as keyof typeof BOARD_BACKGROUND_COLORS] })} />
+              <LabeledSelect label="Board background" info="Choose the color behind this board's content." value={boardBackgroundChoice(selectedProgram.backgroundColor)} options={["classic", "red", "orange", "yellow", "green", "blue", "purple", "pink", "navy", "coffee", "black", "white", "custom"]} optionLabels={{ classic: "Lantern classic", red: "Red", orange: "Orange", yellow: "Yellow", green: "Green", blue: "Blue", purple: "Purple", pink: "Pink", navy: "Navy", coffee: "Coffee", black: "Black", white: "White", custom: "Pick a color…" }} onChange={(choice) => {
+                if (choice === "custom") {
+                  customBoardBackgroundColorRef.current?.click();
+                  return;
+                }
+                patchProgram({ backgroundColor: choice === "classic" ? undefined : BOARD_BACKGROUND_COLORS[choice as keyof typeof BOARD_BACKGROUND_COLORS] });
+              }} />
+              <input ref={customBoardBackgroundColorRef} className="sr-only" type="color" aria-label="Choose a custom board background color" value={selectedProgram.backgroundColor ?? "#385a7a"} onChange={(event) => patchProgram({ backgroundColor: event.target.value })} />
               {boardBackgroundChoice(selectedProgram.backgroundColor) === "custom" && <label className="field"><span>Custom background color</span><input type="color" value={selectedProgram.backgroundColor ?? "#385a7a"} onChange={(event) => patchProgram({ backgroundColor: event.target.value })} /></label>}
             </div></details>
             <details className="inspector-details"><summary>Background & frame</summary><div className="inspector-block">
-              <LabeledSelect label="Frame style" info="A decorative edge saved with this board. Use it to match the display to the room or artwork." value={selectedProgram.frameStyle ?? "classic"} options={["classic", "slim-black", "natural-oak", "walnut", "champagne", "gallery-gold", "matted-black", "espresso-shadowbox", "weathered-pine", "ornate-gold", "wide-black-bevel"]} optionLabels={{ classic: "Lantern classic", "slim-black": "Slim black", "natural-oak": "Natural oak", walnut: "Walnut wood", champagne: "Champagne", "gallery-gold": "Gallery gold", "matted-black": "Black with white mat", "espresso-shadowbox": "Espresso shadowbox", "weathered-pine": "Weathered pine", "ornate-gold": "Ornate antique gold", "wide-black-bevel": "Wide black bevel" }} onChange={(frameStyle) => patchProgram({ frameStyle: frameStyle as DonorBoardProgram["frameStyle"] })} />
+              <ColorControl label="Frame color" value={selectedProgram.frameColor ?? "#15171a"} onChange={(frameColor) => patchProgram({ frameColor })} />
+              <Slider label="Frame thickness" info="Controls the width of the frame edge." value={selectedProgram.frameThickness ?? 8} min={0} max={32} onChange={(frameThickness) => patchProgram({ frameThickness })} />
+              <LabeledSelect label="Frame finish" info="Simple is flat, Bevel adds a raised edge, and Ornate adds layered detail." value={selectedProgram.frameFinish ?? "simple"} options={["simple", "bevel", "ornate"]} optionLabels={{ simple: "Simple", bevel: "Bevel", ornate: "Ornate" }} onChange={(frameFinish) => patchProgram({ frameFinish: frameFinish as DonorBoardProgram["frameFinish"] })} />
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.showMatting ?? false} onChange={(event) => patchProgram({ showMatting: event.target.checked })} /><span>Add white gallery mat</span></label>
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.showFrame ?? display.showFrame ?? true} onChange={(event) => patchProgram({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
+            </div></details>
+            <details className="inspector-details"><summary>Board image</summary><div className="inspector-block">
               <div className="board-background-controls">
                 <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {selectedProgram.backgroundImage ? "Replace board image" : "Add board image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
                 {selectedProgram.backgroundImage && <button type="button" className="command-button danger compact" onClick={removeBoardBackground}><Trash2 size={15} /> Use display background</button>}
@@ -3958,6 +4029,13 @@ function DashboardBlipControl({ blip, startedAt, onSetRemaining, onEnd }: {
   </section>;
 }
 
+function DashboardAnnouncementControl({ announcement, scheduled, onEnd }: { announcement: LanternState["announcement"]; scheduled: boolean; onEnd: () => void }) {
+  return <section className="dashboard-announcement-control" aria-label={`Active message: ${announcement.title || "Untitled message"}`}>
+    <div><Megaphone size={16} /><span><strong>{announcement.title || "Message active"}</strong><small>{scheduled ? "Ends this scheduled occurrence only. Future calendar occurrences stay scheduled." : "This message is currently live."}</small></span></div>
+    <button type="button" className="command-button danger compact" onClick={onEnd}><Square size={14} /> End message</button>
+  </section>;
+}
+
 /** Keep bundled board assets working when the app is hosted below a repository path on GitHub Pages. */
 function resolveProjectAssetUrl(value: string) {
   if (!value.startsWith("/")) return value;
@@ -3979,8 +4057,10 @@ function DirectBoardCanvas({
   onBeginPlace,
   onAdd,
   editorZoom,
-  editorPan
-  ,selectedPanelIds = [], widgets = [], onAddWidget, onSaveWidget
+  editorPan,
+  onZoom,
+  onPan,
+  selectedPanelIds = [], widgets = [], onAddWidget, onSaveWidget
 }: {
   state: LanternState;
   display: DisplayProfile;
@@ -3998,6 +4078,8 @@ function DirectBoardCanvas({
   onAdd: (type?: BoardPanelType, position?: { x: number; y: number }) => void;
   editorZoom: number;
   editorPan: { x: number; y: number };
+  onZoom: React.Dispatch<React.SetStateAction<number>>;
+  onPan: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   widgets?: BoardWidget[]; onAddWidget?: (widget: BoardWidget) => void; onSaveWidget?: (name: string) => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -4008,6 +4090,8 @@ function DirectBoardCanvas({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; panelId?: string } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const viewPanRef = useRef<{ pointerId: number; x: number; y: number; pan: { x: number; y: number } } | null>(null);
+  const viewPanMovedRef = useRef(false);
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const stage = canvas?.parentElement;
@@ -4137,7 +4221,7 @@ function DirectBoardCanvas({
     });
     if (candidate && !target.closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"} frame-${program.frameStyle ?? "classic"}${program.showMatting ? " with-matting" : ""}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"} frame-finish-${program.frameFinish ?? "simple"}${program.showMatting ? " with-matting" : ""}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{
     width: `${authoredCanvasSize.width}px`,
     height: `${authoredCanvasSize.height}px`,
     fontFamily: "Montserrat",
@@ -4148,8 +4232,55 @@ function DirectBoardCanvas({
     "--board-palette-accent": palette.accent,
     "--board-palette-secondary": palette.secondary,
     "--board-palette-muted": palette.muted,
+    "--board-frame-color": program.frameColor ?? "#15171a",
+    "--board-frame-thickness": `${program.frameThickness ?? 8}px`,
     backgroundColor: program.backgroundColor,
-  } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); const panelId = (event.target as Element).closest<HTMLElement>("[data-panel-id]")?.dataset.panelId; if (panelId) onSelect(panelId); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)), panelId }); }}>
+  } as React.CSSProperties}
+    onWheel={(event) => {
+      event.preventDefault();
+      onZoom((value) => clamp(value + (event.deltaY < 0 ? 0.12 : -0.12), 0.75, 2.4));
+    }}
+    onPointerDownCapture={(event) => {
+      if (event.shiftKey && event.button === 2) {
+        event.preventDefault();
+        event.stopPropagation();
+        viewPanMovedRef.current = false;
+        viewPanRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, pan: editorPan };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+      prioritizeMoveHandle(event);
+    }}
+    onPointerMove={(event) => {
+      const viewPan = viewPanRef.current;
+      if (!viewPan || viewPan.pointerId !== event.pointerId) return;
+      const deltaX = event.clientX - viewPan.x;
+      const deltaY = event.clientY - viewPan.y;
+      if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) viewPanMovedRef.current = true;
+      onPan({ x: viewPan.pan.x + deltaX, y: viewPan.pan.y + deltaY });
+    }}
+    onPointerUp={(event) => {
+      if (viewPanRef.current?.pointerId !== event.pointerId) return;
+      viewPanRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    }}
+    onPointerCancel={() => { viewPanRef.current = null; }}
+    onPointerDown={(event) => {
+      if (viewPanRef.current?.pointerId === event.pointerId) return;
+      if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) onSelect("");
+      placePanel(event);
+    }}
+    onContextMenu={(event) => {
+      event.preventDefault();
+      if (viewPanMovedRef.current) {
+        viewPanMovedRef.current = false;
+        return;
+      }
+      const rect = event.currentTarget.getBoundingClientRect();
+      const panelId = (event.target as Element).closest<HTMLElement>("[data-panel-id]")?.dataset.panelId;
+      if (panelId) onSelect(panelId);
+      setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)), panelId });
+    }}>
     {boardBackgroundImage && <div className="direct-board-background"><img src={resolveProjectAssetUrl(boardBackgroundImage)} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
@@ -5725,6 +5856,9 @@ function LivePreviewPanel({
   const sourceRecordingPlaybackRef = useRef<HTMLVideoElement | null>(null);
   const sourceRecordingUrlRef = useRef<string | null>(null);
   const recordingMenuRef = useRef<HTMLDivElement | null>(null);
+  const refreshMediaDevices = useCallback(() => {
+    void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => setDevices([]));
+  }, []);
 
   useEffect(() => {
     const presence = new Map<ScreenId, number>();
@@ -5755,6 +5889,9 @@ function LivePreviewPanel({
   }, []);
 
   useEffect(() => { previewStreamRef.current = previewStream; }, [previewStream]);
+  useEffect(() => {
+    if (state.live.source === "demo") patchLive({ source: "camera" });
+  }, [state.live.source]);
   useEffect(() => {
     const userId = activeUserId ?? state.users[0]?.id ?? "local-user";
     const profile = resolveCalibrationProfile(state.effectStudio, userId, state.live.videoDeviceId, state.live.effects.calibrationProfileId);
@@ -5800,11 +5937,10 @@ function LivePreviewPanel({
   }, []);
 
   useEffect(() => {
-    const refreshDevices = () => void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => setDevices([]));
-    refreshDevices();
-    navigator.mediaDevices?.addEventListener("devicechange", refreshDevices);
+    refreshMediaDevices();
+    navigator.mediaDevices?.addEventListener("devicechange", refreshMediaDevices);
     return () => {
-      navigator.mediaDevices?.removeEventListener("devicechange", refreshDevices);
+      navigator.mediaDevices?.removeEventListener("devicechange", refreshMediaDevices);
       const previewLease = previewLeaseRef.current;
       previewLease?.release();
       previewLeaseRef.current = null;
@@ -6359,10 +6495,24 @@ function LivePreviewPanel({
     stopLive();
   };
 
+  const broadcastSourceReady = Boolean(previewStream);
+  const broadcastStartNotice = state.live.source === "camera"
+    ? "Start the camera before broadcasting."
+    : state.live.source === "screen"
+      ? "Start screen sharing before broadcasting."
+      : state.live.source === "recording"
+        ? "Play the selected recording before broadcasting."
+        : "Connect a video source before broadcasting.";
+
   const beginLivePresentation = () => {
     if (phoneMode && !openTargetOptions.includes(state.live.target as ScreenId)) {
       setPreviewError(openScreens.length ? "Choose one of the open displays before going live." : "Open a display first. Phone broadcasts can only be sent to an open display.");
       setPhoneSettingsOpen(true);
+      return;
+    }
+    if (!broadcastSourceReady) {
+      setPreviewError(broadcastStartNotice);
+      setLiveTab("setup");
       return;
     }
     if (previewStream && state.live.source !== "demo") {
@@ -6490,7 +6640,7 @@ function LivePreviewPanel({
           {state.live.active && <button type="button" className="command-button secondary compact" onClick={() => void openBroadcastRoomCamera()} title={`Open ${previewScreen.label} room camera in a movable window`}><PictureInPicture2 size={16} /> Room camera</button>}
           <label className="compact-heading-select"><span>Pop-out</span><select aria-label="Pop-out preview content" value={popoutMode} onChange={(event) => { const mode = event.target.value as typeof popoutMode; setPopoutMode(mode); setPopoutBoardVisible(mode !== "broadcast"); }}><option value="broadcast">Broadcast only</option><option value="selected">Selected display + broadcast</option><option value="all">Both displays + broadcast</option></select></label>
           <button type="button" className="command-button secondary compact live-preview-window-button" onClick={openPreviewWindow}><PictureInPicture2 size={17} /><span className="desktop-preview-label">{previewWindow && !previewWindow.closed ? "Focus preview" : "Pop out preview"}</span><span className="mobile-preview-label">Preview</span></button>
-          <button className={`${state.live.active ? "command-button danger compact" : "command-button primary compact"} live-broadcast-toggle`} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
+          <button type="button" className={`${state.live.active ? "command-button danger compact" : broadcastSourceReady ? "command-button primary compact" : "command-button secondary compact unavailable"} live-broadcast-toggle`} aria-disabled={!state.live.active && !broadcastSourceReady} title={!state.live.active && !broadcastSourceReady ? broadcastStartNotice : undefined} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>
             {state.live.active ? <Square size={17} /> : <Play size={17} />}
             {state.live.active ? "End broadcast" : "Start broadcast"}
           </button>
@@ -6523,16 +6673,16 @@ function LivePreviewPanel({
       <LabeledInput label="Lower third" info="The smaller caption shown under the title." value={state.live.lowerThird} onChange={(value) => patchLive({ lowerThird: value })} />
       <p className="direct-manipulation-hint text-layer-hint">Drag the title and lower-third text directly in either preview to place each one independently.</p>
       <div className="two-col">
-        <LabeledSelect label="Preview board" info="Board shown behind the broadcast while setting up in this window and its previews." value={previewBoardId} options={["assigned", ...state.boardPrograms.map((program) => program.id)]} optionLabels={{ assigned: "Assigned board for each display", ...Object.fromEntries(state.boardPrograms.map((program) => [program.id, program.name])) }} onChange={setPreviewBoardId} />
-        <LabeledSelect label="Video source" info={recordingActive ? "Stop recording before changing the approved source." : "Choose a camera, shared window, saved recording, or generated local test feed."} value={state.live.source} options={["demo", "camera", "screen", "recording"]} optionLabels={{ demo: "Generated test feed", camera: "Camera", screen: "Screen or window share", recording: "Saved recording" }} disabled={recordingActive} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
+        <PreviewBoardPicker programs={state.boardPrograms} value={previewBoardId} onChange={setPreviewBoardId} />
+        <LabeledSelect label="Video source" info={recordingActive ? "Stop recording before changing the approved source." : "Choose a camera, shared window, or saved recording."} value={state.live.source === "demo" ? "camera" : state.live.source} options={["camera", "screen", "recording"]} optionLabels={{ camera: "Camera", screen: "Screen or window share", recording: "Saved recording" }} disabled={recordingActive} onChange={(value) => selectSource(value as LanternState["live"]["source"])} />
       </div>
       <div className="two-col">
         {state.live.source === "recording" ? <>
           <LabeledSelect label="Recording" info="Saved local video used for preview, pop-out, and live output." value={selectedRecordingId} options={recordings.map((recording) => recording.id)} optionLabels={recordingSourceLabels} disabled={recordingActive || recordingLibraryLoading || !recordings.length} onChange={(recordingId) => { patchLive({ recordingId }); void startPreview("recording", recordingId); }} />
           <div className="recording-source-audio"><Volume2 size={17} /><span><strong>Recording audio</strong><small>{selectedSourceRecording ? "Uses the audio embedded in the selected file." : recordingLibraryLoading ? "Loading saved recordings…" : "Record a video to make it available here."}</small></span></div>
         </> : <>
-          <LabeledSelect label="Camera" info={recordingActive ? "Camera selection is locked while recording." : "Camera used for preview and live mode."} value={state.live.videoDeviceId ?? ""} options={cameraOptions.options} optionLabels={cameraOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ videoDeviceId: value || undefined })} />
-          <LabeledSelect label="Microphone" info={recordingActive ? "Microphone selection is locked while recording." : "Microphone used for live mode when the browser allows it."} value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} />
+          <div className="camera-device-select"><LabeledSelect label="Camera" info={recordingActive ? "Camera selection is locked while recording." : "Camera used for preview and live mode."} value={state.live.videoDeviceId ?? ""} options={cameraOptions.options} optionLabels={cameraOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ videoDeviceId: value || undefined })} /><button type="button" className="icon-button camera-device-refresh" title="Refresh camera and microphone list" aria-label="Refresh camera and microphone list" disabled={recordingActive} onClick={refreshMediaDevices}><RotateCcw size={15} /></button></div>
+          <div className="camera-device-select"><LabeledSelect label="Microphone" info={recordingActive ? "Microphone selection is locked while recording." : "Microphone used for live mode when the browser allows it."} value={state.live.audioDeviceId ?? ""} options={micOptions.options} optionLabels={micOptions.labels} disabled={recordingActive} onChange={(value) => patchLive({ audioDeviceId: value || undefined })} /><button type="button" className="icon-button camera-device-refresh" title="Refresh camera and microphone list" aria-label="Refresh camera and microphone list" disabled={recordingActive} onClick={refreshMediaDevices}><RotateCcw size={15} /></button></div>
         </>}
       </div>
       <section className={previewError || popupBlocked ? "source-connection-card error" : previewStream ? "source-connection-card ready" : "source-connection-card"}>
@@ -6674,7 +6824,6 @@ function LivePreviewPanel({
             <button type="button" onClick={() => selectSource("camera", true)}><Camera size={24} /><strong>Use webcam</strong><span>Ask for camera and microphone access.</span></button>
             <button type="button" onClick={() => selectSource("screen", true)}><Monitor size={24} /><strong>Share a window</strong><span>Choose Zoom, Skype, or another screen.</span></button>
             <button type="button" disabled={!recordings.length} onClick={() => selectSource("recording", true)}><Play size={24} /><strong>Use recording</strong><span>{recordings.length ? `Play ${selectedSourceRecording?.title ?? "a saved recording"}.` : "No saved recordings yet."}</span></button>
-            <button type="button" onClick={() => selectSource("demo", true)}><Video size={24} /><strong>Use test feed</strong><span>Open the generated preview without a camera.</span></button>
           </div>
         </section>
       </div>}
@@ -7271,7 +7420,7 @@ function ScreensView({
   useEffect(() => {
     if (!(window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) return;
     void import("@tauri-apps/api/core").then(({ invoke }) => invoke<Array<{ id: number; name?: string; positionX: number; positionY: number; width: number; height: number }>>("available_displays")).then(setAvailableMonitors).catch(() => setAvailableMonitors([]));
-  }, []);
+  }, [refreshMediaDevices]);
   useEffect(() => {
     if (!editingId) return;
     const keepEditorOnScreen = () => {
@@ -7770,7 +7919,9 @@ function ScheduleCalendarView({
   const scheduleHourCount = Math.max(1, scheduleEndHour - scheduleStartHour);
   const scheduleStartMinutes = scheduleStartHour * 60;
   const scheduleEndMinutes = scheduleEndHour * 60;
-  const hourHeight = clamp((viewportHeight - 280) / scheduleHourCount, 28, 58);
+  // Keep the operator's working hours comfortably readable instead of squeezing
+  // all 24 hours into the viewport. The full day remains available by scrolling.
+  const hourHeight = clamp((viewportHeight - 280) / 13, 36, 58);
   const hours = Array.from({ length: scheduleHourCount + 1 }, (_, index) => scheduleStartHour + index);
   const monthStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
   const monthDates = Array.from({ length: 42 }, (_, index) => addCalendarDays(startOfCalendarWeek(monthStart), index));
@@ -7802,7 +7953,7 @@ function ScheduleCalendarView({
     if (visibleMode !== "week") return;
     const frame = window.requestAnimationFrame(() => { if (weekScrollRef.current) weekScrollRef.current.scrollTop = 7 * hourHeight; });
     return () => window.cancelAnimationFrame(frame);
-  }, [visibleMode]);
+  }, [visibleMode, hourHeight]);
 
   const patchEntry = (id: string, patch: Partial<ScheduleEntry>) => {
     if (draftEntry?.id === id) {
@@ -8874,12 +9025,37 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
   const [stateReady, setStateReady] = useState(false);
   useEffect(() => {
     let mounted = true;
-    void loadAuthoritativeLanternState().then((loaded) => {
-      if (!mounted) return;
-      setState(loaded.state);
-      setStateReady(true);
+    let loading = false;
+    const refreshLiveState = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        const loaded = await loadAuthoritativeLanternState({ preferShared: true });
+        if (mounted) {
+          setState(loaded.state);
+          setStateReady(true);
+        }
+      } finally {
+        loading = false;
+      }
+    };
+    void refreshLiveState();
+    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
+    const channel = createHostChannel((message) => {
+      if (message.type === "state-update") setState(message.state);
     });
-    return () => { mounted = false; };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshLiveState();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+      channel.close();
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   const screens = screenIds.map((screenId) => state.screens[screenId]).filter(Boolean);
@@ -8910,7 +9086,6 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const scheduledSoundRef = useRef<ResolvedScheduledAnnouncement | null>(null);
   const blipSoundKeyRef = useRef("");
   const identifyTimerRef = useRef<number | null>(null);
-  const receivedStateUpdateRef = useRef(false);
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
   const showIdentity = useCallback(() => {
     if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
@@ -8923,16 +9098,34 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
 
   useEffect(() => {
     let mounted = true;
-    void loadAuthoritativeLanternState()
-      // A display can receive a live update before its shared-state bootstrap
-      // finishes. Never let that older bootstrap result roll the display back.
-      .then((loaded) => {
-        if (!mounted) return;
-        if (!receivedStateUpdateRef.current) setState(loaded.state);
-        setStateReady(true);
-      });
+    let loading = false;
+    const refreshLiveState = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        // Displays are read-only outputs. The server is their source of truth,
+        // even if this browser has an older local cache from a prior session.
+        const loaded = await loadAuthoritativeLanternState({ preferShared: true });
+        if (mounted) {
+          setState(loaded.state);
+          setStateReady(true);
+        }
+      } finally {
+        loading = false;
+      }
+    };
+    void refreshLiveState();
+    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshLiveState();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       mounted = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
     };
   }, []);
@@ -8953,7 +9146,6 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   useEffect(() => {
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") {
-        receivedStateUpdateRef.current = true;
         setState(message.state);
       }
       if (message.type === "identify-screen" && message.screenId === screenId) {
@@ -9445,6 +9637,7 @@ function titleFor(view: View) {
 
 interface ResolvedScheduledAnnouncement {
   key: string;
+  occurrenceKey: string;
   announcement: LanternState["announcement"];
   startedAt: string;
 }
@@ -9528,6 +9721,8 @@ function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, n
     (item) => Boolean(item.announcementId && state.savedAnnouncements.some((saved) => saved.id === item.announcementId))
   );
   if (!entry?.announcementId) return null;
+  const occurrenceKey = scheduleOccurrenceKey(entry, now);
+  if (state.dismissedAnnouncementOccurrences?.includes(occurrenceKey)) return null;
   const saved = state.savedAnnouncements.find((item) => item.id === entry.announcementId);
   if (!saved) return null;
   const startMinutes = timeToMinutes(entry.startTime);
@@ -9537,6 +9732,7 @@ function resolveScheduledAnnouncement(state: LanternState, screenId: ScreenId, n
   const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   return {
     key: `${entry.id}-${dateKey}`,
+    occurrenceKey,
     startedAt: startedAt.toISOString(),
     announcement: {
       ...saved,
