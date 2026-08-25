@@ -8,14 +8,10 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Logger } from "@babylonjs/core/Misc/logger";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
-import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import "@babylonjs/loaders/glTF";
-import "@babylonjs/loaders/OBJ";
 import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
@@ -33,8 +29,6 @@ interface BabylonDonorWallProps {
   viewMode?: "2d" | "3d";
   resetKey?: number;
   previewProgramId?: string;
-  announcementCharacter?: Announcement["character"];
-  announcementCharacterAsset?: Announcement;
   announcementActive?: boolean;
   /** Baked into the panel texture so it remains physically attached in 3D. */
   announcementOverlay?: Announcement;
@@ -52,9 +46,8 @@ const boardPanelImageCache = new Map<string, HTMLImageElement>();
 // dashboard console. Rendering failures still surface as Babylon errors.
 Logger.LogLevels = Logger.ErrorLogLevel;
 
-export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementCharacter = state.announcement.character, announcementCharacterAsset = state.announcement, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), announcementOverlay, blipOverlay, broadcastOverlay }: BabylonDonorWallProps) {
+export function BabylonDonorWall({ state, screenId, interactive = false, fitToScreen = false, viewMode = "3d", resetKey = 0, previewProgramId, announcementActive = state.announcement.active && targetIncludesAnnouncement(state, screenId), announcementOverlay, blipOverlay, broadcastOverlay }: BabylonDonorWallProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const previousAnnouncementActive = useRef(announcementActive);
   const [scheduleMinute, setScheduleMinute] = useState(() => Math.floor(Date.now() / 60_000));
   const previewProgram = useMemo(
     () => previewProgramId ? state.boardPrograms.find((program) => program.id === previewProgramId) : undefined,
@@ -97,17 +90,6 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
         activeProgramId: activeProgram?.id,
         theme: state.theme,
         screen: renderScreen,
-          announcementCharacter,
-          announcementCharacterAsset: announcementCharacterAsset ? {
-            characterAssetUrl: announcementCharacterAsset.characterAssetUrl,
-            characterAssetName: announcementCharacterAsset.characterAssetName,
-            characterAssetKind: announcementCharacterAsset.characterAssetKind,
-            characterPlayAnimation: announcementCharacterAsset.characterPlayAnimation,
-            characterStartX: announcementCharacterAsset.characterStartX,
-            characterStopX: announcementCharacterAsset.characterStopX,
-            characterWalkSeconds: announcementCharacterAsset.characterWalkSeconds,
-            characterWaitSeconds: announcementCharacterAsset.characterWaitSeconds
-          } : null,
         announcementActive,
         announcementOverlay: announcementOverlay ? {
           title: announcementOverlay.title,
@@ -118,7 +100,14 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
           backgroundColor: announcementOverlay.backgroundColor,
           layoutX: announcementOverlay.layoutX,
           layoutY: announcementOverlay.layoutY,
-          layoutWidth: announcementOverlay.layoutWidth
+          layoutWidth: announcementOverlay.layoutWidth,
+          timerStyle: announcementOverlay.timerStyle,
+          timerPosition: announcementOverlay.timerPosition,
+          timerX: announcementOverlay.timerX,
+          timerY: announcementOverlay.timerY,
+          timerAccentColor: announcementOverlay.timerAccentColor,
+          timerTrackColor: announcementOverlay.timerTrackColor,
+          durationMinutes: announcementOverlay.durationMinutes
         } : null,
         blipOverlay: blipOverlay ? {
           kind: blipOverlay.kind,
@@ -140,7 +129,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
         } : null
       });
     },
-    [state.revision, state.donors, state.board, state.boardPrograms, state.theme, state.screens, screenId, activeProgram?.id, announcementCharacter, announcementCharacterAsset, announcementActive, announcementOverlay, blipOverlay, broadcastOverlay]
+    [state.revision, state.donors, state.board, state.boardPrograms, state.theme, state.screens, screenId, activeProgram?.id, announcementActive, announcementOverlay, blipOverlay, broadcastOverlay]
   );
 
   useEffect(() => {
@@ -376,13 +365,6 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
       const rightTrim = leftTrim.clone("right-trim");
       rightTrim.position.x = panelWidth / 2 + 0.075;
     }
-    if (screen.style === "donor-wall" && announcementCharacter === "inspector" && (announcementActive || previousAnnouncementActive.current)) {
-      addToyInspector(scene, isPortrait, panelWidth, panelHeight, announcementActive);
-    }
-    if (screen.style === "donor-wall" && announcementCharacter === "custom" && announcementCharacterAsset.characterAssetUrl && (announcementActive || previousAnnouncementActive.current)) {
-      void addCustomAnnouncementCharacter(scene, isPortrait, panelWidth, panelHeight, announcementActive, announcementCharacterAsset);
-    }
-    previousAnnouncementActive.current = announcementActive;
 
     if (!reduceMotion && state.theme.motion > 15 && !fitToScreen && !interactive) {
       scene.onBeforeRenderObservable.add(() => {
@@ -542,6 +524,7 @@ function drawAnnouncementOverlay(context: CanvasRenderingContext2D, width: numbe
     context.textBaseline = "middle";
     context.fillText([title, message, announcement.details].filter(Boolean).join("  •  "), x + tickerHeight * 0.32, centerY, overlayWidth - tickerHeight * 0.64);
     context.restore();
+    drawAnnouncementCountdown(context, width, height, announcement);
     return;
   }
 
@@ -582,6 +565,39 @@ function drawAnnouncementOverlay(context: CanvasRenderingContext2D, width: numbe
     context.font = `${detailSize}px Inter, Arial, sans-serif`;
     detailLines.forEach((line) => { context.fillText(line, x + overlayWidth * 0.09, textY); textY += detailSize * 1.35; });
   }
+  context.restore();
+  drawAnnouncementCountdown(context, width, height, announcement);
+}
+
+function drawAnnouncementCountdown(context: CanvasRenderingContext2D, width: number, height: number, announcement: Announcement) {
+  if (announcement.timerStyle === "off") return;
+  const position = announcement.timerPosition === "announcement-right" ? "bottom-right" : announcement.timerPosition;
+  const x = width * (announcement.timerX ?? (position.endsWith("left") ? 17 : 83)) / 100;
+  const y = height * (announcement.timerY ?? (position.startsWith("top") ? 15 : 84)) / 100;
+  const accent = announcement.timerAccentColor || "#f0b642";
+  const track = announcement.timerTrackColor || "#e9dcc4";
+  const total = Math.max(0, Math.round(announcement.durationMinutes * 60));
+  const text = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  const size = Math.max(42, Math.min(width, height) * .075);
+  context.save();
+  context.fillStyle = "rgba(5, 15, 27, .78)";
+  context.strokeStyle = track;
+  context.lineWidth = Math.max(4, size * .1);
+  if (announcement.timerStyle === "circular") {
+    context.beginPath(); context.arc(x, y, size / 2, 0, Math.PI * 2); context.fill(); context.stroke();
+    context.strokeStyle = accent; context.beginPath(); context.arc(x, y, size / 2, -Math.PI / 2, Math.PI * 1.5); context.stroke();
+  } else if (announcement.timerStyle === "progress") {
+    const barWidth = size * 2.25; const barHeight = size * .32;
+    roundedTextureRect(context, x - barWidth / 2, y - barHeight / 2, barWidth, barHeight, barHeight / 2); context.fill();
+    context.fillStyle = accent; roundedTextureRect(context, x - barWidth / 2, y - barHeight / 2, barWidth, barHeight, barHeight / 2); context.fill();
+  } else {
+    const boxWidth = size * 1.7; const boxHeight = size * .8;
+    roundedTextureRect(context, x - boxWidth / 2, y - boxHeight / 2, boxWidth, boxHeight, boxHeight * .18); context.fill(); context.stroke();
+  }
+  context.fillStyle = accent;
+  context.font = `800 ${Math.round(size * .3)}px Inter, Arial, sans-serif`;
+  context.textAlign = "center"; context.textBaseline = "middle";
+  context.fillText(text, x, y);
   context.restore();
 }
 
@@ -729,7 +745,7 @@ function drawMuseumBoard(
   screen?: DisplayProfile,
   animationTime = performance.now()
 ) {
-  const palette = resolveBoardPalette(activeProgram?.palette, state.board.visualStyle);
+  const palette = applyBoardBackgroundColor(resolveBoardPalette(activeProgram?.palette, state.board.visualStyle), activeProgram?.backgroundColor);
   const cream = palette.text;
   const teal = palette.secondary;
   const gold = palette.accent;
@@ -911,7 +927,7 @@ function drawComposableBoard(
   screen?: DisplayProfile,
   animationTime = performance.now()
 ) {
-  const palette = resolveBoardPalette(program.palette, state.board.visualStyle);
+  const palette = applyBoardBackgroundColor(resolveBoardPalette(program.palette, state.board.visualStyle), program.backgroundColor);
   const ivory = palette.text;
   const gold = palette.accent;
   const muted = palette.muted;
@@ -2486,142 +2502,6 @@ function addConstellation(scene: Scene, isPortrait: boolean, panelWidth: number,
   moon.material = moonMaterial;
 }
 
-function addToyInspector(scene: Scene, isPortrait: boolean, panelWidth: number, panelHeight: number, announcementActive: boolean) {
-  const root = new TransformNode("toy-inspector", scene);
-  const restingX = -panelWidth * 0.3;
-  const offscreenX = announcementActive ? -panelWidth * 0.68 : panelWidth * 0.68;
-  root.position = new Vector3(announcementActive ? offscreenX : restingX, -panelHeight * (isPortrait ? 0.34 : 0.36), -0.42);
-  root.scaling = new Vector3(isPortrait ? 0.8 : 0.72, isPortrait ? 0.8 : 0.72, isPortrait ? 0.8 : 0.72);
-
-  const coat = new StandardMaterial("inspector-coat", scene);
-  coat.diffuseColor = Color3.FromHexString("#d8c49a");
-  const navy = new StandardMaterial("inspector-navy", scene);
-  navy.diffuseColor = Color3.FromHexString("#16324a");
-  const glow = new StandardMaterial("inspector-star", scene);
-  glow.diffuseColor = Color3.FromHexString("#f5c562");
-  glow.emissiveColor = Color3.FromHexString("#6d4b12");
-
-  const body = MeshBuilder.CreateCylinder("inspector-body", { height: 0.48, diameterTop: 0.18, diameterBottom: 0.25, tessellation: 16 }, scene);
-  body.position.y = 0.18;
-  body.material = coat;
-  body.parent = root;
-
-  const head = MeshBuilder.CreateSphere("inspector-head", { diameter: 0.18, segments: 16 }, scene);
-  head.position.y = 0.52;
-  head.material = coat;
-  head.parent = root;
-
-  const hat = MeshBuilder.CreateCylinder("inspector-hat", { height: 0.1, diameter: 0.23, tessellation: 16 }, scene);
-  hat.position.y = 0.66;
-  hat.material = navy;
-  hat.parent = root;
-
-  const arm = MeshBuilder.CreateCylinder("inspector-arm", { height: 0.48, diameter: 0.035, tessellation: 10 }, scene);
-  arm.position = new Vector3(0.18, 0.34, 0);
-  arm.rotation.z = -0.72;
-  arm.material = coat;
-  arm.parent = root;
-
-  const star = MeshBuilder.CreateSphere("inspector-held-star", { diameter: 0.09, segments: 10 }, scene);
-  star.position = new Vector3(0.38, 0.5, -0.02);
-  star.material = glow;
-  star.parent = root;
-
-  const started = performance.now();
-  const duration = 1250;
-  scene.onBeforeRenderObservable.add(() => {
-    const progress = Math.min(1, (performance.now() - started) / duration);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    root.position.x = announcementActive
-      ? offscreenX + (restingX - offscreenX) * eased
-      : restingX + (offscreenX - restingX) * eased;
-    root.position.y += Math.sin(progress * Math.PI * 10) * 0.0018;
-    root.rotation.y = Math.sin(progress * Math.PI * 10) * 0.08;
-    if (!announcementActive && progress >= 1) root.setEnabled(false);
-  });
-}
-
-async function addCustomAnnouncementCharacter(scene: Scene, isPortrait: boolean, panelWidth: number, panelHeight: number, announcementActive: boolean, announcement: Announcement) {
-  const assetUrl = announcement.characterAssetUrl;
-  if (!assetUrl) return;
-  const root = new TransformNode("custom-announcement-character", scene);
-  const startX = panelWidth * ((announcement.characterStartX ?? -18) / 100);
-  const stopX = panelWidth * ((announcement.characterStopX ?? 18) / 100);
-  const floorY = -panelHeight * (isPortrait ? .36 : .39);
-  root.position = new Vector3(startX, floorY, -.5);
-
-  let animationGroup: { start: (loop?: boolean) => unknown; pause: () => unknown; play: (loop?: boolean) => unknown } | undefined;
-  if (announcement.characterAssetKind === "image") {
-    const plane = MeshBuilder.CreatePlane("custom-character-image", { width: isPortrait ? 1.15 : 1.35, height: isPortrait ? 1.75 : 2.05 }, scene);
-    const material = new StandardMaterial("custom-character-image-material", scene);
-    material.diffuseTexture = new Texture(assetUrl, scene, false, false);
-    material.diffuseTexture.hasAlpha = true;
-    material.useAlphaFromDiffuseTexture = true;
-    material.backFaceCulling = false;
-    material.emissiveColor = new Color3(.3, .3, .3);
-    plane.material = material;
-    plane.position.y = (isPortrait ? .84 : .98);
-    plane.parent = root;
-  } else {
-    try {
-      const extension = announcement.characterAssetName?.match(/\.(glb|gltf|obj)$/i)?.[0]?.toLowerCase() ?? ".glb";
-      const result = await SceneLoader.ImportMeshAsync(null, "", assetUrl, scene, undefined, extension);
-      result.meshes.filter((mesh) => !mesh.parent).forEach((mesh) => { mesh.parent = root; });
-      const visible = result.meshes.find((mesh) => mesh.getTotalVertices() > 0);
-      if (visible) {
-        const bounds = visible.getHierarchyBoundingVectors(true);
-        const height = Math.max(.001, bounds.max.y - bounds.min.y);
-        const targetHeight = isPortrait ? 1.7 : 1.95;
-        root.scaling.setAll(targetHeight / height);
-        root.position.y = floorY - bounds.min.y * root.scaling.y;
-      }
-      const selectedAnimation = result.animationGroups.find((group) => /walk/i.test(group.name)) ?? result.animationGroups[0];
-      if (selectedAnimation && announcement.characterPlayAnimation !== false) {
-        selectedAnimation.start(true);
-        animationGroup = selectedAnimation;
-      }
-    } catch (error) {
-      console.warn("Unable to load custom announcement character", error);
-      root.dispose();
-      return;
-    }
-  }
-
-  if (!announcementActive) {
-    root.position.x = startX;
-    animationGroup?.pause();
-    return;
-  }
-  const started = performance.now();
-  const walkMs = Math.max(1, announcement.characterWalkSeconds ?? 2) * 1000;
-  const waitMs = Math.max(0, announcement.characterWaitSeconds ?? 4) * 1000;
-  let waiting = false;
-  let leaving = false;
-  scene.onBeforeRenderObservable.add(() => {
-    const elapsed = performance.now() - started;
-    if (elapsed <= walkMs) {
-      const progress = 1 - Math.pow(1 - elapsed / walkMs, 3);
-      root.position.x = startX + (stopX - startX) * progress;
-      return;
-    }
-    if (elapsed <= walkMs + waitMs) {
-      root.position.x = stopX;
-      if (!waiting) {
-        animationGroup?.pause();
-        waiting = true;
-      }
-      return;
-    }
-    if (!leaving) {
-      animationGroup?.play(true);
-      leaving = true;
-    }
-    const exitProgress = Math.min(1, (elapsed - walkMs - waitMs) / walkMs);
-    root.position.x = stopX + (startX - stopX) * exitProgress;
-    if (exitProgress >= 1) animationGroup?.pause();
-  });
-}
-
 function targetIncludesAnnouncement(state: LanternState, screenId: ScreenId) {
   return state.announcement.targets?.length ? state.announcement.targets.includes(screenId) : state.announcement.target === "all" || state.announcement.target === screenId;
 }
@@ -2693,6 +2573,10 @@ function drawBrigadeAccents(context: CanvasRenderingContext2D, width: number, he
     context.fill();
   });
   context.restore();
+}
+
+function applyBoardBackgroundColor(palette: ResolvedBoardPalette, backgroundColor?: string): ResolvedBoardPalette {
+  return backgroundColor ? { ...palette, background: backgroundColor, gradientStart: backgroundColor, gradientEnd: backgroundColor } : palette;
 }
 
 function clamp(value: number, min: number, max: number) {

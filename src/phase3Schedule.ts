@@ -1,9 +1,9 @@
 import type { SavedAnnouncement, ScheduleEntry, ScreenId } from "./types";
 
-export const PHASE3_CONTENT_VERSION = 8;
+export const PHASE3_CONTENT_VERSION = 18;
 
 /** Museum hours: Wednesday through Sunday. Regular boards run 07:00–18:00. */
-const ALL_WEEK = [0, 3, 4, 5, 6];
+const ALL_WEEK = [0, 1, 2, 3, 4, 5, 6];
 const ART_CENTER_ASSET = "/assets/announcements/art-center-paintbrush.svg";
 
 const announcementBase = {
@@ -21,7 +21,6 @@ const announcementBase = {
   timerTrackColor: "#f4d894",
   finishSfx: "off" as const,
   sfxVolume: 55,
-  character: "off" as const
 };
 
 /**
@@ -76,11 +75,8 @@ export interface Phase3DemoRange {
 }
 
 export function phase3DemoRange(reference = new Date()): Phase3DemoRange {
-  const today = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate(), 12);
-  const start = new Date(today);
-  const end = new Date(today);
-  start.setDate(start.getDate() - 7);
-  end.setDate(end.getDate() + 30);
+  const start = new Date(2026, 7, 25, 12);
+  const end = new Date(2026, 8, 30, 12);
   return { startDate: localDateValue(start), endDate: localDateValue(end) };
 }
 
@@ -104,9 +100,18 @@ const discoverySlots: DemoSlot[] = [
 
 export function createPhase3DemoSchedule(reference = new Date()): ScheduleEntry[] {
   const range = phase3DemoRange(reference);
+  const weekly = (id: string, name: string, target: ScreenId, boardId: string, startTime: string, endTime: string, color: string, contentType: ScheduleEntry["contentType"] = "board", extra: Partial<ScheduleEntry> = {}): ScheduleEntry => ({ id, name, target, boardId, startTime, endTime, color, contentType, days: [...ALL_WEEK], recurrence: "weekly", scheduleDate: range.startDate, scheduleEndDate: range.endDate, active: true, ...extra });
   return [
-    ...scheduleTrack("welcome", "display-1", welcomeSlots, range),
-    ...scheduleTrack("discovery", "display-2", discoverySlots, range)
+    weekly("phase3-demo-welcome-01", "Morning welcome", "display-1", "board-toy-about-portrait", "09:00", "13:00", "#3579A6"),
+    weekly("phase3-demo-welcome-02", "Art Center opens", "display-1", "board-toy-about-portrait", "10:00", "10:05", "#D99005", "announcement", { announcementId: "art-center-open" }),
+    weekly("phase3-demo-welcome-03", "Afternoon supporter spotlight", "display-1", "board-supporter-spotlight-portrait", "13:00", "17:00", "#A95777"),
+    weekly("phase3-demo-welcome-04", "Visitor kindness blip", "display-1", "board-supporter-spotlight-portrait", "14:15", "14:17", "#26A89F", "blip", { blipId: "blip-brigade-good-deed" }),
+    weekly("phase3-demo-discovery-01", "Morning welcome", "display-2", "board-toy-about-landscape", "09:00", "13:00", "#3579A6"),
+    weekly("phase3-demo-discovery-02", "Art Center opens", "display-2", "board-toy-about-landscape", "10:00", "10:05", "#D99005", "announcement", { announcementId: "art-center-open" }),
+    weekly("phase3-demo-discovery-03", "Afternoon supporter spotlight", "display-2", "board-supporter-spotlight-landscape", "13:00", "17:00", "#A95777"),
+    weekly("phase3-demo-discovery-04", "Visitor kindness blip", "display-2", "board-supporter-spotlight-landscape", "14:15", "14:17", "#26A89F", "blip", { blipId: "blip-brigade-good-deed" }),
+    { ...weekly("phase3-demo-test-01", "After-hours test board", "display-1", "board-toy-about-portrait", "18:15", "18:30", "#6B7280"), days: [1, 2] },
+    { ...weekly("phase3-demo-test-02", "After-hours test board", "display-2", "board-toy-about-landscape", "18:15", "18:30", "#6B7280"), days: [1, 2] }
   ];
 }
 
@@ -124,11 +129,7 @@ export function migratePhase3Schedules(
   // Phase 3 entries are generated demo content rather than curator-created
   // schedules. Replace only those stable IDs so the compact v8 rotation takes
   // effect without touching custom schedules or legacy content.
-  const withoutPriorDemoSeed = existing.filter((entry) => !isPhase3DemoScheduleId(entry.id));
-  return appendMissingPhase3Content(
-    archiveUntouchedLegacyFullDaySchedules(withoutPriorDemoSeed),
-    createPhase3DemoSchedule(reference)
-  );
+  return createPhase3DemoSchedule(reference);
 }
 
 /**
@@ -142,7 +143,7 @@ export function archiveUntouchedLegacyFullDaySchedules(entries: readonly Schedul
 }
 
 export function isPhase3DemoScheduleId(id: string): boolean {
-  return /^phase3-demo-(welcome|discovery)-\d{2}$/.test(id);
+  return /^phase3-demo-(welcome|discovery)-\d{2}$|^phase3-demo-test-\d+$/.test(id);
 }
 
 function scheduleTrack(track: string, target: ScreenId, slots: DemoSlot[], range: Phase3DemoRange): ScheduleEntry[] {

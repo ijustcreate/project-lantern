@@ -1,5 +1,462 @@
 [
   {
+    "id": "DEV-0365",
+    "title": "Improve Schedule live-now contrast",
+    "summary": "Increased light-theme contrast for active and upcoming schedule labels.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:43 PM",
+    "areas": [
+      "Schedule",
+      "Theming"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0364",
+    "title": "Fix Blip library image previews",
+    "summary": "Validated selected Blip library images and added a stable unavailable-image state for failed assets.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:42 PM",
+    "areas": [
+      "Blips",
+      "Image library"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0363",
+    "title": "Reorganize saved Blips workspace",
+    "summary": "Added a categorized saved-Blip selector and separated the display preview from the far-right Blip editor.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:39 PM",
+    "areas": [
+      "Announcements",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0362",
+    "title": "Default announcement schedule timing",
+    "summary": "Announcement delivery now starts with the local current date and time and provides calendar-style weekly repeat days.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:37 PM",
+    "areas": [
+      "Announcements",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0361",
+    "title": "Simplify announcement delivery controls",
+    "summary": "Removed announcement layout and text placement controls while retaining delivery targets, duration, and scheduling.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:35 PM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0360",
+    "title": "Refine announcement Sound FX controls",
+    "summary": "Clarified built-in versus uploaded announcement sounds and removed the redundant global sound test button.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:32 PM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0359",
+    "title": "Show countdowns in announcement preview",
+    "summary": "Render configured countdown styles and colors into the physical 3D announcement board preview.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:30 PM",
+    "areas": [
+      "Announcements",
+      "Preview"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0358",
+    "title": "Remove announcement walk-on characters",
+    "summary": "Removed walk-on character controls, character data fields, asset loaders, and all announcement display rendering for those characters.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:28 PM",
+    "areas": [
+      "Announcements",
+      "Display renderer"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/host/lanternHost.ts",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css",
+      "src/sampleData.ts",
+      "src/phase3Schedule.ts"
+    ],
+    "tests": "npm run build; rg walk-on character references; git diff --check"
+  },
+  {
+    "id": "DEV-0357",
+    "title": "Fix announcement preview framing and zoom",
+    "summary": "Removed the redundant inner preview frame and made zoom buttons use the same smooth 10 percent increment as the mouse wheel.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:24 PM",
+    "areas": [
+      "Announcements",
+      "Preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0356",
+    "title": "Improve announcement message editing",
+    "summary": "Stacked announcement fields vertically, added auto-growing support text, removed placement sliders, and enabled direct edge resizing of message boxes.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:22 PM",
+    "areas": [
+      "Announcements",
+      "Editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0355",
+    "title": "Refine announcement image controls",
+    "summary": "Show the selected announcement image name, use standard replacement styling, add an in-canvas delete control, and use light-blue announcement selections in the light theme.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:17 PM",
+    "areas": [
+      "Announcements",
+      "Light theme"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0354",
+    "title": "Improve announcement image drag performance",
+    "summary": "Kept announcement image placement local during dragging and save X, Y, and size once the drag ends to prevent composer refreshes.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:15 PM",
+    "areas": [
+      "Announcements",
+      "Performance"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0353",
+    "title": "Move announcement composer right",
+    "summary": "Placed the announcement preview on the left and Message Composer on the right for desktop while preserving the mobile reading order.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:13 PM",
+    "areas": [
+      "Announcements"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0352",
+    "title": "Fix light Schedule theme surfaces",
+    "summary": "Updated Schedule's light-theme view selection, event color picker, and display preview chrome for readable blue and white surfaces.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:12 PM",
+    "areas": [
+      "Schedule",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0351",
+    "title": "Fix light Schedule theme surfaces",
+    "summary": "Updated Schedule's light-theme view selection, event color picker, and display preview chrome for readable blue and white surfaces.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:10 PM",
+    "areas": [
+      "Schedule",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0350",
+    "title": "Replace schedule with September plan",
+    "summary": "Replaced existing schedule content with a conflict-free Aug 25–Sep 30 rotation: two daily boards per display, messages, Blips, and gray Monday/Tuesday after-hours tests with populated date bounds.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:06 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/phase3Schedule.ts",
+      "src/sampleData.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0349",
+    "title": "Rename Schedule agenda view",
+    "summary": "Changed the visible Schedule Agenda label and help copy to Daily without changing saved view behavior.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:02 PM",
+    "areas": [
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0348",
+    "title": "Reorganize donor profile editor",
+    "summary": "Added Basic info, Pledge & donations, About, and Donor lists tabs; added donor detail fields; removed board checkboxes; and improved theme contrast.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 12:00 PM",
+    "areas": [
+      "Donors",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0347",
+    "title": "Fix donor dropdown light styling",
+    "summary": "Made donor dropdowns and option popups use light surfaces and moved the focus outline inside the control to prevent clipping.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:57 AM",
+    "areas": [
+      "Donors",
+      "Light theme"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0346",
+    "title": "Move Dashboard display actions",
+    "summary": "Moved Identify display and Configure room camera controls to a left-side action rail on Dashboard display panels.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:55 AM",
+    "areas": [
+      "Dashboard"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0345",
+    "title": "Improve Board Editor context actions",
+    "summary": "Moved grouping guidance onto the board stage and added right-click panel edit, remove, ungroup, and add-content actions.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:53 AM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0344",
+    "title": "Improve light theme button contrast",
+    "summary": "Strengthened disabled button, destructive-action, helper-text, and Board Editor grouping-control contrast in the light theme.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:51 AM",
+    "areas": [
+      "Light theme",
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0343",
+    "title": "Make board accent bars reusable images",
+    "summary": "Converted Brigade background bars into reusable brass PNG image panels, migrated existing boards, and added a stored-image picker in the Board Editor.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:49 AM",
+    "areas": [
+      "Board Editor",
+      "Board rendering",
+      "Media library"
+    ],
+    "files": [
+      "public/assets/board-accents/brass-arch.png",
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0342",
+    "title": "Compact Board picker header",
+    "summary": "Placed the board name, folder, and orientation on one line and aligned the Board picker height with Board actions.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:46 AM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0341",
+    "title": "Compact Board picker header",
+    "summary": "Placed the board name, folder, and orientation on one line and aligned the Board picker height with Board actions.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:45 AM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0340",
+    "title": "Organize Board Settings and folders",
+    "summary": "Grouped the board element selector and added per-board folder creation and rename controls.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:43 AM",
+    "areas": [
+      "Board Editor",
+      "Board settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0339",
+    "title": "Expand Board Editor frame options",
+    "summary": "Added espresso shadowbox, weathered pine, ornate antique gold, and wide black bevel frames, plus an optional white gallery mat for any frame.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:43 AM",
+    "areas": [
+      "Board Editor",
+      "Board settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0338",
+    "title": "Add Board background color choices",
+    "summary": "Renamed the board palette control to Board background and added rainbow, navy, coffee, black, white, and custom-color choices saved with each board.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:39 AM",
+    "areas": [
+      "Board Editor",
+      "Board settings",
+      "Display rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
+    "id": "DEV-0337",
+    "title": "Add Board Editor frame styles",
+    "summary": "Added selectable slim black, natural oak, walnut, champagne, gallery gold, and matted frame treatments that are saved with each recognition board.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 11:38 AM",
+    "areas": [
+      "Board Editor",
+      "Board settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0336",
     "title": "Restore phone camera access",
     "summary": "Phone broadcast mode now ignores desktop-specific saved device IDs, asks mobile browsers for camera and microphone together, and falls back to camera-only when audio permission is unavailable.",

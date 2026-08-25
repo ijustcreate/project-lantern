@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   BadgeCheck,
   BookOpen,
-  Box,
   Bug,
   Camera,
   CalendarDays,
@@ -2019,7 +2018,7 @@ const helpSlides = [
   {
     kicker: "04 · Put it on the calendar",
     title: "Plan the day without second-guessing it.",
-    copy: "Use week, month, or agenda views to place boards, messages, Blips, and broadcasts on the right display at the right time. Only overlapping items of the same kind conflict.",
+    copy: "Use week, month, or daily views to place boards, messages, Blips, and broadcasts on the right display at the right time. Only overlapping items of the same kind conflict.",
     points: ["Choose Board, Announcement, Blip, or Broadcast", "Set timing, target, duration, and recurrence", "Resolve same-type conflicts before showtime"],
     accent: "05",
     image: `${import.meta.env.BASE_URL}assets/help/schedule.png`,
@@ -2248,6 +2247,7 @@ function Dashboard({
               const liveMessage = resolveScheduledAnnouncement(state, screen.id)?.announcement;
               return (
               <article className="dashboard-display-tile" key={screen.id}>
+                <div className="dashboard-display-side-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button></div>
                 <header className="dashboard-display-label">
                   <div>
                     <div className="dashboard-display-heading">
@@ -2277,7 +2277,7 @@ function Dashboard({
                   })}
                   onEnd={() => updateState((current) => current.activeBlip.active ? { ...current, activeBlip: { ...current.activeBlip, active: false } } : current)}
                 />}
-                <div className="button-row dashboard-display-actions"><button className="icon-button" onClick={() => identifyDisplay(screen.id)} title="Identify display"><Radio size={17} /></button><button className="icon-button" onClick={() => editRoomCamera(screen.id)} title={`Configure ${screen.label} room camera`}><Camera size={17} /></button><button className="command-button secondary compact" disabled={!editableBoard} onClick={() => editableBoard && editBoard(screen.id, editableBoard.id)} title={editableBoard ? `Edit ${editableBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
+                <div className="button-row dashboard-display-actions"><button className="command-button secondary compact" disabled={!editableBoard} onClick={() => editableBoard && editBoard(screen.id, editableBoard.id)} title={editableBoard ? `Edit ${editableBoard.name}` : "No board available to edit"}><Settings2 size={16} /> Edit Board</button><button className="icon-button danger-icon" disabled={displays.length <= 1} onClick={() => deleteDisplay(screen.id)} title="Delete display"><Trash2 size={17} /></button></div>
               </article>
             );})}
           </div>
@@ -2369,7 +2369,7 @@ function DonorsView({
   const [sortOrder, setSortOrder] = useState<"manual" | "az" | "za">(
     () => state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual"
   );
-  const [editTab, setEditTab] = useState<"profile" | "recognition" | "history" | "displays">("profile");
+  const [editTab, setEditTab] = useState<"basic" | "giving" | "about" | "displays">("basic");
   const [discardDraftPending, setDiscardDraftPending] = useState(false);
   const [draftDonorListIds, setDraftDonorListIds] = useState<string[]>([]);
   const [originalDonorListIds, setOriginalDonorListIds] = useState<string[]>([]);
@@ -2430,7 +2430,7 @@ function DonorsView({
     setDraft({ ...donor, boardIds: donor.boardIds ?? state.boardPrograms.filter((board) => board.donorIds.includes(donor.id)).map((board) => board.id) });
     setDraftDonorListIds(assignedListIds);
     setOriginalDonorListIds(assignedListIds);
-    setEditTab("profile");
+    setEditTab("basic");
   };
 
   const givingBoardMatchesDonor = (current: LanternState, board: DonorBoardProgram, donor: Donor) => {
@@ -2693,10 +2693,10 @@ function DonorsView({
       {draft && editingId && createPortal(<div className="modal-backdrop donor-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeEditor(); }}>
         <section className="editor-modal donor-editor-modal" role="dialog" aria-modal="true" aria-labelledby="donor-editor-title">
           <div className="editor-modal-head"><div><p className="eyebrow">Recognition profile</p><h2 id="donor-editor-title">Edit donor</h2></div><button className="icon-button" onClick={closeEditor} title="Close editor"><X size={18} /></button></div>
-          <EditorTabs value={editTab} options={[["profile", "Profile"], ["recognition", "Pledge"], ["history", "Donation History"], ["displays", "Donor lists"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
+          <EditorTabs value={editTab} options={[["basic", "Basic info"], ["giving", "Pledge & donations"], ["about", "About"], ["displays", "Donor lists"]]} onChange={(value) => setEditTab(value as typeof editTab)} />
           <div className="editor-modal-body donor-editor-body">
-            {editTab === "profile" && <div className="editor-form-grid"><LabeledInput label="Name" info="Donor or organization display name." value={draft.name} onChange={(name) => setDraft({ ...draft, name })} /><LabeledInput label={draft.givingProgramId ? "Recognition year" : "Donation date"} info={draft.givingProgramId ? "Cohort or pledge start year; this does not record a received gift." : "Enter an exact date or only a year."} value={draft.givingProgramId ? (draft.pledgeStartYear ?? draft.since) : (draft.donationDate ?? draft.since)} onChange={(date) => setDraft(draft.givingProgramId ? { ...draft, pledgeStartYear: date, since: date } : { ...draft, donationDate: date, since: date })} /><LabeledSelect label="Tier" info="Recognition tier." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} /><LabeledSelect label="Category" info="Donor category." value={draft.category} options={state.recognitionSettings.categories} onChange={(category) => setDraft({ ...draft, category })} /><label className="field span-two"><span>Basic public information <InfoDot text="Short summary used in donor lists." /></span><textarea value={draft.basicInfo ?? ""} onChange={(event) => setDraft({ ...draft, basicInfo: event.target.value })} /></label><label className="field span-two"><span>Expanded donor story <InfoDot text="Longer story shown on the donor profile." /></span><textarea className="expanded-copy" value={draft.expandedInfo ?? ""} onChange={(event) => setDraft({ ...draft, expandedInfo: event.target.value })} /></label><label className="switch-row span-two"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span>{draft.active ? "Active on recognition boards" : "Saved as draft"}</span></label></div>}
-            {editTab === "recognition" && <DonorPledgeEditor state={state} donor={draft} onChange={(nextDonor) => {
+            {editTab === "basic" && <div className="editor-form-grid"><LabeledInput label="Name" info="Donor or organization display name." value={draft.name} onChange={(name) => setDraft({ ...draft, name })} /><LabeledInput label="Recognition year" info="Year this donor's recognition begins." value={draft.pledgeStartYear ?? draft.donationDate ?? draft.since} onChange={(year) => setDraft({ ...draft, pledgeStartYear: year, donationDate: year, since: year })} /><LabeledSelect label="Tier" info="Recognition tier." value={draft.tier} options={state.recognitionSettings.tiers} onChange={(tier) => setDraft({ ...draft, tier })} /><LabeledSelect label="Category" info="Donor category." value={draft.category} options={state.recognitionSettings.categories} onChange={(category) => setDraft({ ...draft, category })} /></div>}
+            {editTab === "giving" && <><DonorPledgeEditor state={state} donor={draft} onChange={(nextDonor) => {
               const previousBoardIds = new Set(draft.boardIds ?? []);
               const nextBoardIds = new Set(nextDonor.boardIds ?? []);
               setDraft(nextDonor);
@@ -2705,11 +2705,11 @@ function DonorsView({
                 if (previousBoardIds.has(option.boardId) && !nextBoardIds.has(option.boardId)) return assignments.filter((id) => id !== option.id);
                 return assignments;
               }, current));
-            }} />}
-            {editTab === "history" && <DonationHistoryEditor donor={draft} users={state.users} activeUserId={activeUserId} onChange={(donations) => setDraft({ ...draft, donations })} />}
+            }} /><DonationHistoryEditor donor={draft} users={state.users} activeUserId={activeUserId} onChange={(donations) => setDraft({ ...draft, donations })} /></>}
+            {editTab === "about" && <div className="editor-form-grid"><label className="field span-two"><span>Basic info</span><textarea value={draft.basicInfo ?? ""} onChange={(event) => setDraft({ ...draft, basicInfo: event.target.value })} /></label><label className="field span-two"><span>Donor story</span><textarea className="expanded-copy" value={draft.expandedInfo ?? ""} onChange={(event) => setDraft({ ...draft, expandedInfo: event.target.value })} /></label><label className="field span-two"><span>Favorite joke</span><textarea value={draft.favoriteJoke ?? ""} onChange={(event) => setDraft({ ...draft, favoriteJoke: event.target.value })} /></label><label className="field span-two"><span>Favorite inspiration quote</span><textarea value={draft.favoriteQuote ?? ""} onChange={(event) => setDraft({ ...draft, favoriteQuote: event.target.value })} /></label></div>}
             {editTab === "displays" && <div className="display-assignment-grid">{availableDonorLists.map((option) => {
-              const checked = draftDonorListIds.includes(option.id);
-              return <div className={checked ? "display-assignment selected" : "display-assignment"} key={option.id}><label><input type="checkbox" checked={checked} onChange={(event) => setDraftDonorListIds((current) => event.target.checked ? [...new Set([...current, option.id])] : current.filter((id) => id !== option.id))} /><span><strong>{option.label}</strong></span></label><button type="button" className="command-button secondary compact" onClick={() => onOpenBoard(option.boardId)}><ExternalLink size={14} /> Open board</button></div>;
+              const assigned = draftDonorListIds.includes(option.id);
+              return <div className={assigned ? "display-assignment selected" : "display-assignment"} key={option.id}><span><strong>{option.label}</strong><small>{assigned ? "Included through the board's donor list" : "Not currently included"}</small></span><button type="button" className="command-button secondary compact" onClick={() => onOpenBoard(option.boardId)}><ExternalLink size={14} /> Open board</button></div>;
             })}{!availableDonorLists.length && <div className="empty-inspector"><Users size={24} /><strong>No donor lists available</strong><span>Add a donor-list panel to a board to assign donors here.</span></div>}</div>}
           </div>
           <div className="editor-modal-actions"><button className="command-button secondary" onClick={closeEditor}>Cancel</button><button className="command-button primary" onClick={saveDonor}><Save size={17} /> Save changes</button></div>
@@ -3227,7 +3227,31 @@ function boardPreviewPalette(palette: DonorBoardProgram["palette"]) {
   return { text: "#f5f2eb", accent: "#d9a657", secondary: "#79cac6", muted: "#bdc7c7" };
 }
 
-const boardFolderOptions = ["Honor rolls", "Supporter spotlights", "Program information", "Good deeds", "Custom boards"];
+const BOARD_BACKGROUND_COLORS = {
+  classic: undefined,
+  red: "#b63838",
+  orange: "#d87720",
+  yellow: "#d8b322",
+  green: "#2d8557",
+  blue: "#196aae",
+  purple: "#6542a6",
+  pink: "#c44f87",
+  navy: "#142a46",
+  coffee: "#513528",
+  black: "#101214",
+  white: "#f8f7f2"
+} as const;
+
+function boardBackgroundChoice(color?: string) {
+  const match = Object.entries(BOARD_BACKGROUND_COLORS).find(([, value]) => value?.toLowerCase() === color?.toLowerCase());
+  return match?.[0] ?? (color ? "custom" : "classic");
+}
+
+const defaultBoardFolderOptions = ["Honor rolls", "Supporter spotlights", "Program information", "Good deeds", "Custom boards"];
+
+function boardFolderOptions(programs: DonorBoardProgram[]) {
+  return [...new Set([...defaultBoardFolderOptions, ...programs.map(boardFolderFor)])].sort((left, right) => left.localeCompare(right));
+}
 
 function boardFolderFor(program: DonorBoardProgram) {
   if (program.folder) return program.folder;
@@ -3239,7 +3263,7 @@ function boardFolderFor(program: DonorBoardProgram) {
 }
 
 function groupBoardPrograms(programs: DonorBoardProgram[]) {
-  return boardFolderOptions
+  return boardFolderOptions(programs)
     .map((label) => ({ label, programs: programs.filter((program) => boardFolderFor(program) === label) }))
     .filter((group) => group.programs.length);
 }
@@ -3334,6 +3358,7 @@ function ThemeStudio({
   const [donorPage, setDonorPage] = useState(0);
   const [donorSearch, setDonorSearch] = useState("");
   const [boardSearch, setBoardSearch] = useState("");
+  const [folderNameDraft, setFolderNameDraft] = useState("");
   const [boardEditorZoom, setBoardEditorZoom] = useState(1);
   const [boardEditorPan, setBoardEditorPan] = useState({ x: 0, y: 0 });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "local" | "sync-error" | "error">("idle");
@@ -3350,6 +3375,16 @@ function ThemeStudio({
   const selectedPanel = panels.find((panel) => panel.id === selectedPanelId);
   const donorPageSize = 8;
   const filteredBoardDonors = state.donors.filter((donor) => donor.name.toLowerCase().includes(donorSearch.trim().toLowerCase()));
+  const boardImageLibrary = useMemo(() => {
+    const entries = [
+      { name: "Brass board accent", imageUrl: "/assets/board-accents/brass-arch.png" },
+      ...state.boardPrograms.flatMap((program) => [
+        ...(program.backgroundImage ? [{ name: `${program.name} background`, imageUrl: program.backgroundImage }] : []),
+        ...(program.panels ?? []).flatMap((panel) => panel.imageUrl ? [{ name: panel.title || `${program.name} image`, imageUrl: panel.imageUrl }] : [])
+      ])
+    ];
+    return [...new Map(entries.map((entry) => [entry.imageUrl, entry])).values()];
+  }, [state.boardPrograms]);
   const donorPageCount = Math.max(1, Math.ceil(filteredBoardDonors.length / donorPageSize));
   const donorPageItems = filteredBoardDonors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
   useEffect(() => {
@@ -3378,6 +3413,10 @@ function ThemeStudio({
     setBoardEditorZoom(1);
     setBoardEditorPan({ x: 0, y: 0 });
   }, [selectedProgramId]);
+
+  useEffect(() => {
+    if (selectedProgram) setFolderNameDraft(boardFolderFor(selectedProgram));
+  }, [selectedProgram]);
 
   useEffect(() => {
     const displayedProgramId = resolveDisplayedBoardProgramId(state, display.id);
@@ -3418,6 +3457,22 @@ function ThemeStudio({
         boardPrograms: current.boardPrograms.map((program) => program.id === programId ? { ...program, panels: nextPanels, ...legacyPatch } : program)
       };
     });
+  };
+
+  const createBoardFolder = () => {
+    const folder = folderNameDraft.trim();
+    if (!folder || !selectedProgram) return;
+    patchProgram({ folder });
+  };
+
+  const renameBoardFolder = () => {
+    const nextFolder = folderNameDraft.trim();
+    if (!nextFolder || !selectedProgram) return;
+    const currentFolder = boardFolderFor(selectedProgram);
+    updateDraftState((current) => ({
+      ...current,
+      boardPrograms: current.boardPrograms.map((program) => boardFolderFor(program) === currentFolder ? { ...program, folder: nextFolder } : program)
+    }));
   };
   const addPanel = (type = newPanelType, position?: { x: number; y: number }) => {
     const panel = createBoardPanel(type, position);
@@ -3665,6 +3720,7 @@ function ThemeStudio({
     window.setTimeout(() => setSaveStatus("idle"), 2600);
   };
 
+  const folderOptions = boardFolderOptions(state.boardPrograms);
   const groupedBoardPrograms = groupBoardPrograms(state.boardPrograms);
   const selectedBoardGroup = groupedBoardPrograms.find((group) => group.programs.some((program) => program.id === selectedProgram?.id));
   const boardPickerName = (program: DonorBoardProgram) => program.name.replace(/\s*(?:·|-)\s*(?:portrait|landscape)\s*$/i, "").trim();
@@ -3720,7 +3776,7 @@ function ThemeStudio({
         <main className="direct-board-stage" onPointerDown={(event) => {
           if (!(event.target as Element).closest(".direct-board-canvas")) setSelectedPanelId("");
         }}>
-          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit</span></div>
+          <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit · Shift-click two panels to group them; right-click a grouped panel to ungroup.</span></div>
           <DirectBoardCanvas
             state={state}
             display={boardDisplay}
@@ -3731,6 +3787,7 @@ function ThemeStudio({
             onSelect={(id, additive) => { setSelectedPanelId(id); setSelectedPanelIds((current) => additive ? (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]) : [id]); }}
             onPatch={patchPanel}
             onRemove={requestRemovePanel}
+            onUngroup={(panelId) => { const panel = panels.find((item) => item.id === panelId); if (panel) ungroupPanel(panel); }}
             onRenameDonor={renameDonor}
             placingPanelType={placingPanelType}
             onBeginPlace={setPlacingPanelType}
@@ -3749,7 +3806,7 @@ function ThemeStudio({
 
         <aside className="board-panel-inspector">
           <div className="inspector-sticky-head">
-            <div className="inspector-title-block"><p className="eyebrow">{selectedPanel ? "Selected element" : "Board settings"}</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "Edit this board"}</h2><label className="board-element-picker"><span className="sr-only">Choose board element</span><select value={selectedPanel?.id ?? ""} onChange={(event) => { setSelectedPanelId(event.target.value); setSelectedPanelIds(event.target.value ? [event.target.value] : []); }}><option value="">Board settings</option>{panels.map((panel, index) => <option value={panel.id} key={panel.id}>{index + 1}. {boardPanelLabel(panel.type)}{panel.title ? ` · ${panel.title.slice(0, 28)}` : ""}</option>)}</select></label></div>
+            <div className="inspector-title-block"><p className="eyebrow">{selectedPanel ? "Selected element" : "Board settings"}</p><h2>{selectedPanel ? boardPanelLabel(selectedPanel.type) : "Edit this board"}</h2><label className="board-element-picker"><span className="sr-only">Choose board element</span><select value={selectedPanel?.id ?? ""} onChange={(event) => { setSelectedPanelId(event.target.value); setSelectedPanelIds(event.target.value ? [event.target.value] : []); }}><optgroup label="Base board"><option value="">Board settings</option></optgroup>{panels.length > 0 && <optgroup label="Board elements">{panels.map((panel, index) => <option value={panel.id} key={panel.id}>{index + 1}. {boardPanelLabel(panel.type)}{panel.title ? ` · ${panel.title.slice(0, 28)}` : ""}</option>)}</optgroup>}</select></label></div>
             <div className="panel-icon-actions">
               <details className="board-add-menu" ref={boardAddMenuRef}>
                 <summary className="command-button secondary compact"><Plus size={15} /> Add content</summary>
@@ -3769,7 +3826,7 @@ function ThemeStudio({
               <section className="inspector-primary-section">
                 <header><strong>Content</strong></header>
                 {selectedPanel.type === "text" && <label className="field"><span>Text <InfoDot text="Use line breaks to arrange all copy inside this one text panel." /></span><textarea rows={7} value={selectedPanel.title} onChange={(event) => patchPanel(selectedPanel.id, { title: event.target.value })} /></label>}
-                {selectedPanel.type === "image" && <><label className="command-button secondary compact image-upload-button"><Upload size={15} /> {selectedPanel.imageUrl ? "Replace image" : "Choose PNG or image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the element." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
+                {selectedPanel.type === "image" && <><LabeledSelect label="Stored images" info="Images already used on this site can be reused without uploading again." value={selectedPanel.imageUrl ?? ""} options={["", ...boardImageLibrary.map((image) => image.imageUrl)]} optionLabels={{ "": "Choose from image library", ...Object.fromEntries(boardImageLibrary.map((image) => [image.imageUrl, image.name])) }} onChange={(imageUrl) => patchPanel(selectedPanel.id, { imageUrl: imageUrl || undefined })} /><label className="command-button secondary compact image-upload-button"><Upload size={15} /> {selectedPanel.imageUrl ? "Replace image" : "Choose PNG or image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (imageUrl) => patchPanel(selectedPanel.id, { imageUrl })); }} /></label><LabeledSelect label="Image fit" info="Contain keeps the whole image visible; cover fills the element." value={selectedPanel.imageFit ?? "contain"} options={["contain", "cover"]} optionLabels={{ contain: "Contain", cover: "Cover" }} onChange={(imageFit) => patchPanel(selectedPanel.id, { imageFit: imageFit as BoardPanel["imageFit"] })} /></>}
               </section>
               {selectedPanel.type === "donors" && <>
                 <div className="field"><span>Names in each row</span><SegmentedControl value={String(selectedPanel.columns ?? selectedProgram.columns)} options={[["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]]} onChange={(value) => patchPanel(selectedPanel.id, { columns: Number(value) as BoardPanel["columns"] })} /></div>
@@ -3826,16 +3883,18 @@ function ThemeStudio({
                   <Slider label="Shadow distance" info="Sets how far this element's text appears lifted from the board." value={selectedPanel.textShadowDistance ?? 5} min={0} max={16} onChange={(textShadowDistance) => patchPanel(selectedPanel.id, { textShadowDistance })} />
                 </>}
               </div></details>}
-              <div className="panel-group-actions"><span>{selectedPanel.groupId ? "Grouped panels move together." : "Select two panels with Shift to group them."}</span>{selectedPanel.groupId ? <button type="button" onClick={() => ungroupPanel(selectedPanel)}>Ungroup</button> : <button type="button" disabled={selectedPanelIds.length < 2} onClick={groupSelectedPanels}>Group selected</button>}</div>
               <details className="inspector-details"><summary>Layout & position</summary><div className="inspector-block"><div className="panel-position-grid">{(["x", "y", "width", "height"] as const).map((field) => <label className="field" key={field}><span>{field === "width" ? "W" : field === "height" ? "H" : field.toUpperCase()} (%)</span><input type="number" min={field === "width" || field === "height" ? 4 : -50} max={field === "width" || field === "height" ? 150 : 100} step="0.5" value={Math.round((selectedPanel[field] ?? 0) * 10) / 10} onChange={(event) => { const value = Number(event.target.value); const isSize = field === "width" || field === "height"; const limit = field === "width" ? Math.min(150, 150 - (selectedPanel.x ?? 0)) : field === "height" ? Math.min(150, 150 - (selectedPanel.y ?? 0)) : 100; patchPanel(selectedPanel.id, { [field]: Math.max(isSize ? 4 : -50, Math.min(limit, value)) }); }} /></label>)}</div><small className="panel-position-note">Panels may extend beyond the board edge; anything outside the board stays clipped.</small><button type="button" className="command-button danger compact" disabled={panels.length === 1} onClick={(event) => requestRemovePanel(selectedPanel.id, { x: event.clientX, y: event.clientY })}><Trash2 size={14} /> Remove element</button></div></details>
             </div> : <>
             <details className="inspector-details" open><summary>Essentials</summary><div className="inspector-block">
               <LabeledInput label="Board name" info="Name used in schedules and display controls." value={selectedProgram.name} onChange={(name) => patchProgram({ name })} />
-              <LabeledSelect label="Board folder" info="Choose where this board appears in board pickers." value={boardFolderFor(selectedProgram)} options={boardFolderOptions} onChange={(folder) => patchProgram({ folder })} />
+              <div className="field"><span>Board folder <InfoDot text="Folders organize boards in board pickers. Rename updates every board currently in this folder." /></span><select value={boardFolderFor(selectedProgram)} onChange={(event) => { patchProgram({ folder: event.target.value }); setFolderNameDraft(event.target.value); }}>{folderOptions.map((folder) => <option value={folder} key={folder}>{folder}</option>)}</select><div className="board-folder-actions"><input value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} placeholder="New or renamed folder" /><button type="button" onClick={createBoardFolder} disabled={!folderNameDraft.trim()}>Add folder</button><button type="button" onClick={renameBoardFolder} disabled={!folderNameDraft.trim() || folderNameDraft.trim() === boardFolderFor(selectedProgram)}>Rename folder</button></div></div>
               <div className="field"><span>Format <InfoDot text="Saved with this board and applied when the board is assigned to a display." /></span><SegmentedControl value={selectedProgram.orientation} options={[["Portrait", "Portrait"], ["Landscape", "Landscape"]]} onChange={(orientation) => patchProgram({ orientation: orientation as DisplayProfile["orientation"] })} /></div>
-              <LabeledSelect label="Board palette" info="A saved visitor-facing color system for this board." value={selectedProgram.palette ?? "classic"} options={["classic", "brigade-blue", "brigade-red", "brigade-sunshine", "brigade-cream", "legacy-navy", "legacy-sky"]} optionLabels={{ classic: "Lantern classic", "brigade-blue": "Brigade blue", "brigade-red": "Brigade red", "brigade-sunshine": "Brigade sunshine", "brigade-cream": "Brigade cream", "legacy-navy": "Legacy navy wall", "legacy-sky": "Legacy sky wall" }} onChange={(palette) => patchProgram({ palette: palette as DonorBoardProgram["palette"] })} />
+              <LabeledSelect label="Board background" info="Choose the color behind this board's content." value={boardBackgroundChoice(selectedProgram.backgroundColor)} options={["classic", "red", "orange", "yellow", "green", "blue", "purple", "pink", "navy", "coffee", "black", "white", "custom"]} optionLabels={{ classic: "Lantern classic", red: "Red", orange: "Orange", yellow: "Yellow", green: "Green", blue: "Blue", purple: "Purple", pink: "Pink", navy: "Navy", coffee: "Coffee", black: "Black", white: "White", custom: "Pick a color…" }} onChange={(choice) => patchProgram({ backgroundColor: choice === "classic" ? undefined : choice === "custom" ? selectedProgram.backgroundColor ?? "#385a7a" : BOARD_BACKGROUND_COLORS[choice as keyof typeof BOARD_BACKGROUND_COLORS] })} />
+              {boardBackgroundChoice(selectedProgram.backgroundColor) === "custom" && <label className="field"><span>Custom background color</span><input type="color" value={selectedProgram.backgroundColor ?? "#385a7a"} onChange={(event) => patchProgram({ backgroundColor: event.target.value })} /></label>}
             </div></details>
             <details className="inspector-details"><summary>Background & frame</summary><div className="inspector-block">
+              <LabeledSelect label="Frame style" info="A decorative edge saved with this board. Use it to match the display to the room or artwork." value={selectedProgram.frameStyle ?? "classic"} options={["classic", "slim-black", "natural-oak", "walnut", "champagne", "gallery-gold", "matted-black", "espresso-shadowbox", "weathered-pine", "ornate-gold", "wide-black-bevel"]} optionLabels={{ classic: "Lantern classic", "slim-black": "Slim black", "natural-oak": "Natural oak", walnut: "Walnut wood", champagne: "Champagne", "gallery-gold": "Gallery gold", "matted-black": "Black with white mat", "espresso-shadowbox": "Espresso shadowbox", "weathered-pine": "Weathered pine", "ornate-gold": "Ornate antique gold", "wide-black-bevel": "Wide black bevel" }} onChange={(frameStyle) => patchProgram({ frameStyle: frameStyle as DonorBoardProgram["frameStyle"] })} />
+              <label className="switch-row"><input type="checkbox" checked={selectedProgram.showMatting ?? false} onChange={(event) => patchProgram({ showMatting: event.target.checked })} /><span>Add white gallery mat</span></label>
               <label className="switch-row"><input type="checkbox" checked={selectedProgram.showFrame ?? display.showFrame ?? true} onChange={(event) => patchProgram({ showFrame: event.target.checked })} /><span>Show board frame</span></label>
               <div className="board-background-controls">
                 <label className="command-button secondary compact image-upload-button"><ImagePlus size={15} /> {selectedProgram.backgroundImage ? "Replace board image" : "Add board image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void chooseBoardBackground(event.target.files?.[0])} /></label>
@@ -3914,6 +3973,7 @@ function DirectBoardCanvas({
   onSelect,
   onPatch,
   onRemove,
+  onUngroup,
   onRenameDonor,
   placingPanelType,
   onBeginPlace,
@@ -3931,6 +3991,7 @@ function DirectBoardCanvas({
   selectedPanelIds?: string[];
   onPatch: (id: string, patch: Partial<BoardPanel>) => void;
   onRemove: (id: string, position?: { x: number; y: number }) => void;
+  onUngroup: (panelId: string) => void;
   onRenameDonor: (id: string, name: string) => void;
   placingPanelType: BoardPanelType | null;
   onBeginPlace: (type: BoardPanelType | null) => void;
@@ -3944,7 +4005,7 @@ function DirectBoardCanvas({
   const [editorFitScale, setEditorFitScale] = useState(1);
   const manipulationRef = useRef<{ pointerId: number; moved: boolean; pending: Map<string, Partial<BoardPanel>> } | null>(null);
   const suppressPanelClickRef = useRef(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; panelId?: string } | null>(null);
   const [widgetNamePromptOpen, setWidgetNamePromptOpen] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -4076,7 +4137,7 @@ function DirectBoardCanvas({
     });
     if (candidate && !target.closest(`[data-panel-id="${candidate.id}"] .panel-move-handle`)) beginManipulation(event, candidate, "move");
   };
-  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{
+  return <div ref={canvasRef} className={`direct-board-canvas ${display.orientation.toLowerCase()} ${state.board.visualStyle} palette-${program.palette ?? "classic"} frame-${program.frameStyle ?? "classic"}${program.showMatting ? " with-matting" : ""}${(program.showFrame ?? display.showFrame) === false ? " no-frame" : ""}${placingPanelType ? " placing-panel" : ""}`} style={{
     width: `${authoredCanvasSize.width}px`,
     height: `${authoredCanvasSize.height}px`,
     fontFamily: "Montserrat",
@@ -4087,7 +4148,8 @@ function DirectBoardCanvas({
     "--board-palette-accent": palette.accent,
     "--board-palette-secondary": palette.secondary,
     "--board-palette-muted": palette.muted,
-  } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)) }); }}>
+    backgroundColor: program.backgroundColor,
+  } as React.CSSProperties} onPointerDownCapture={prioritizeMoveHandle} onPointerDown={(event) => { if (!placingPanelType && !(event.target as Element).closest(".direct-board-panel, .board-context-menu, .direct-board-selection-layer")) onSelect(""); placePanel(event); }} onContextMenu={(event) => { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); const panelId = (event.target as Element).closest<HTMLElement>("[data-panel-id]")?.dataset.panelId; if (panelId) onSelect(panelId); setContextMenu({ x: Math.max(6, Math.min(event.clientX - rect.left, rect.width - 168)), y: Math.max(6, Math.min(event.clientY - rect.top, rect.height - 286)), panelId }); }}>
     {boardBackgroundImage && <div className="direct-board-background"><img src={resolveProjectAssetUrl(boardBackgroundImage)} alt="" style={{ width: `${backgroundScale * 100}%`, height: `${backgroundScale * 100}%`, objectPosition: `${boardBackgroundCrop?.x ?? 50}% ${boardBackgroundCrop?.y ?? 50}%` }} /></div>}
     {display.particleAnimationEnabled && <div className={`board-particles particles-${display.particleColorStyle ?? "warm"} drift-${display.particleDriftDirection ?? "natural"}`} style={{ "--particle-speed": `${display.particleLifetime ?? Math.max(7, 24 - (display.particleDriftSpeed ?? 4) * 1.45)}s`, "--particle-gravity": display.particleGravity ?? 3 } as React.CSSProperties}>{Array.from({ length: particleCount }, (_, index) => {
       const scatter = (salt: number) => ((Math.sin((index + 1) * salt) * 10000) % 1 + 1) % 1;
@@ -4154,7 +4216,7 @@ function DirectBoardCanvas({
       </div>
     </div>}
     {placingPanelType && <div className="placement-hint"><Plus size={14} /> Click where the {boardPanelLabel(placingPanelType).toLowerCase()} should go</div>}
-    {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}><strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}{widgets.map((widget) => <button key={widget.id} type="button" onClick={() => { onAddWidget?.(widget); setContextMenu(null); }}>{widget.name}</button>)}{selectedPanelIds.length > 1 && <button type="button" onClick={() => { setWidgetNamePromptOpen(true); setContextMenu(null); }}>Save selection as widget</button>}</div>}
+    {contextMenu && <div ref={contextMenuRef} className="board-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>{contextMenu.panelId && <><strong>Panel</strong><button type="button" onClick={() => { onSelect(contextMenu.panelId!); setContextMenu(null); }}>Edit panel</button>{panels.find((panel) => panel.id === contextMenu.panelId)?.groupId && <button type="button" onClick={() => { onUngroup(contextMenu.panelId!); setContextMenu(null); }}>Ungroup panels</button>}<button type="button" onClick={() => { onRemove(contextMenu.panelId!); setContextMenu(null); }}>Remove panel</button></>}<strong>Add panel</strong>{boardPanelTypes.map((type) => <button key={type} type="button" onClick={() => { onBeginPlace(type); setContextMenu(null); }}>{boardPanelLabel(type)}</button>)}{widgets.map((widget) => <button key={widget.id} type="button" onClick={() => { onAddWidget?.(widget); setContextMenu(null); }}>{widget.name}</button>)}</div>}
     {widgetNamePromptOpen && <LanternTextPromptDialog eyebrow="Reusable board content" title="Save selection as a widget" description="The selected panels are copied into a reusable widget. The panels already on this board remain unchanged." label="Widget name" initialValue="Saved widget" submitLabel="Save widget" onCancel={() => setWidgetNamePromptOpen(false)} onSubmit={(name) => { onSaveWidget?.(name); setWidgetNamePromptOpen(false); }} />}
   </div>;
 }
@@ -4649,13 +4711,16 @@ function AnnouncementsView({
 }) {
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(() => state.savedAnnouncements.some((item) => item.id === state.announcement.id) ? state.announcement.id : null);
   const [scheduleAnnouncementId, setScheduleAnnouncementId] = useState<string | null>(null);
-  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [scheduleDate, setScheduleDate] = useState(() => toDateInputValue(new Date()));
   const [scheduleEndDate, setScheduleEndDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 30);
     return date.toISOString().slice(0, 10);
   });
-  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [scheduleTime, setScheduleTime] = useState(() => {
+    const now = new Date();
+    return minutesToTime(now.getHours() * 60 + now.getMinutes());
+  });
   const [scheduleRecurrence, setScheduleRecurrence] = useState<"once" | "weekly">("once");
   const [scheduleDays, setScheduleDays] = useState<number[]>([new Date().getDay()]);
   const [deliveryScheduleOpen, setDeliveryScheduleOpen] = useState(false);
@@ -4679,9 +4744,17 @@ function AnnouncementsView({
     ? `All displays · previewing ${previewScreen.label}`
     : previewScreen.label;
   const isTicker = state.announcement.style === "News Ticker";
+  const announcementImageName = state.announcement.imageName
+    ?? state.announcement.imageUrl?.split("/").pop()?.split("?")[0]
+    ?? "Selected image";
   const effectiveTimerPosition = isTicker && state.announcement.timerPosition === "announcement-right" ? "top-right" : state.announcement.timerPosition;
   const patchAnnouncement = (patch: Partial<LanternState["announcement"]>) => {
     updateState((current) => ({ ...current, announcement: { ...current.announcement, ...patch } }));
+  };
+  const growSupportingMessage = (event: React.FormEvent<HTMLTextAreaElement>) => {
+    const input = event.currentTarget;
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
   };
 
   const toggleAnnouncementTarget = (screenId: ScreenId) => {
@@ -4858,31 +4931,14 @@ function AnnouncementsView({
           <div className="announcement-form-scroll">
           <details className="composer-section primary-section" open>
             <summary><span>1</span><div><strong>Message</strong><small>Keep it short enough to read at a glance.</small></div><ChevronDown size={16} /></summary>
-            <div className="composer-message-grid"><LabeledInput label="Headline" info="Large headline shown on the announcement." value={state.announcement.title} onChange={(value) => patchAnnouncement({ title: value })} /><LabeledInput label="Supporting message" info="Supporting text below the headline." value={state.announcement.message} onChange={(value) => patchAnnouncement({ message: value })} /></div>
-            <label className="field announcement-details-field"><span>Details <InfoDot text="Optional smaller text displayed in a bordered detail panel." /></span><textarea rows={4} value={state.announcement.details ?? ""} onChange={(event) => patchAnnouncement({ details: event.target.value })} placeholder="Add supporting details…" /></label>
+            <div className="composer-message-grid"><LabeledInput label="Headline" info="Large headline shown on the announcement." value={state.announcement.title} onChange={(value) => patchAnnouncement({ title: value })} /><label className="field announcement-support-field"><span>Supporting message <InfoDot text="Supporting text displayed below the headline." /></span><textarea rows={2} value={state.announcement.message} onInput={growSupportingMessage} onChange={(event) => patchAnnouncement({ message: event.target.value })} placeholder="Add a supporting message" /></label></div>
+            <LabeledInput label="Details" info="Optional smaller text displayed in a bordered detail panel." value={state.announcement.details ?? ""} onChange={(details) => patchAnnouncement({ details })} />
             <div className="announcement-color-row"><ColorControl label="Text color" value={state.announcement.textColor ?? "#10131f"} onChange={(textColor) => patchAnnouncement({ textColor })} /><ColorControl label="Background" value={state.announcement.backgroundColor ?? "#f3efe0"} onChange={(backgroundColor) => patchAnnouncement({ backgroundColor })} /></div>
-            {state.announcement.imageUrl && !isTicker && <div className="three-col compact-image-controls"><Slider label="Image X" info="Move the announcement image horizontally." value={state.announcement.imageX ?? 72} min={0} max={100} onChange={(imageX) => patchAnnouncement({ imageX })} /><Slider label="Image Y" info="Move the announcement image vertically." value={state.announcement.imageY ?? 50} min={0} max={100} onChange={(imageY) => patchAnnouncement({ imageY })} /><Slider label="Image size" info="Adjust the announcement image width." value={state.announcement.imageWidth ?? 22} min={5} max={70} onChange={(imageWidth) => patchAnnouncement({ imageWidth })} /></div>}
           </details>
           <details className="composer-section delivery-section">
-            <summary><span>3</span><div><strong>Delivery</strong><small>Choose the audience, layout, schedule, and how long it stays visible.</small></div><ChevronDown size={16} /></summary>
+            <summary><span>3</span><div><strong>Delivery</strong><small>Choose the audience, schedule, and how long it stays visible.</small></div><ChevronDown size={16} /></summary>
             <div className="announcement-target-picker"><span>Send to</span>{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={selectedTargets.includes(screen.id)} onChange={() => toggleAnnouncementTarget(screen.id)} />{screen.label}</label>)}</div>
-            <div className="two-col">
-              <LabeledSelect label="Layout" info="The announcement layout used on the display." value={state.announcement.style} options={["Ribbon", "Temporary Card", "Lower Third", "News Ticker"]} onChange={(value) => {
-                const style = value as LanternState["announcement"]["style"];
-                patchAnnouncement({
-                  style,
-                  layoutX: undefined,
-                  layoutY: undefined,
-                  layoutWidth: undefined,
-                  ...(style === "News Ticker" && state.announcement.timerPosition === "announcement-right" ? { timerPosition: "top-right" as const } : {})
-                });
-              }} />
-              <label className="field duration-field"><span>Show for <InfoDot text="Use 0 to keep it visible until someone ends it manually." /></span><div className="duration-input"><input aria-label="Announcement duration in minutes" type="number" min={0} max={1440} value={state.announcement.durationMinutes} onChange={(event) => patchAnnouncement({ durationMinutes: Number(event.target.value) || 0 })} /><b>min</b></div></label>
-            </div>
-            {isTicker && <div className="ticker-option-row">
-              <LabeledSelect label="Ticker pace" info="Controls how quickly the announcement pans across the display." value={state.announcement.tickerSpeed ?? "standard"} options={["slow", "standard", "fast"]} optionLabels={{ slow: "Slow", standard: "Standard", fast: "Fast" }} onChange={(tickerSpeed) => patchAnnouncement({ tickerSpeed: tickerSpeed as NonNullable<LanternState["announcement"]["tickerSpeed"]> })} />
-              <LabeledSelect label="Scroll direction" info="Choose which direction the news ticker travels." value={state.announcement.tickerDirection ?? "left"} options={["left", "right"]} optionLabels={{ left: "Right to left", right: "Left to right" }} onChange={(tickerDirection) => patchAnnouncement({ tickerDirection: tickerDirection as NonNullable<LanternState["announcement"]["tickerDirection"]> })} />
-            </div>}
+            <label className="field duration-field"><span>Show for <InfoDot text="Use 0 to keep it visible until someone ends it manually." /></span><div className="duration-input"><input aria-label="Announcement duration in minutes" type="number" min={0} max={1440} value={state.announcement.durationMinutes} onChange={(event) => patchAnnouncement({ durationMinutes: Number(event.target.value) || 0 })} /><b>min</b></div></label>
             <div className={`announcement-delivery-schedule${deliveryScheduleOpen ? " open" : ""}`}>
               <div className="announcement-delivery-schedule-head">
                 <div><CalendarDays size={17} /><span><strong>When should it play?</strong><small>Add this announcement directly to the Schedule calendar.</small></span></div>
@@ -4893,9 +4949,9 @@ function AnnouncementsView({
                   <label className="field calendar-input-field"><span>Play date</span><div><CalendarDays size={15} /><input type="date" aria-label="Announcement play date" value={scheduleDate} min={toDateInputValue(new Date())} onChange={(event) => setScheduleDate(event.target.value)} /></div></label>
                   <label className="field calendar-input-field"><span>Start time</span><div><Clock3 size={15} /><input type="time" aria-label="Announcement start time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></div></label>
                 </div>
-                <label className="switch-row"><input type="checkbox" checked={scheduleRecurrence === "weekly"} onChange={(event) => setScheduleRecurrence(event.target.checked ? "weekly" : "once")} /><span>Repeat every week</span></label>
+                <LabeledSelect label="Repeat" value={scheduleRecurrence} options={["once", "weekly"]} optionLabels={{ once: "Does not repeat", weekly: "Every week" }} onChange={(value) => setScheduleRecurrence(value as "once" | "weekly")} />
                 {scheduleRecurrence === "weekly" && <>
-                  <div className="field"><span>Repeat on</span><div className="schedule-day-picker">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => <button type="button" key={day} className={scheduleDays.includes(index) ? "active" : ""} onClick={() => setScheduleDays((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])}>{day}</button>)}</div></div>
+                  <div className="field"><span>Repeat on</span><div className="schedule-day-picker">{["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <button type="button" key={`${day}-${index}`} aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][index]} className={scheduleDays.includes(index) ? "active" : ""} onClick={() => setScheduleDays((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])}>{day}</button>)}</div></div>
                   <label className="switch-row"><input type="checkbox" checked={scheduleHasEndDate} onChange={(event) => setScheduleHasEndDate(event.target.checked)} /><span>Use a date range</span></label>
                   {scheduleHasEndDate && <div className="two-col announcement-date-range">
                     <label className="field calendar-input-field"><span>Range starts</span><div><CalendarDays size={15} /><input type="date" aria-label="Announcement range start" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></div></label>
@@ -4905,22 +4961,14 @@ function AnnouncementsView({
                 <button type="button" className="command-button primary announcement-add-schedule" disabled={!scheduleDate || !scheduleTime || (scheduleRecurrence === "weekly" && (!scheduleDays.length || (scheduleHasEndDate && scheduleEndDate < scheduleDate)))} onClick={scheduleCurrentAnnouncement}><CalendarDays size={16} /> Add to schedule</button>
               </div>}
             </div>
-            <div className="announcement-placement-controls">
-              <div className="placement-control-heading"><span>Text box position</span><button type="button" onClick={() => patchAnnouncement({ layoutX: undefined, layoutY: undefined, layoutWidth: undefined })}><RotateCcw size={13} /> Use layout default</button></div>
-              <div className="three-col">
-                <Slider label="Text X" info="Horizontal center of the announcement text box." value={state.announcement.layoutX ?? 50} min={5} max={95} onChange={(layoutX) => patchAnnouncement({ layoutX })} />
-                <Slider label="Text Y" info="Vertical center of the announcement text box." value={state.announcement.layoutY ?? (state.announcement.style === "Temporary Card" ? 50 : state.announcement.style === "News Ticker" ? 91 : 88)} min={5} max={95} onChange={(layoutY) => patchAnnouncement({ layoutY })} />
-                <Slider label="Text width" info="Width of the draggable announcement text box." value={state.announcement.layoutWidth ?? (state.announcement.style === "News Ticker" ? 96 : state.announcement.style === "Ribbon" ? 90 : 78)} min={20} max={96} onChange={(layoutWidth) => patchAnnouncement({ layoutWidth })} />
-              </div>
-            </div>
           </details>
           <details className="composer-section optional-section">
-            <summary><span>2</span><div><strong>Optional enhancements</strong><small>{isTicker ? "Countdown, sounds, and walk-on character" : "Image, countdown, sounds, and walk-on character"}</small></div><ChevronDown size={16} /></summary>
+            <summary><span>2</span><div><strong>Optional enhancements</strong><small>{isTicker ? "Countdown and sounds" : "Image, countdown, and sounds"}</small></div><ChevronDown size={16} /></summary>
             <div className="optional-section-body">
               {!isTicker ? <div className="optional-image-control">
-                <div><ImagePlus size={18} /><span><strong>Announcement image</strong><small>Add an optional PNG, JPG, GIF, or WebP to the message.</small></span></div>
-                <label className="image-upload announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void readSharedImageFile(event.target.files?.[0], (imageUrl) => patchAnnouncement({ imageUrl, imageX: 72, imageY: 50, imageWidth: 22 }))} /></label>
-                {state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined })} title="Remove announcement image"><Trash2 size={15} /></button>}
+                <div><ImagePlus size={18} /><span><strong>Announcement image</strong><small>{state.announcement.imageUrl ? announcementImageName : "Add an optional PNG, JPG, GIF, or WebP to the message."}</small></span></div>
+                <label className="command-button secondary compact image-upload-button announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; void readSharedImageFile(file, (imageUrl) => patchAnnouncement({ imageUrl, imageName: file?.name, imageX: 72, imageY: 50, imageWidth: 22 })); }} /></label>
+                {state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined, imageName: undefined })} title="Remove announcement image"><Trash2 size={15} /></button>}
               </div> : <p className="ticker-image-note"><Megaphone size={16} /> News tickers keep the full width clear for readable moving text. Any saved announcement image is preserved and returns if you choose another layout.</p>}
               <div className="announcement-timer-controls">
                 <LabeledSelect label="Countdown" info="Add a live countdown to the announcement." value={state.announcement.timerStyle} options={["off", "digital", "progress", "circular"]} optionLabels={{ off: "Off", digital: "Digital clock", progress: "Progress bar", circular: "Circular timer" }} onChange={(value) => patchAnnouncement({ timerStyle: value as LanternState["announcement"]["timerStyle"], ...(isTicker && state.announcement.timerPosition === "announcement-right" ? { timerPosition: "top-right" as const } : {}) })} />
@@ -4933,28 +4981,7 @@ function AnnouncementsView({
                   <Slider label="Timer Y" info="Vertical center of the floating timer." value={state.announcement.timerY ?? (effectiveTimerPosition.startsWith("top") ? 15 : 84)} min={4} max={96} onChange={(timerY) => patchAnnouncement({ timerY })} />
                 </div>
               </div>}
-              <div className="announcement-character-editor">
-                <div className="announcement-character-heading"><div><strong>Walk-on character</strong><span>Choose an image or 3D asset, then set its walk-in, wait, and exit path.</span></div><LabeledSelect label="Character" info="OBJ files are static. GLB and GLTF can include animation clips." value={state.announcement.character} options={["off", "inspector", "custom"]} optionLabels={{ off: "Off", inspector: "Built-in inspector", custom: "Custom image or 3D model" }} onChange={(value) => patchAnnouncement({ character: value as LanternState["announcement"]["character"] })} /></div>
-                {state.announcement.character === "custom" && <>
-                  <div className="character-asset-actions">
-                    <label className="command-button secondary compact image-upload-button"><Upload size={15} /> {state.announcement.characterAssetName ? "Replace asset" : "Choose image or 3D file"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,.glb,.gltf,.obj" onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => patchAnnouncement({ characterAssetUrl: String(reader.result), characterAssetName: file.name, characterAssetKind: file.type.startsWith("image/") ? "image" : "model", characterPlayAnimation: /\.(glb|gltf)$/i.test(file.name) });
-                      reader.readAsDataURL(file);
-                    }} /></label>
-                    <button type="button" className="command-button secondary compact" onClick={() => patchAnnouncement({ characterAssetUrl: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb", characterAssetName: "Khronos animated Fox.glb", characterAssetKind: "model", characterPlayAnimation: true })}><Box size={15} /> Use animated Fox example</button>
-                  </div>
-                  {state.announcement.characterAssetName && <div className="character-asset-status"><strong>{state.announcement.characterAssetName}</strong><span>{state.announcement.characterAssetKind === "image" ? "Image character" : /\.(obj)$/i.test(state.announcement.characterAssetName) ? "Static OBJ model" : "Animated 3D model"}</span></div>}
-                  {state.announcement.characterAssetKind === "model" && !/\.obj$/i.test(state.announcement.characterAssetName ?? "") && <label className="switch-row"><input type="checkbox" checked={state.announcement.characterPlayAnimation ?? true} onChange={(event) => patchAnnouncement({ characterPlayAnimation: event.target.checked })} /><span>Play embedded walk animation while moving</span></label>}
-                  <div className="two-col"><Slider label="Start off-screen" info="Starting horizontal position before the character enters." value={state.announcement.characterStartX ?? -18} min={-40} max={20} onChange={(characterStartX) => patchAnnouncement({ characterStartX })} /><Slider label="Stop point" info="Horizontal position where the character waits." value={state.announcement.characterStopX ?? 18} min={0} max={80} onChange={(characterStopX) => patchAnnouncement({ characterStopX })} /></div>
-                  <div className="two-col"><Slider label="Walk time" info="Seconds used to move in and back out." value={state.announcement.characterWalkSeconds ?? 2} min={1} max={10} onChange={(characterWalkSeconds) => patchAnnouncement({ characterWalkSeconds })} /><Slider label="Wait time" info="Seconds the character waits at the stop point." value={state.announcement.characterWaitSeconds ?? 4} min={0} max={30} onChange={(characterWaitSeconds) => patchAnnouncement({ characterWaitSeconds })} /></div>
-                  <p className="character-example-credit">Example: Khronos glTF Fox with Survey, Walk, and Run clips. Model CC0; rigging, animation, and glTF conversion credited under CC BY 4.0.</p>
-                </>}
-              </div>
-              <div className="announcement-sfx-controls"><LabeledSelect label="Finish sound" info="Optional built-in sound played when the countdown ends." value={state.announcement.finishSfx} options={["off", "ding", "chime"]} optionLabels={{ off: "Off", ding: "Ding", chime: "Chime" }} onChange={(value) => patchAnnouncement({ finishSfx: value as LanternState["announcement"]["finishSfx"] })} /><Slider label="Sound volume" info="Volume for the built-in ding or chime." value={state.announcement.sfxVolume} onChange={(sfxVolume) => patchAnnouncement({ sfxVolume })} /><button type="button" className="command-button secondary compact preview-sfx-button" disabled={state.announcement.finishSfx === "off"} onClick={() => playAnnouncementSfx(state.announcement)}><Volume2 size={15} /> Test sound</button></div>
-              <div className="sound-pickers"><SoundPicker label="Sound at start" value={state.announcement.startSoundUrl} onChange={(value) => patchAnnouncement({ startSoundUrl: value })} /><SoundPicker label="Sound at finish" value={state.announcement.endSoundUrl} onChange={(value) => patchAnnouncement({ endSoundUrl: value })} /></div>
+              <section className="sound-fx-section"><header><strong>Sound FX</strong><small>Choose a site sound for the finish, or add a sound file for the start or finish.</small></header><div className="announcement-sfx-controls"><LabeledSelect label="Site finish sound" info="Use a sound effect already available on the site." value={state.announcement.finishSfx} options={["off", "ding", "chime"]} optionLabels={{ off: "Off", ding: "Museum ding", chime: "Museum chime" }} onChange={(value) => patchAnnouncement({ finishSfx: value as LanternState["announcement"]["finishSfx"] })} /><Slider label="Sound volume" info="Volume used by site and uploaded sound effects." value={state.announcement.sfxVolume} onChange={(sfxVolume) => patchAnnouncement({ sfxVolume })} /></div><div className="sound-pickers"><SoundPicker label="Sound at start" value={state.announcement.startSoundUrl} onChange={(value) => patchAnnouncement({ startSoundUrl: value })} /><SoundPicker label="Sound at finish" value={state.announcement.endSoundUrl} onChange={(value) => patchAnnouncement({ endSoundUrl: value })} /></div></section>
             </div>
           </details>
           </div>
@@ -5443,11 +5470,12 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
   const [scheduleTime, setScheduleTime] = useState(() => minutesToTime(Math.min(1430, new Date().getHours() * 60 + new Date().getMinutes() + 10)));
   const [scheduleTarget, setScheduleTarget] = useState<TargetScreen>(() => state.savedBlips[0]?.target ?? firstDisplayId(state));
   const [previewElapsedSeconds, setPreviewElapsedSeconds] = useState(0);
-  const [bankFilter, setBankFilter] = useState<"all" | LanternState["savedBlips"][number]["kind"]>("all");
+  const [blipImageError, setBlipImageError] = useState(false);
+  const blipPickerRef = useRef<HTMLDetailsElement>(null);
   const selected = draftBlip?.id === selectedId ? draftBlip : state.savedBlips.find((blip) => blip.id === selectedId) ?? state.savedBlips[0];
   const previewScreen = state.screens[selected?.target === "all" ? firstDisplayId(state) : selected?.target] ?? Object.values(state.screens)[0];
   const previewDurationSeconds = selected?.kind === "celebration" ? 3 : Math.max(3, (selected?.countdownSeconds ?? 0) + 3);
-  const filteredBlips = bankFilter === "all" ? state.savedBlips : state.savedBlips.filter((blip) => blip.kind === bankFilter);
+  const blipGroups = (["joke", "quiz", "celebration"] as const).map((kind) => ({ kind, label: kind === "joke" ? "Jokes" : kind === "quiz" ? "Quizzes" : "Celebrations", blips: state.savedBlips.filter((blip) => blip.kind === kind) })).filter((group) => group.blips.length);
   const imageLibrary = useMemo(() => {
     const entries = [
       ...state.savedBlips.map((blip) => ({ name: blip.name, imageUrl: blip.imageUrl })),
@@ -5464,6 +5492,10 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
   useEffect(() => {
     setPreviewElapsedSeconds(0);
   }, [selected?.id]);
+
+  useEffect(() => {
+    setBlipImageError(false);
+  }, [selected?.id, selected?.imageUrl]);
 
   useEffect(() => {
     setPreviewElapsedSeconds((current) => Math.min(current, previewDurationSeconds));
@@ -5550,19 +5582,40 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
     if (!file) return;
     patchBlip({ [field]: await fileToDataUrl(file) });
   };
+  const chooseLibraryImage = (imageUrl: string) => {
+    if (!imageUrl) {
+      setBlipImageError(false);
+      patchBlip({ imageUrl: undefined });
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      setBlipImageError(false);
+      patchBlip({ imageUrl });
+    };
+    image.onerror = () => setBlipImageError(true);
+    image.src = imageUrl;
+  };
 
   if (!selected) return <section className="blips-empty"><Sparkles size={36} /><h2>Create your first Blip</h2><p>Start with a joke, quiz, or celebration.</p><div><button className="command-button primary" onClick={() => createBlip("joke")}>New joke</button><button className="command-button secondary" onClick={() => createBlip("quiz")}>New quiz</button><button className="command-button secondary" onClick={() => createBlip("celebration")}>New celebration</button></div></section>;
 
   return <section className="blips-workspace">
-    <aside className="blip-bank">
-      <header><div><p className="eyebrow">Saved bank</p><h2>Blips</h2></div><div className="blip-bank-header-actions"><span title={draftBlip ? "One unsaved draft" : undefined}>{state.savedBlips.length}{draftBlip ? " + draft" : ""}</span><div className="blip-create-row"><button type="button" onClick={() => createBlip("joke")}>+ Joke</button><button type="button" onClick={() => createBlip("quiz")}>+ Quiz</button><button type="button" onClick={() => createBlip("celebration")}>+ Celebration</button></div></div></header>
-      <div className="blip-bank-filters" aria-label="Filter saved Blips">{(["all", "joke", "quiz", "celebration"] as const).map((filter) => <button type="button" key={filter} className={bankFilter === filter ? "active" : ""} aria-pressed={bankFilter === filter} onClick={() => setBankFilter(filter)}>{filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div>
-      <div className="blip-bank-list">{filteredBlips.map((blip) => <button type="button" key={blip.id} className={blip.id === selected.id ? "selected" : ""} onClick={() => { setDraftBlip(null); setSelectedId(blip.id); }}><i style={{ background: blip.accentColor }} /><span><strong>{blip.name}</strong><small>{blip.kind} · {blip.durationMinutes} min</small></span><Play size={14} onClick={(event) => { event.stopPropagation(); setDraftBlip(null); setSelectedId(blip.id); setRunTargets(blip.target === "all" ? Object.keys(state.screens) : [blip.target]); setRunMinutes(blip.durationMinutes); setRunOpen(true); }} /></button>)}{!filteredBlips.length && <p className="blip-bank-empty">No {bankFilter === "all" ? "saved" : bankFilter} Blips yet.</p>}</div>
-    </aside>
-    <main className="blip-editor">
+    <header className="blips-toolbar">
+      <details className="board-picker blip-picker" ref={blipPickerRef}>
+        <summary aria-label={`Choose saved Blip. Current Blip: ${selected.name}`}>
+          <span className="board-picker-label">Saved Blip</span>
+          <span className="board-picker-current"><Sparkles size={14} /><span><strong>{selected.name}</strong><small>{draftBlip ? "Unsaved draft" : `${selected.kind[0].toUpperCase() + selected.kind.slice(1)} · ${selected.durationMinutes} min`}</small></span></span>
+          <ChevronDown size={16} />
+        </summary>
+        <div className="board-picker-popover blip-picker-popover"><div className="board-picker-groups">{blipGroups.map((group) => <section className="board-picker-group" key={group.kind}><header><Sparkles size={14} /><strong>{group.label}</strong><span>{group.blips.length}</span></header>{group.blips.map((blip) => <button type="button" className={blip.id === selected.id && !draftBlip ? "selected board-picker-option" : "board-picker-option"} aria-current={blip.id === selected.id && !draftBlip ? "true" : undefined} key={blip.id} onClick={() => { setDraftBlip(null); setSelectedId(blip.id); blipPickerRef.current?.removeAttribute("open"); }}><i style={{ background: blip.accentColor }} /><span>{blip.name}</span><small>{blip.durationMinutes} min</small></button>)}</section>)}{!blipGroups.length && <div className="board-picker-empty"><Sparkles size={18} /><span>No saved Blips yet.</span></div>}</div></div>
+      </details>
+      <div className="blip-create-row"><button type="button" onClick={() => createBlip("joke")}>+ Joke</button><button type="button" onClick={() => createBlip("quiz")}>+ Quiz</button><button type="button" onClick={() => createBlip("celebration")}>+ Celebration</button></div>
+    </header>
+    <div className="blips-editor-layout">
+      <section className="blip-display-panel"><header><div><p className="eyebrow">Display preview</p><h2>{previewScreen.label}</h2></div><small>{previewScreen.orientation}</small></header><div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} previewElapsedSeconds={previewElapsedSeconds} /></div>{selected.kind !== "celebration" && <BlipPreviewTimeline blip={selected} orientation={orientationClass(previewScreen)} elapsedSeconds={previewElapsedSeconds} durationSeconds={previewDurationSeconds} onChange={setPreviewElapsedSeconds} onRevealChange={(seconds) => patchBlip({ countdownSeconds: seconds })} />}<p>{selected.kind === "celebration" ? "Celebrations stay on one screen." : "Scrub the timeline to inspect the setup, countdown, and answer reveal. Changing reveal timing saves to this Blip."}</p></div></section>
+    <aside className="blip-editor">
       <header><div><p className="eyebrow">{draftBlip ? "Unsaved draft" : `${selected.kind} blip`}</p><h2>{selected.name}</h2></div><div>{draftBlip ? <><button className="command-button secondary compact" onClick={cancelDraftBlip}>Cancel</button><button className="command-button primary compact" onClick={saveDraftBlip}>Save Blip</button></> : <><button className="command-button secondary compact" onClick={duplicateBlip}><ClipboardCopy size={14} /> Duplicate</button><button className="icon-button" onClick={deleteBlip} title="Delete Blip"><Trash2 size={16} /></button></>}</div></header>
-      <div className="blip-editor-body">
-        <div className="blip-fields">
+      <div className="blip-editor-body"><div className="blip-fields">
           <div className="two-col"><LabeledInput label="Saved name" value={selected.name} onChange={(name) => patchBlip({ name })} /><LabeledSelect label="Type" value={selected.kind} options={["joke", "quiz", "celebration"]} optionLabels={{ joke: "Joke", quiz: "Quiz time", celebration: "Celebration" }} onChange={(kind) => patchBlip({ kind: kind as typeof selected.kind })} /></div>
           <LabeledInput label="Headline" value={selected.headline} onChange={(headline) => patchBlip({ headline })} />
           <label className="field"><span>{selected.kind === "celebration" ? "Message" : "Question / setup"}</span><textarea value={selected.prompt} onChange={(event) => patchBlip({ prompt: event.target.value })} /></label>
@@ -5573,12 +5626,11 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
           <div className="two-col"><LabeledSelect label="Opening SFX" value={selected.startSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(startSfx) => patchBlip({ startSfx: startSfx as typeof selected.startSfx })} /><LabeledSelect label="Reveal SFX" value={selected.revealSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(revealSfx) => patchBlip({ revealSfx: revealSfx as typeof selected.revealSfx })} /></div>
           <div className="blip-upload-row"><label className="command-button secondary compact"><Upload size={14} /> Custom opening sound<input type="file" accept="audio/*" onChange={(event) => void upload(event.target.files?.[0], "startSoundUrl")} /></label><label className="command-button secondary compact"><Upload size={14} /> Custom reveal sound<input type="file" accept="audio/*" onChange={(event) => void upload(event.target.files?.[0], "revealSoundUrl")} /></label></div>
           <div className="two-col"><label className="field"><span>Background</span><input type="color" value={selected.backgroundColor} onChange={(event) => patchBlip({ backgroundColor: event.target.value })} /></label><label className="field"><span>Accent</span><input type="color" value={selected.accentColor} onChange={(event) => patchBlip({ accentColor: event.target.value })} /></label></div>
-          <div className="two-col"><LabeledSelect label="Motion" value={selected.motion} options={["slide", "pop", "gentle"]} optionLabels={{ slide: "Slide in/out", pop: "Playful pop", gentle: "Gentle fade" }} onChange={(motion) => patchBlip({ motion: motion as typeof selected.motion })} /><div className="blip-image-manager"><span className="field-label">Blip image</span>{selected.imageUrl && <div className="blip-image-current"><img src={selected.imageUrl} alt="Selected Blip asset" /><span><strong>Image selected</strong><small>Shown in the preview and when this Blip runs.</small></span><button type="button" className="icon-button" onClick={() => patchBlip({ imageUrl: undefined })} title="Remove image" aria-label="Remove image"><X size={15} /></button></div>}<div className="blip-image-actions">{imageLibrary.length > 0 && <label className="field"><span>Image library</span><select value={selected.imageUrl ?? ""} onChange={(event) => patchBlip({ imageUrl: event.target.value || undefined })}><option value="">No image</option>{imageLibrary.map((image) => <option value={image.imageUrl} key={image.imageUrl}>{image.name} image</option>)}</select></label>}<label className="image-upload command-button secondary compact"><ImagePlus size={14} /><span>{selected.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/*" onChange={(event) => void upload(event.target.files?.[0], "imageUrl")} /></label></div></div></div>
-        </div>
-        <div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} previewElapsedSeconds={previewElapsedSeconds} /></div>{selected.kind !== "celebration" && <BlipPreviewTimeline blip={selected} orientation={orientationClass(previewScreen)} elapsedSeconds={previewElapsedSeconds} durationSeconds={previewDurationSeconds} onChange={setPreviewElapsedSeconds} onRevealChange={(seconds) => patchBlip({ countdownSeconds: seconds })} />}<p>{selected.kind === "celebration" ? "Celebrations stay on one screen. Jokes and quizzes include an adjustable reveal timeline." : "Scrub the timeline to inspect the setup, countdown, and answer reveal. Changing reveal timing saves to this Blip."}</p></div>
-      </div>
+          <div className="two-col"><LabeledSelect label="Motion" value={selected.motion} options={["slide", "pop", "gentle"]} optionLabels={{ slide: "Slide in/out", pop: "Playful pop", gentle: "Gentle fade" }} onChange={(motion) => patchBlip({ motion: motion as typeof selected.motion })} /><div className="blip-image-manager"><span className="field-label">Blip image</span>{selected.imageUrl && <div className={`blip-image-current${blipImageError ? " image-error" : ""}`}>{blipImageError ? <div className="blip-image-unavailable"><ImagePlus size={17} /></div> : <img src={selected.imageUrl} alt="Selected Blip asset" onError={() => setBlipImageError(true)} />}<span><strong>{blipImageError ? "Image unavailable" : "Image selected"}</strong><small>{blipImageError ? "This stored image can no longer be loaded. Choose another image." : "Shown in the preview and when this Blip runs."}</small></span><button type="button" className="icon-button" onClick={() => patchBlip({ imageUrl: undefined })} title="Remove image" aria-label="Remove image"><X size={15} /></button></div>}<div className="blip-image-actions">{imageLibrary.length > 0 && <label className="field"><span>Image library</span><select value={selected.imageUrl ?? ""} onChange={(event) => chooseLibraryImage(event.target.value)}><option value="">No image</option>{imageLibrary.map((image) => <option value={image.imageUrl} key={image.imageUrl}>{image.name} image</option>)}</select></label>}<label className="image-upload command-button secondary compact"><ImagePlus size={14} /><span>{selected.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/*" onChange={(event) => void upload(event.target.files?.[0], "imageUrl")} /></label></div></div></div>
+      </div></div>
       <footer>{draftBlip ? <p className="field-note blip-draft-note">Save this draft before scheduling or running it.</p> : <><button className="command-button secondary" onClick={() => { setScheduleTarget(selected.target); setScheduleOpen(true); }}><CalendarDays size={16} /> Schedule</button>{state.activeBlip.active && state.activeBlip.id === selected.id && <button className="command-button secondary" onClick={() => updateState((current) => ({ ...current, activeBlip: { ...current.activeBlip, active: false } }))}><Square size={15} /> Stop</button>}<button className="command-button primary" onClick={openRun}><Play size={16} /> Run now</button></>}</footer>
-    </main>
+    </aside>
+    </div>
     {runOpen && createPortal(<div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setRunOpen(false)}><section className="editor-modal blip-run-modal"><div className="editor-modal-head"><div><p className="eyebrow">Go live now</p><h2>Run “{selected.name}”</h2></div><button className="icon-button" onClick={() => setRunOpen(false)}><X size={17} /></button></div><div className="blip-target-list">{Object.values(state.screens).map((screen) => <label key={screen.id}><input type="checkbox" checked={runTargets.includes(screen.id)} onChange={(event) => setRunTargets((current) => event.target.checked ? [...new Set([...current, screen.id])] : current.filter((id) => id !== screen.id))} /><span><strong>{screen.label}</strong><small>{screen.orientation} · {screen.resolution}</small></span></label>)}</div><LabeledInput label="How many minutes?" type="number" value={String(runMinutes)} onChange={(value) => setRunMinutes(Math.max(1, Number(value) || 1))} /><p className="field-note">Runs immediately without adding anything to the schedule. Broadcasts will cover it if both are live.</p><div className="editor-modal-actions"><button className="command-button secondary" onClick={() => setRunOpen(false)}>Cancel</button><button className="command-button primary" disabled={!runTargets.length} onClick={runNow}><Play size={15} /> Run Blip</button></div></section></div>, document.body)}
     {scheduleOpen && createPortal(<div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setScheduleOpen(false)}><section className="editor-modal blip-run-modal"><div className="editor-modal-head"><div><p className="eyebrow">Add to calendar</p><h2>Schedule “{selected.name}”</h2></div><button className="icon-button" title="Cancel scheduling" onClick={() => setScheduleOpen(false)}><X size={17} /></button></div><div className="two-col"><label className="field"><span>Date</span><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></label><label className="field"><span>Start time</span><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label></div><LabeledSelect label="Display" value={scheduleTarget} options={["all", ...Object.keys(state.screens)]} optionLabels={{ all: "All Displays", ...Object.fromEntries(Object.values(state.screens).map((screen) => [screen.id, `${screen.label} (${screen.orientation})`])) }} onChange={(target) => setScheduleTarget(target as TargetScreen)} /><p className="field-note">The calendar event uses this Blip’s {selected.durationMinutes}-minute default duration. Nothing is added until you confirm.</p><div className="editor-modal-actions"><button className="command-button secondary" onClick={() => setScheduleOpen(false)}>Cancel</button><button className="command-button primary" onClick={scheduleBlip}><CalendarDays size={15} /> Add to schedule</button></div></section></div>, document.body)}
     {pendingDeleteBlip && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDeleteBlip(null); }}><section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-blip-title" aria-describedby="delete-blip-description"><div className="destructive-confirm-icon"><Trash2 size={22} /></div><div><p className="eyebrow">Delete saved Blip</p><h2 id="delete-blip-title">Delete “{pendingDeleteBlip.name}”?</h2><p id="delete-blip-description">This also removes its scheduled calendar occurrences. This action cannot be undone.</p></div><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setPendingDeleteBlip(null)}>Cancel</button><button type="button" className="command-button danger" onClick={confirmDeleteBlip}><Trash2 size={15} /> Delete Blip</button></div></section></div>, document.body)}
@@ -6662,6 +6714,9 @@ function AnnouncementMonitorSurface({
     setViewMode(mode);
     resetView();
   };
+  const adjustZoom = (direction: 1 | -1) => {
+    setView((current) => ({ ...current, zoom: clamp(current.zoom + direction * .1, .45, 2.5) }));
+  };
   const beginViewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     // Physical announcement editing owns pointer input. The display camera must
     // never pan or orbit while the operator is placing a message element.
@@ -6700,17 +6755,17 @@ function AnnouncementMonitorSurface({
       {onPatch && <button type="button" className={editing ? "active edit-toggle" : "edit-toggle"} onClick={() => setEditing((current) => !current)}><Pencil size={14} /> {editing ? "Finish editing" : "Edit"}</button>}
       <button type="button" className={viewMode === "2d" ? "active" : ""} onClick={() => setMode("2d")}><Monitor size={14} /> 2D</button>
       <button type="button" className={viewMode === "3d" ? "active" : ""} onClick={() => { setEditing(false); setMode("3d"); }}><Rotate3d size={14} /> 3D</button>
-      <button type="button" onClick={() => setView((current) => ({ ...current, zoom: clamp(current.zoom - .12, .45, 2.5) }))} title="Zoom out"><ZoomOut size={14} /></button>
+      <button type="button" onClick={() => adjustZoom(-1)} title="Zoom out"><ZoomOut size={14} /></button>
       <span>{Math.round(view.zoom * 100)}%</span>
-      <button type="button" onClick={() => setView((current) => ({ ...current, zoom: clamp(current.zoom + .12, .45, 2.5) }))} title="Zoom in"><ZoomIn size={14} /></button>
+      <button type="button" onClick={() => adjustZoom(1)} title="Zoom in"><ZoomIn size={14} /></button>
       <button type="button" onClick={resetView} title="Reset view"><RotateCcw size={14} /></button>
     </div>
     <div className="announcement-monitor-viewport" onPointerDown={beginViewDrag} onPointerMove={moveViewDrag} onPointerUp={endViewDrag} onPointerCancel={endViewDrag} onWheel={(event) => {
       event.preventDefault();
-      setView((current) => ({ ...current, zoom: clamp(current.zoom + (event.deltaY < 0 ? .1 : -.1), .45, 2.5) }));
+      adjustZoom(event.deltaY < 0 ? 1 : -1);
     }}>
       <div className={`announcement-monitor-surface ${orientationClass(screen)}`} style={{ transform }}>
-        <BabylonDonorWall state={state} screenId={screen.id} interactive={viewMode === "3d" && !editing} fitToScreen viewMode={viewMode} announcementCharacter={announcement.character} announcementActive announcementCharacterAsset={announcement} announcementOverlay={viewMode === "3d" ? announcement : undefined} />
+        <BabylonDonorWall state={state} screenId={screen.id} interactive={viewMode === "3d" && !editing} fitToScreen viewMode={viewMode} announcementActive announcementOverlay={viewMode === "3d" ? announcement : undefined} />
         {viewMode === "2d" && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} editing={editing} onPatch={onPatch} />}
       </div>
     </div>
@@ -6783,9 +6838,10 @@ function AnnouncementLayer({
     x: number;
     y: number;
     width: number;
+    height: number;
   } | null>(null);
-  const pendingPatchRef = useRef<Partial<LanternState["announcement"]> | null>(null);
-  const patchFrameRef = useRef<number | null>(null);
+  const placementDraftRef = useRef<Partial<LanternState["announcement"]> | null>(null);
+  const [placementDraft, setPlacementDraft] = useState<Partial<LanternState["announcement"]> | null>(null);
   const isTicker = announcement.style === "News Ticker";
   const timerInAnnouncement = !isTicker && announcement.timerStyle !== "off" && announcement.timerPosition === "announcement-right";
   const floatingTimerPosition = isTicker && announcement.timerPosition === "announcement-right" ? "top-right" : announcement.timerPosition;
@@ -6793,24 +6849,20 @@ function AnnouncementLayer({
   const styleClass = announcement.style.toLowerCase().replace(/\s/g, "-");
   const defaultLayoutY = announcement.style === "Temporary Card" ? 50 : isTicker ? 91 : 88;
   const defaultLayoutWidth = isTicker ? 96 : announcement.style === "Ribbon" ? 90 : 78;
-  const layoutWidth = clamp(announcement.layoutWidth ?? defaultLayoutWidth, 20, 96);
-  const layoutX = clamp(announcement.layoutX ?? 50, layoutWidth / 2 + 2, 100 - layoutWidth / 2 - 2);
-  const layoutY = clamp(announcement.layoutY ?? defaultLayoutY, 8, 92);
-  const hasCustomLayout = announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
-  const queuePatch = (patch: Partial<LanternState["announcement"]>) => {
-    if (!onPatch) return;
-    pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
-    if (patchFrameRef.current !== null) return;
-    patchFrameRef.current = requestAnimationFrame(() => {
-      patchFrameRef.current = null;
-      const nextPatch = pendingPatchRef.current;
-      pendingPatchRef.current = null;
-      if (nextPatch) onPatch(nextPatch);
-    });
+  const defaultLayoutHeight = isTicker ? 10 : announcement.style === "Temporary Card" ? 22 : announcement.style === "Lower Third" ? 12 : 10;
+  const layoutWidth = clamp(placementDraft?.layoutWidth ?? announcement.layoutWidth ?? defaultLayoutWidth, 20, 96);
+  const layoutX = clamp(placementDraft?.layoutX ?? announcement.layoutX ?? 50, layoutWidth / 2 + 2, 100 - layoutWidth / 2 - 2);
+  const layoutY = clamp(placementDraft?.layoutY ?? announcement.layoutY ?? defaultLayoutY, 8, 92);
+  const layoutHeight = clamp(placementDraft?.layoutHeight ?? announcement.layoutHeight ?? defaultLayoutHeight, 6, 85);
+  const imageX = placementDraft?.imageX ?? announcement.imageX ?? 72;
+  const imageY = placementDraft?.imageY ?? announcement.imageY ?? 50;
+  const imageWidth = placementDraft?.imageWidth ?? announcement.imageWidth ?? 22;
+  const hasCustomHeight = placementDraft?.layoutHeight !== undefined || announcement.layoutHeight !== undefined;
+  const hasCustomLayout = hasCustomHeight || placementDraft?.layoutX !== undefined || placementDraft?.layoutY !== undefined || placementDraft?.layoutWidth !== undefined || announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
+  const stagePlacementPatch = (patch: Partial<LanternState["announcement"]>) => {
+    placementDraftRef.current = { ...placementDraftRef.current, ...patch };
+    setPlacementDraft(placementDraftRef.current);
   };
-  useEffect(() => () => {
-    if (patchFrameRef.current !== null) cancelAnimationFrame(patchFrameRef.current);
-  }, []);
   const overlayStyle = {
     color: announcement.textColor ?? undefined,
     background: announcement.backgroundColor ?? undefined,
@@ -6820,6 +6872,7 @@ function AnnouncementLayer({
       right: "auto",
       bottom: "auto",
       width: `${layoutWidth}%`,
+      ...(hasCustomHeight ? { height: `${layoutHeight}%`, minHeight: 0, boxSizing: "border-box" } : {}),
       transform: "translate(-50%, -50%)"
     } : {})
   } as React.CSSProperties;
@@ -6834,9 +6887,10 @@ function AnnouncementLayer({
       edge,
       pointerX: event.clientX,
       pointerY: event.clientY,
-      x: kind === "layout" ? layoutX : announcement.imageX ?? 72,
-      y: kind === "layout" ? layoutY : announcement.imageY ?? 50,
-      width: kind === "layout" ? layoutWidth : announcement.imageWidth ?? 22
+      x: kind === "layout" ? layoutX : imageX,
+      y: kind === "layout" ? layoutY : imageY,
+      width: kind === "layout" ? layoutWidth : imageWidth,
+      height: kind === "layout" ? layoutHeight : 0
     };
   };
   const moveManipulation = (event: React.PointerEvent<HTMLElement>) => {
@@ -6847,24 +6901,31 @@ function AnnouncementLayer({
     const dx = (event.clientX - drag.pointerX) / bounds.width * 100;
     const dy = (event.clientY - drag.pointerY) / bounds.height * 100;
     if (drag.edge === "move") {
-      queuePatch(drag.kind === "layout"
+      stagePlacementPatch(drag.kind === "layout"
         ? { layoutX: clamp(drag.x + dx, drag.width / 2 + 2, 100 - drag.width / 2 - 2), layoutY: clamp(drag.y + dy, 8, 92) }
         : { imageX: clamp(drag.x + dx, 0, 100), imageY: clamp(drag.y + dy, 0, 100) });
       return;
     }
     const horizontal = drag.edge.includes("e") ? dx : drag.edge.includes("w") ? -dx : 0;
+    const vertical = drag.edge.includes("s") ? dy : drag.edge.includes("n") ? -dy : 0;
     const width = clamp(drag.width + horizontal, drag.kind === "layout" ? 20 : 5, drag.kind === "layout" ? 96 : 70);
     const centerShift = drag.edge.includes("e") ? horizontal / 2 : drag.edge.includes("w") ? -horizontal / 2 : 0;
-    queuePatch(drag.kind === "layout"
-      ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, width / 2 + 2, 100 - width / 2 - 2) }
+    const height = clamp(drag.height + vertical, 6, 85);
+    const centerYShift = drag.edge.includes("s") ? vertical / 2 : drag.edge.includes("n") ? -vertical / 2 : 0;
+    stagePlacementPatch(drag.kind === "layout"
+      ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, width / 2 + 2, 100 - width / 2 - 2), ...(vertical ? { layoutHeight: height, layoutY: clamp(drag.y + centerYShift, height / 2 + 2, 100 - height / 2 - 2) } : {}) }
       : { imageWidth: width, imageX: clamp(drag.x + centerShift, 0, 100) });
   };
   const endManipulation = (event: React.PointerEvent<HTMLElement>) => {
     if (manipulationRef.current?.pointerId !== event.pointerId) return;
     manipulationRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    const patch = placementDraftRef.current;
+    placementDraftRef.current = null;
+    setPlacementDraft(null);
+    if (patch) onPatch?.(patch);
   };
-  const resizeHandles = (kind: "layout" | "image") => ["ne", "e", "se", "sw", "w", "nw"].map((edge) =>
+  const resizeHandles = (kind: "layout" | "image") => (kind === "layout" ? ["n", "ne", "e", "se", "s", "sw", "w", "nw"] : ["ne", "e", "se", "sw", "w", "nw"]).map((edge) =>
     <span key={edge} className={`announcement-resize-handle direct-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, kind, edge)} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation} />
   );
   const editableText = (field: "title" | "message" | "details") => ({
@@ -6901,7 +6962,7 @@ function AnnouncementLayer({
       </>}
       {timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className="inside-announcement" />}
     </div>
-    {announcement.imageUrl && !isTicker && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${announcement.imageX ?? 72}%`, top: `${announcement.imageY ?? 50}%`, width: `${announcement.imageWidth ?? 22}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button>{resizeHandles("image")}</>}</div>}
+    {announcement.imageUrl && !isTicker && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${imageX}%`, top: `${imageY}%`, width: `${imageWidth}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button><button type="button" className="announcement-edit-handle image-delete-handle" title="Remove announcement image" onPointerDown={(event) => event.stopPropagation()} onClick={() => onPatch?.({ imageUrl: undefined, imageName: undefined })}><Trash2 size={16} /></button>{resizeHandles("image")}</>}</div>}
     {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${floatingTimerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
   </>;
 }
@@ -7004,7 +7065,7 @@ function SoundPicker({ label, value, onChange }: { label: string; value?: string
     reader.onload = () => onChange(typeof reader.result === "string" ? reader.result : undefined);
     reader.readAsDataURL(file);
   };
-  return <div className="sound-picker"><span className="sound-picker-label"><Music2 size={14} />{label}</span><label className="sound-upload" title={value ? `Replace ${label.toLowerCase()}` : `Choose ${label.toLowerCase()}`}><Upload size={14} /><span>{value ? "Replace" : "Choose"}</span><input type="file" accept="audio/*" onChange={(event) => loadSound(event.target.files?.[0])} /></label><button type="button" className="icon-button" disabled={!value} onClick={() => value && playSound(value)} title="Preview sound"><Play size={15} /></button>{value && <button type="button" className="icon-button danger-icon" onClick={() => onChange(undefined)} title="Remove sound"><X size={15} /></button>}</div>;
+  return <div className="sound-picker"><span className="sound-picker-label"><Music2 size={14} />{label}</span><label className="sound-upload" title={value ? `Replace ${label.toLowerCase()}` : `Add ${label.toLowerCase()}`}><Upload size={14} /><span>{value ? "Replace" : "Add"}</span><input type="file" accept="audio/*" onChange={(event) => loadSound(event.target.files?.[0])} /></label><button type="button" className="icon-button" disabled={!value} onClick={() => value && playSound(value)} title="Test sound" aria-label={`Test ${label}`}><Play size={15} /></button>{value && <button type="button" className="icon-button danger-icon" onClick={() => onChange(undefined)} title="Remove sound"><X size={15} /></button>}</div>;
 }
 
 function PhoneBroadcastDelivery({ screen, delivery }: { screen?: DisplayProfile; delivery?: Extract<HostMessage, { type: "display-video-status" }> }) {
@@ -8017,7 +8078,7 @@ function ScheduleCalendarView({
         <label className="calendar-date-picker"><CalendarDays size={14} /><input type="date" aria-label="Choose calendar date" value={toDateInputValue(anchorDate)} onChange={(event) => event.target.value && setAnchorDate(dateFromInputValue(event.target.value))} /></label>
       </div>
       <div className="schedule-command-actions">
-        <div className="calendar-view-switch" aria-label="Calendar view">{(["week", "month", "agenda"] as const).map((option) => <button type="button" key={option} className={visibleMode === option ? "active" : ""} disabled={compact && option !== "agenda"} onClick={() => setViewMode(option)}>{option[0].toUpperCase() + option.slice(1)}</button>)}</div>
+        <div className="calendar-view-switch" aria-label="Calendar view">{(["week", "month", "agenda"] as const).map((option) => <button type="button" key={option} className={visibleMode === option ? "active" : ""} disabled={compact && option !== "agenda"} onClick={() => setViewMode(option)}>{option === "agenda" ? "Daily" : option[0].toUpperCase() + option.slice(1)}</button>)}</div>
         <label className="calendar-selector"><Monitor size={14} /><select aria-label="Display filter" value={displayFilter} onChange={(event) => setDisplayFilter(event.target.value as TargetScreen)}><option value="all">All Displays</option>{Object.values(state.screens).map((screen) => <option key={screen.id} value={screen.id}>{screen.label} ({screen.orientation})</option>)}</select></label>
         <button type="button" className="command-button secondary compact" onClick={() => addEntry("board")}><Plus size={15} /> Board</button>
         <button type="button" className="command-button primary compact" onClick={() => addEntry("announcement")}><Megaphone size={15} /> Announcement</button>
@@ -8051,7 +8112,7 @@ function ScheduleCalendarView({
     </div>
     {selected && createPortal(<>{selectedPreviewScreen && selectedPreviewPosition && <aside className="schedule-event-board-preview" style={selectedPreviewPosition} aria-label={`Preview of ${selected.name} on ${selectedPreviewScreen.label}`}>
       <header><div><p className="eyebrow">Display preview</p><strong>{selected.contentType === "board" ? selectedPreviewProgram?.name ?? "Selected board" : selected.name}</strong><span>{selectedPreviewScreen.label} · {selectedPreviewScreen.orientation}</span></div>{selected.contentType === "announcement" ? <Megaphone size={16} /> : selected.contentType === "blip" ? <Sparkles size={16} /> : <Monitor size={16} />}</header>
-      <div className={`schedule-preview-surface ${orientationClass(selectedPreviewScreen)}`}><BabylonDonorWall state={state} screenId={selectedPreviewScreen.id} fitToScreen viewMode="2d" previewProgramId={selected.boardId} announcementActive={Boolean(selectedPreviewAnnouncement)} announcementCharacter={selectedPreviewAnnouncement?.character} announcementCharacterAsset={selectedPreviewAnnouncement} />{selectedPreviewAnnouncement && <FixedAnnouncementComposition screen={selectedPreviewScreen} announcement={selectedPreviewAnnouncement} startedAt={`${toDateInputValue(anchorDate)}T${selected.startTime}:00`} />}{selectedPreviewBlip && <BlipComposition blip={selectedPreviewBlip} startedAt={new Date(Date.now() - Math.max(0, selectedPreviewBlip.countdownSeconds - 3) * 1000).toISOString()} />}</div>
+      <div className={`schedule-preview-surface ${orientationClass(selectedPreviewScreen)}`}><BabylonDonorWall state={state} screenId={selectedPreviewScreen.id} fitToScreen viewMode="2d" previewProgramId={selected.boardId} announcementActive={Boolean(selectedPreviewAnnouncement)} />{selectedPreviewAnnouncement && <FixedAnnouncementComposition screen={selectedPreviewScreen} announcement={selectedPreviewAnnouncement} startedAt={`${toDateInputValue(anchorDate)}T${selected.startTime}:00`} />}{selectedPreviewBlip && <BlipComposition blip={selectedPreviewBlip} startedAt={new Date(Date.now() - Math.max(0, selectedPreviewBlip.countdownSeconds - 3) * 1000).toISOString()} />}</div>
     </aside>}<aside className="schedule-event-editor" style={compact ? undefined : { left: editorPosition.x, top: editorPosition.y }} role="dialog" aria-modal="false" aria-labelledby="schedule-event-editor-title">
       <header className="schedule-event-editor-header" onPointerDown={(event) => { if (compact || (event.target as Element).closest("button")) return; editorDragRef.current = { pointerX: event.clientX, pointerY: event.clientY, ...editorPosition }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { const drag = editorDragRef.current; if (!drag) return; const editorHeight = event.currentTarget.parentElement?.getBoundingClientRect().height ?? 610; setEditorPosition({ x: clamp(drag.x + event.clientX - drag.pointerX, 8, Math.max(8, window.innerWidth - 360)), y: clamp(drag.y + event.clientY - drag.pointerY, 70, Math.max(70, window.innerHeight - editorHeight - 8)) }); }} onPointerUp={() => { editorDragRef.current = null; }} onPointerCancel={() => { editorDragRef.current = null; }}><div><p className="eyebrow">Schedule item · drag title to move</p><h2 id="schedule-event-editor-title">{draftIsNew ? "New event" : "Edit event"}</h2></div><button type="button" className="icon-button" title={draftIsNew ? "Discard new event" : "Cancel edits and close"} onClick={closeEditor}><X size={17} /></button></header>
       <div className="schedule-event-editor-body">
@@ -8075,7 +8136,7 @@ function ScheduleCalendarView({
     </aside></>, document.body)}
     {contextMenu && createPortal(<div className="calendar-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()} role="menu">{contextMenu.id ? (() => { const entry = visibleSchedules.find((item) => item.id === contextMenu.id); return entry ? <><button type="button" onClick={() => { openEditorAt(entry.id); setContextMenu(null); }}><Pencil size={14} /> Edit event</button><button type="button" onClick={() => { setPreviewEntry(entry); setContextMenu(null); }}><Eye size={14} /> Preview on display</button>{entry.contentType === "announcement" ? <button type="button" disabled={!entry.announcementId} onClick={() => { if (entry.announcementId) onEditAnnouncement(entry.announcementId); setContextMenu(null); }}><Megaphone size={14} /> Edit announcement</button> : <button type="button" onClick={() => { onEditDisplay(entry.target); setContextMenu(null); }}><Palette size={14} /> Edit display</button>}<button type="button" onClick={() => { duplicateEntry(entry); setContextMenu(null); }}><Plus size={14} /> Duplicate</button><button type="button" className="danger" onClick={() => { confirmRemoveEntry(entry); setContextMenu(null); }}><Trash2 size={14} /> Delete</button></> : null; })() : <><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("board", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Plus size={14} /> Add board here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("announcement", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Megaphone size={14} /> Add announcement here</button><button type="button" onClick={() => { if (contextMenu.date !== undefined && contextMenu.start !== undefined) addEntry("blip", { date: contextMenu.date, start: contextMenu.start }); setContextMenu(null); }}><Sparkles size={14} /> Add Blip here</button></>}</div>, document.body)}
     {pendingDelete && createPortal(<div className="modal-backdrop destructive-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDelete(null); }}><section className="editor-modal destructive-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-schedule-title" aria-describedby="delete-schedule-description"><div className="destructive-confirm-icon"><Trash2 size={22} /></div><div><p className="eyebrow">Delete scheduled content</p><h2 id="delete-schedule-title">Delete “{pendingDelete.name}”?</h2><p id="delete-schedule-description">This removes the event from the calendar. The underlying board, announcement, Blip, or recording will remain available.</p></div><div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setPendingDelete(null)}>Cancel</button><button type="button" className="command-button danger" onClick={() => removeEntry(pendingDelete.id)}><Trash2 size={15} /> Delete event</button></div></section></div>, document.body)}
-    {previewEntry && (() => { const screenId = previewEntry.target === "all" ? (displayFilter === "all" ? Object.keys(state.screens)[0] : displayFilter) : previewEntry.target; const screen = state.screens[screenId]; const savedAnnouncement = previewEntry.contentType === "announcement" ? state.savedAnnouncements.find((item) => item.id === previewEntry.announcementId) : undefined; const announcement = savedAnnouncement ? { ...savedAnnouncement, active: true } : undefined; const savedBlip = previewEntry.contentType === "blip" ? state.savedBlips.find((item) => item.id === previewEntry.blipId) : undefined; const blip = savedBlip ? { ...savedBlip, active: true } as LanternState["activeBlip"] : undefined; return screen && createPortal(<div className="modal-backdrop schedule-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewEntry(null); }}><section className="editor-modal schedule-display-preview" role="dialog" aria-modal="true" aria-labelledby="schedule-preview-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled display preview</p><h2 id="schedule-preview-title">{screen.label} · {previewEntry.startTime}–{previewEntry.endTime}</h2></div><button type="button" className="icon-button" title="Close preview" onClick={() => setPreviewEntry(null)}><X size={18} /></button></div><div className={`schedule-preview-surface ${orientationClass(screen)}`}><BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" previewProgramId={previewEntry.boardId} announcementActive={Boolean(announcement)} announcementCharacter={announcement?.character} announcementCharacterAsset={announcement} />{announcement && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={`${toDateInputValue(anchorDate)}T${previewEntry.startTime}:00`} />}{blip && <BlipComposition blip={blip} startedAt={new Date(Date.now() - Math.max(0, blip.countdownSeconds - 3) * 1000).toISOString()} />}</div><p className="field-note">Previewing the content scheduled for this event on {screen.label}.</p></section></div>, document.body); })()}
+    {previewEntry && (() => { const screenId = previewEntry.target === "all" ? (displayFilter === "all" ? Object.keys(state.screens)[0] : displayFilter) : previewEntry.target; const screen = state.screens[screenId]; const savedAnnouncement = previewEntry.contentType === "announcement" ? state.savedAnnouncements.find((item) => item.id === previewEntry.announcementId) : undefined; const announcement = savedAnnouncement ? { ...savedAnnouncement, active: true } : undefined; const savedBlip = previewEntry.contentType === "blip" ? state.savedBlips.find((item) => item.id === previewEntry.blipId) : undefined; const blip = savedBlip ? { ...savedBlip, active: true } as LanternState["activeBlip"] : undefined; return screen && createPortal(<div className="modal-backdrop schedule-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewEntry(null); }}><section className="editor-modal schedule-display-preview" role="dialog" aria-modal="true" aria-labelledby="schedule-preview-title"><div className="editor-modal-head"><div><p className="eyebrow">Scheduled display preview</p><h2 id="schedule-preview-title">{screen.label} · {previewEntry.startTime}–{previewEntry.endTime}</h2></div><button type="button" className="icon-button" title="Close preview" onClick={() => setPreviewEntry(null)}><X size={18} /></button></div><div className={`schedule-preview-surface ${orientationClass(screen)}`}><BabylonDonorWall state={state} screenId={screen.id} fitToScreen viewMode="2d" previewProgramId={previewEntry.boardId} announcementActive={Boolean(announcement)} />{announcement && <FixedAnnouncementComposition screen={screen} announcement={announcement} startedAt={`${toDateInputValue(anchorDate)}T${previewEntry.startTime}:00`} />}{blip && <BlipComposition blip={blip} startedAt={new Date(Date.now() - Math.max(0, blip.countdownSeconds - 3) * 1000).toISOString()} />}</div><p className="field-note">Previewing the content scheduled for this event on {screen.label}.</p></section></div>, document.body); })()}
   </section>;
 }
 
@@ -8750,7 +8811,7 @@ function BlipComposition({ blip, startedAt, previewElapsedSeconds }: { blip: Lan
   return <div className={`blip-overlay blip-${blip.kind} motion-${blip.motion}${revealed ? " revealed" : ""}`} style={{ "--blip-background": blip.backgroundColor, "--blip-accent": blip.accentColor } as React.CSSProperties}>
     <div className="blip-glow" />
     <article>
-      {blip.imageUrl && <div className="blip-image"><img src={blip.imageUrl} alt="" /></div>}
+      {blip.imageUrl && <div className="blip-image"><img src={blip.imageUrl} alt="Blip image" onError={(event) => event.currentTarget.parentElement?.classList.add("image-error")} /><span>Image unavailable</span></div>}
       <div className="blip-copy"><span className="blip-kicker">{blip.kind === "celebration" ? "Museum moment" : blip.kind === "quiz" ? "Think fast" : "Just for fun"}</span><h1>{blip.headline}</h1><p className="blip-prompt">{blip.prompt}</p>{blip.subtext && <small>{blip.subtext}</small>}
         {blip.kind !== "celebration" && <div className={`blip-answer${revealed ? " visible" : ""}`} aria-live="polite"><span>{blip.kind === "quiz" ? "Answer" : "Punchline"}</span><strong>{revealed ? blip.answer : "Get ready…"}</strong></div>}
       </div>
@@ -8999,8 +9060,6 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
           screenId={screenId}
           fitToScreen={fitToScreen}
           viewMode="2d"
-          announcementCharacter={(showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement)?.character ?? "off"}
-          announcementCharacterAsset={showAnnouncement ? state.announcement : scheduledAnnouncement?.announcement}
           announcementActive={Boolean(showAnnouncement || scheduledAnnouncement)}
         />}
       {!displayHasScheduledContent && <IdleDisplayNotice upcoming={nextScheduledContent} presentation />}

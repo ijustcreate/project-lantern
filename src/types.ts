@@ -30,6 +30,8 @@ export interface Donor {
   note: string;
   basicInfo?: string;
   expandedInfo?: string;
+  favoriteJoke?: string;
+  favoriteQuote?: string;
   subtext?: string;
   tags?: string[];
   groupId?: string;
@@ -222,6 +224,9 @@ export type BoardDonorHighlight = "none" | "fine-underline" | "soft-underline" |
 
 export type BoardDonorAnimation = "none" | "grow-shrink" | "slow-shimmer" | "letter-wave";
 
+/** Decorative treatment applied around a saved recognition board. */
+export type BoardFrameStyle = "classic" | "slim-black" | "natural-oak" | "walnut" | "champagne" | "gallery-gold" | "matted-black" | "espresso-shadowbox" | "weathered-pine" | "ornate-gold" | "wide-black-bevel";
+
 /** Visitor-facing name styling owned by one board, never by the donor profile. */
 export interface BoardDonorPresentation {
   fontFamily?: DisplayProfile["fontFamily"];
@@ -260,7 +265,13 @@ export interface DonorBoardProgram {
   backgroundImage?: string;
   backgroundMediaId?: string;
   backgroundCrop?: ImageCrop;
+  /** Solid board surface chosen in Board Settings. Omit to use the legacy theme surface. */
+  backgroundColor?: string;
   showFrame?: boolean;
+  /** Keeps the chosen frame with the board instead of the assigned display. */
+  frameStyle?: BoardFrameStyle;
+  /** Adds a light gallery mat inside the selected board frame. */
+  showMatting?: boolean;
   givingProgramId?: string;
   /** Folder shown in board pickers. When absent, the legacy template grouping is used. */
   folder?: string;
@@ -370,12 +381,14 @@ export interface Announcement {
   textColor?: string;
   backgroundColor?: string;
   imageUrl?: string;
+  imageName?: string;
   imageX?: number;
   imageY?: number;
   imageWidth?: number;
   layoutX?: number;
   layoutY?: number;
   layoutWidth?: number;
+  layoutHeight?: number;
   timerX?: number;
   timerY?: number;
   targets?: ScreenId[];
@@ -393,15 +406,6 @@ export interface Announcement {
   timerTrackColor: string;
   finishSfx: "off" | "ding" | "chime";
   sfxVolume: number;
-  character: "off" | "inspector" | "custom";
-  characterAssetUrl?: string;
-  characterAssetName?: string;
-  characterAssetKind?: "image" | "model";
-  characterPlayAnimation?: boolean;
-  characterStartX?: number;
-  characterStopX?: number;
-  characterWalkSeconds?: number;
-  characterWaitSeconds?: number;
   startSoundUrl?: string;
   endSoundUrl?: string;
 }

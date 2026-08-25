@@ -19,7 +19,8 @@ export const ANNOUNCEMENT_LAYOUT_CONTENT_VERSION = 15;
 export const QUESTIONING_TOY_SOLDIER_CONTENT_VERSION = 16;
 /** Removes retired display attachment, heartbeat, and manual live-toggle state. */
 export const DISPLAY_STATUS_REMOVAL_CONTENT_VERSION = 17;
-export const LANTERN_CONTENT_VERSION = DISPLAY_STATUS_REMOVAL_CONTENT_VERSION;
+export const SCHEDULE_RESET_CONTENT_VERSION = 18;
+export const LANTERN_CONTENT_VERSION = SCHEDULE_RESET_CONTENT_VERSION;
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -613,7 +614,6 @@ const announcementBase = {
   timerTrackColor: "#e9dcc4",
   finishSfx: "off" as const,
   sfxVolume: 55,
-  character: "off" as const
 };
 
 export const brigadeAnnouncements: SavedAnnouncement[] = [

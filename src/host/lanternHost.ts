@@ -1282,8 +1282,9 @@ function clampAnnouncementCoordinate(value: number, size: number, inset = 2) {
   return Math.min(100 - size / 2 - inset, Math.max(size / 2 + inset, value));
 }
 
-function normalizeAnnouncementPlacement<T extends Pick<Announcement, "layoutWidth" | "layoutX" | "layoutY" | "imageWidth" | "imageX" | "imageY" | "timerX" | "timerY">>(announcement: T): T {
+function normalizeAnnouncementPlacement<T extends Pick<Announcement, "layoutWidth" | "layoutHeight" | "layoutX" | "layoutY" | "imageWidth" | "imageX" | "imageY" | "timerX" | "timerY">>(announcement: T): T {
   const layoutWidth = announcement.layoutWidth === undefined ? undefined : Math.min(96, Math.max(20, announcement.layoutWidth));
+  const layoutHeight = announcement.layoutHeight === undefined ? undefined : Math.min(85, Math.max(6, announcement.layoutHeight));
   const imageWidth = announcement.imageWidth === undefined ? undefined : Math.min(70, Math.max(5, announcement.imageWidth));
   return {
     ...announcement,
@@ -1292,6 +1293,7 @@ function normalizeAnnouncementPlacement<T extends Pick<Announcement, "layoutWidt
       layoutX: announcement.layoutX === undefined ? undefined : clampAnnouncementCoordinate(announcement.layoutX, layoutWidth),
       layoutY: announcement.layoutY === undefined ? undefined : Math.min(92, Math.max(8, announcement.layoutY))
     }),
+    ...(layoutHeight === undefined ? {} : { layoutHeight }),
     ...(imageWidth === undefined ? {} : {
       imageWidth,
       imageX: announcement.imageX === undefined ? undefined : clampAnnouncementCoordinate(announcement.imageX, imageWidth),
@@ -1617,19 +1619,24 @@ export function normalizeState(state: LanternState): LanternState {
         ...state.board?.footerVisibility
       }
     },
-    boardPrograms: boardPrograms.map((program) => ({
+    boardPrograms: boardPrograms.map((program) => {
+      const accentPanels = program.palette?.startsWith("brigade-") && !(program.panels ?? []).some((panel) => panel.id === "brigade-accent-top" || panel.id === "brigade-accent-bottom")
+        ? [
+            { id: "brigade-accent-top", type: "image" as const, title: "Brass top accent", size: "compact" as const, x: 0, y: 0, width: 100, height: 5, imageUrl: "/assets/board-accents/brass-arch.png", imageFit: "cover" as const },
+            { id: "brigade-accent-bottom", type: "image" as const, title: "Brass bottom accent", size: "compact" as const, x: 0, y: 95, width: 100, height: 5, imageUrl: "/assets/board-accents/brass-arch.png", imageFit: "cover" as const }
+          ]
+        : [];
+      return {
       ...program,
+      panels: [...(program.panels ?? []), ...accentPanels],
       orientation: program.orientation
         ?? Object.values(screens).find((screen) => screen.boardProgramId === program.id)?.orientation
         ?? initialState.boardPrograms.find((candidate) => candidate.id === program.id)?.orientation
         ?? "Portrait"
-    })),
+      };
+    }),
     schedules,
-    savedAnnouncements: savedAnnouncements.map((announcement) => ({
-      ...announcement,
-      character: announcement.character ?? "off",
-      target: normalizeTarget(announcement.target)
-    })),
+    savedAnnouncements: savedAnnouncements.map((announcement) => ({ ...announcement, target: normalizeTarget(announcement.target) })),
     savedBlips: savedBlips.map((blip) => ({
       ...blip,
       target: normalizeTarget(blip.target)
@@ -1689,13 +1696,11 @@ export function normalizeState(state: LanternState): LanternState {
         ? repairSeededAnnouncementPlacement({
           ...initialState.announcement,
           ...state.announcement,
-          character: state.announcement?.character ?? "off",
           target: normalizeTarget(state.announcement?.target)
         })
         : {
             ...initialState.announcement,
             ...state.announcement,
-            character: state.announcement?.character ?? "off",
             target: normalizeTarget(state.announcement?.target)
           }),
     activeBlip: {
