@@ -5081,7 +5081,6 @@ function AnnouncementsView({
       };
     });
     setSelectedSavedId(announcementId);
-    setDeliveryScheduleOpen(false);
   };
 
   const openAnnouncementDemo = () => {
