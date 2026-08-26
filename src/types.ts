@@ -313,6 +313,10 @@ export interface BoardPanel {
   height?: number;
   imageUrl?: string;
   imageFit?: "cover" | "contain";
+  /** Rotation applied only to image panels, in degrees. */
+  imageRotation?: number;
+  /** Flips an image panel left-to-right without changing its placement. */
+  imageMirrored?: boolean;
   /** Panels with the same group move together in the board editor. */
   groupId?: string;
   fontFamily?: DisplayProfile["fontFamily"];
@@ -804,6 +808,8 @@ export interface LanternState {
   theme: LanternTheme;
   board: BoardContent;
   boardPrograms: DonorBoardProgram[];
+  /** Named board folders, including empty folders created in Settings. */
+  boardFolders?: string[];
   widgets?: BoardWidget[];
   schedules: ScheduleEntry[];
   savedAnnouncements: SavedAnnouncement[];

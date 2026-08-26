@@ -1,5 +1,371 @@
 [
   {
+    "id": "DEV-0417",
+    "title": "Centralize board organization in Settings",
+    "summary": "Moved board naming and folder management out of the Board Editor into a collapsible Settings library with inline editing and drag-and-drop moves.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:35 PM",
+    "areas": [
+      "Board Editor",
+      "Settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0416",
+    "title": "Expose announcement schedule controls",
+    "summary": "Made announcement date, time, and repeat scheduling controls directly visible in Delivery instead of hiding them behind a button.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:30 PM",
+    "areas": [
+      "Announcements",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0415",
+    "title": "Add board image transforms",
+    "summary": "Image panels can now rotate and mirror horizontally from Selected element, with matching editor and live-display rendering.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:27 PM",
+    "areas": [
+      "Board Editor",
+      "Displays"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0414",
+    "title": "Tighten board accent images",
+    "summary": "Brass line accents now have compact placement bounds, while normal board images preserve their full artwork with Contain by default.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:25 PM",
+    "areas": [
+      "Board Editor",
+      "Assets"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0413",
+    "title": "Fix schedule board picker popover",
+    "summary": "Prevented the schedule event board picker from being clipped and made it close when users click outside or press Escape.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:21 PM",
+    "areas": [
+      "Schedule",
+      "Boards"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0412",
+    "title": "Theme calendar context menu",
+    "summary": "Updated the schedule right-click menu with readable Light-theme surfaces and action states.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:19 PM",
+    "areas": [
+      "Themes",
+      "Schedule"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0411",
+    "title": "Theme board view controls",
+    "summary": "Updated the Board Editor move and zoom widget with readable Light-theme colors and interaction states.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:17 PM",
+    "areas": [
+      "Themes",
+      "Board Editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0410",
+    "title": "Fix light-theme donor search",
+    "summary": "Replaced the dark donor search container with a readable light surface and clear focus treatment in Light mode.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:15 PM",
+    "areas": [
+      "Themes",
+      "Donors",
+      "Forms"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0409",
+    "title": "Fix light-theme donor search",
+    "summary": "Replaced the dark donor search container with a readable light surface and clear focus treatment in Light mode.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:15 PM",
+    "areas": [
+      "Themes",
+      "Donors",
+      "Forms"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0408",
+    "title": "Link schedule events to board editing",
+    "summary": "Added a direct Board Editor action below scheduled board selection and restored donor-list inclusion checkboxes in the donor editor.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 4:03 PM",
+    "areas": [
+      "Schedule",
+      "Boards",
+      "Donors"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; git diff --check"
+  },
+  {
+    "id": "DEV-0407",
+    "title": "Restore light-theme form contrast",
+    "summary": "Fixed portal theme tokens and donor editor form surfaces so Light mode uses readable light controls and visible active focus states.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:59 PM",
+    "areas": [
+      "Themes",
+      "Donors",
+      "Forms"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "TypeScript check; npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0406",
+    "title": "Harden TV display startup",
+    "summary": "Displays now render a local board immediately, time out stalled shared-state requests, and gracefully fall back when embedded browsers do not support live messaging APIs.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:51 PM",
+    "areas": [
+      "Displays",
+      "Shared state",
+      "TV compatibility"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit --incremental false; fallback-path review; git diff --check"
+  },
+  {
+    "id": "DEV-0405",
+    "title": "Add drag panning to the board editor",
+    "summary": "You can now left-drag an empty part of a board to pan its editor viewport, while panel editing controls remain unchanged.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:45 PM",
+    "areas": [
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "Pointer interaction review; git diff --check"
+  },
+  {
+    "id": "DEV-0404",
+    "title": "Remove mobile dashboard header glow",
+    "summary": "The mobile dashboard header now uses a solid themed surface so decorative page glow no longer appears behind its shortcut controls.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:37 PM",
+    "areas": [
+      "Dashboard",
+      "Mobile",
+      "Themes"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "Responsive CSS review; git diff --check"
+  },
+  {
+    "id": "DEV-0403",
+    "title": "Remove mobile dashboard header glow",
+    "summary": "The mobile dashboard header now uses a solid themed surface so decorative page glow no longer appears behind its shortcut controls.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:37 PM",
+    "areas": [
+      "Dashboard",
+      "Mobile",
+      "Themes"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0402",
+    "title": "Improve mobile broadcast device controls",
+    "summary": "Mobile Broadcast / Stream source settings now keep camera and microphone selectors, refresh actions, and camera connection actions in a clear full-width flow.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:33 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Mobile"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --incremental false; npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0401",
+    "title": "Polish mobile broadcast startup",
+    "summary": "Broadcast / Stream now defaults to the phone studio on mobile, requests portrait camera framing, and uses theme-aware control colors with improved Light-theme contrast.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:29 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Mobile",
+      "Themes"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0400",
+    "title": "Streamline mobile announcement composing",
+    "summary": "Mobile Announcements now removes unused top space, puts send and save actions after all options, and displays a full-height portrait preview.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:26 PM",
+    "areas": [
+      "Announcements",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0399",
+    "title": "Restore mobile schedule views",
+    "summary": "Phone scheduling now supports Daily, Week, and Month views, with a separate icon-only row for adding boards, announcements, Blips, and broadcasts.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:23 PM",
+    "areas": [
+      "Schedule",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0398",
+    "title": "Improve mobile board editing gestures",
+    "summary": "Phone board editing now prioritizes panel manipulation over canvas panning, includes a page-position rail, and places Save in the dark board header to preserve workspace height.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:15 PM",
+    "areas": [
+      "Board Editor",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0397",
+    "title": "Improve mobile donor navigation",
+    "summary": "Mobile donor search now shares a row with Add donor, filters have reachable previous/next controls, and a list-position rail lets staff see and change their place in the donor roster.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:09 PM",
+    "areas": [
+      "Donors",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0396",
+    "title": "Place mobile Blip actions after dashboard content",
+    "summary": "The phone Send a Blip controls now appear after both display previews and the visitor message section, while desktop dashboard layout is unchanged.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:09 PM",
+    "areas": [
+      "Dashboard",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
+    "id": "DEV-0395",
+    "title": "Use iPhone portrait camera framing",
+    "summary": "The mobile Broadcast / Stream camera preview now defaults to a centered 9:19.5 iPhone-style portrait area instead of a stretched landscape frame.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 3:02 PM",
+    "areas": [
+      "Broadcast / Stream",
+      "Mobile"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build; npx tsc --noEmit --incremental false; git diff --check"
+  },
+  {
     "id": "DEV-0394",
     "title": "Fill TV presentation without stretching",
     "summary": "Present on TV now uses a true zero-margin contain fit, filling the screen as far as the board aspect ratio allows while remaining centered and undistorted.",

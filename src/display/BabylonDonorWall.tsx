@@ -1138,7 +1138,7 @@ function drawComposableBoard(
     }
 
     if (panel.type === "image") {
-      if (panel.imageUrl) drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain");
+      if (panel.imageUrl) drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain", panel.imageRotation, panel.imageMirrored);
       else {
         context.fillStyle = palette.panelTint;
         context.fillRect(left, y, contentWidth, panelHeight);
@@ -1237,7 +1237,9 @@ function drawBoardPanelImage(
   y: number,
   width: number,
   height: number,
-  fit: "cover" | "contain"
+  fit: "cover" | "contain",
+  rotation = 0,
+  mirrored = false
 ) {
   if (!source) return;
   const resolvedSource = resolveBoardAssetUrl(source);
@@ -1249,7 +1251,15 @@ function drawBoardPanelImage(
     : Math.min(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
-  context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+  context.save();
+  context.beginPath();
+  context.rect(x, y, width, height);
+  context.clip();
+  context.translate(x + width / 2, y + height / 2);
+  context.rotate((rotation * Math.PI) / 180);
+  context.scale(mirrored ? -1 : 1, 1);
+  context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  context.restore();
 }
 
 function drawPortraitBoard(

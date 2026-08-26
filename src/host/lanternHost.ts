@@ -78,7 +78,14 @@ function realtimeSocketUrl() {
 function ensureRealtimeSocket() {
   const url = realtimeSocketUrl();
   if (!url || realtimeSocket || !realtimeListeners.size) return;
-  const socket = new WebSocket(url);
+  let socket: WebSocket;
+  try {
+    socket = new WebSocket(url);
+  } catch {
+    // WebSocket is unavailable in some embedded browsers. State polling still
+    // keeps displays current, without crashing or retrying a missing API.
+    return;
+  }
   realtimeSocket = socket;
   socket.addEventListener("open", () => {
     while (pendingRealtimeMessages.length && socket.readyState === WebSocket.OPEN) {
@@ -151,7 +158,14 @@ type LegacyDonorAppearance = {
 };
 
 export function loadLanternState(): LanternState {
-  const stored = window.localStorage.getItem(LANTERN_STORAGE_KEY);
+  let stored: string | null;
+  try {
+    stored = window.localStorage.getItem(LANTERN_STORAGE_KEY);
+  } catch {
+    // Privacy-restricted and embedded TV browsers can deny storage access.
+    // Start with a renderable board rather than failing before React mounts.
+    return normalizeState(initialState);
+  }
   if (!stored) {
     return normalizeState(initialState);
   }
@@ -330,10 +344,20 @@ export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternSta
   if (!LANTERN_READ_SERVICE_ROOT) return { state: null, updatedAt: null };
   // A display can remain open for days. Never allow its browser HTTP cache to
   // turn a server check into an older board or schedule snapshot.
-  const response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, {
-    cache: "no-store",
-    headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
-  });
+  // Some built-in TV browsers leave a failed network request pending forever.
+  // Abort promptly so the display can render its local fallback and retry.
+  const controller = typeof AbortController === "undefined" ? undefined : new AbortController();
+  const timeout = controller ? window.setTimeout(() => controller.abort(), 8_000) : undefined;
+  let response!: Response;
+  try {
+    response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, {
+      cache: "no-store",
+      signal: controller?.signal,
+      headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
+    });
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error(`Shared project service returned ${response.status}`);
   const body = await response.json() as { state?: LanternState | null; updatedAt?: string | null };
   return {
@@ -574,7 +598,13 @@ function openMediaDatabase() {
 }
 
 export function createHostChannel(listener: Listener) {
-  const channel = new BroadcastChannel(LANTERN_CHANNEL);
+  let channel: BroadcastChannel | null = null;
+  try {
+    channel = new BroadcastChannel(LANTERN_CHANNEL);
+  } catch {
+    // BroadcastChannel is optional. TVs can still receive published state by
+    // polling the shared service instead of failing during display startup.
+  }
   const recentlyDelivered = new Map<string, number>();
   const deliver: RealtimeListener = (message) => {
     const now = Date.now();
@@ -591,7 +621,7 @@ export function createHostChannel(listener: Listener) {
     }
     listener(message);
   };
-  channel.addEventListener("message", (event: MessageEvent<WireHostMessage>) => {
+  channel?.addEventListener("message", (event: MessageEvent<WireHostMessage>) => {
     deliver(event.data);
   });
   realtimeListeners.add(deliver);
@@ -600,11 +630,11 @@ export function createHostChannel(listener: Listener) {
   return {
     post(message: HostMessage) {
       const wireMessage = wireHostMessage(message);
-      channel.postMessage(wireMessage);
+      channel?.postMessage(wireMessage);
       postRealtime(wireMessage);
     },
     close() {
-      channel.close();
+      channel?.close();
       realtimeListeners.delete(deliver);
       if (!realtimeListeners.size) {
         window.clearTimeout(realtimeReconnectTimer);
@@ -1635,9 +1665,22 @@ export function normalizeState(state: LanternState): LanternState {
             { id: "brigade-accent-bottom", type: "image" as const, title: "Brass bottom accent", size: "compact" as const, x: 0, y: 95, width: 100, height: 5, imageUrl: "/assets/board-accents/brass-arch.png", imageFit: "cover" as const }
           ]
         : [];
+      const panels = [...(program.panels ?? []), ...accentPanels].map((panel) => {
+        // The original brass arch PNG has a generous transparent canvas. Treat it
+        // as a compact decorative line so its selection bounds match the visible art.
+        if (panel.type !== "image" || !panel.imageUrl?.endsWith("/assets/board-accents/brass-arch.png")) return panel;
+        const currentHeight = panel.height ?? 7;
+        const compactHeight = currentHeight > 7 ? 7 : currentHeight;
+        return {
+          ...panel,
+          imageFit: "cover" as const,
+          height: compactHeight,
+          y: currentHeight > compactHeight ? (panel.y ?? 0) + (currentHeight - compactHeight) / 2 : panel.y
+        };
+      });
       return {
       ...program,
-      panels: [...(program.panels ?? []), ...accentPanels],
+      panels,
       orientation: program.orientation
         ?? Object.values(screens).find((screen) => screen.boardProgramId === program.id)?.orientation
         ?? initialState.boardPrograms.find((candidate) => candidate.id === program.id)?.orientation
