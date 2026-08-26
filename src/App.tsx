@@ -2649,9 +2649,9 @@ function DonorsView({
           <button type="button" className="donor-filter-nudge" onClick={() => nudgeDonorFilters(-1)} aria-label="Show earlier donor filters"><ChevronLeft size={15} /></button>
         <div className="donor-filter-row" ref={donorFilterRef}>
           <select className="toolbar-select" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}><option value="all">All tags</option>{allTags.map((tag) => <option key={tag}>{tag}</option>)}</select>
-          <select className="toolbar-select" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="all">All groups</option>{state.donorGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>
-          <select className="toolbar-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">All donation types</option>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select>
-          <select className="toolbar-select" aria-label="Sort donors" value={sortOrder} onChange={(event) => setDonorSort(event.target.value as typeof sortOrder)} title="Choose how donor names are ordered"><option value="manual">Manual order</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option></select>
+          <select className="toolbar-select" aria-label="Filter by donor group" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="all">Groups</option>{state.donorGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>
+          <select className="toolbar-select" aria-label="Filter by donation type" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">All types</option>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select>
+          <select className="toolbar-select" aria-label="Sort donors" value={sortOrder} onChange={(event) => setDonorSort(event.target.value as typeof sortOrder)} title="Choose how donor names are ordered"><option value="manual">Manual</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option></select>
         </div>
           <button type="button" className="donor-filter-nudge" onClick={() => nudgeDonorFilters(1)} aria-label="Show more donor filters"><ChevronRight size={15} /></button>
         </div>

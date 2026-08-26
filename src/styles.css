@@ -14425,21 +14425,22 @@ body.theme-light {
     white-space: nowrap;
   }
   .compact-donors .donor-filter-row {
-    grid-column: 1 / -1;
-    display: flex;
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: minmax(0, .85fr) minmax(0, .95fr) minmax(0, 1.25fr) minmax(0, 1.05fr);
     width: 100%;
     min-width: 0;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
+    gap: 4px;
+    overflow: visible;
+    padding: 0;
   }
-  .compact-donors .donor-filter-row::-webkit-scrollbar { display: none; }
   .compact-donors .donor-filter-row .toolbar-select {
-    width: 128px;
-    min-width: 128px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 36px;
-    flex: 0 0 128px;
+    padding-inline: 5px;
+    font-size: clamp(8px, 2vw, 10px);
   }
   .compact-donors .donor-card-list { gap: 5px; }
   .compact-donors .donor-card {

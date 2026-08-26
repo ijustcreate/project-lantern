@@ -1,5 +1,21 @@
 [
   {
+    "id": "DEV-0420",
+    "title": "Fix mobile donor filter row",
+    "summary": "Mobile donor filters now keep both navigation arrows and all four readable dropdowns on one row without horizontal clipping.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 6:08 PM",
+    "areas": [
+      "Donors",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright screenshots at 492x956 and 390x844; git diff --check"
+  },
+  {
     "id": "DEV-0419",
     "title": "Fix Board Manager organization controls",
     "summary": "Board and group names now save as replacements through Enter, click-away, or an explicit Save action. Board and group deletion now requires confirmation, and expanded donor vocabulary controls remain above Board Organization.",
