@@ -813,6 +813,12 @@ export interface RevisionRecord {
   landscapeReady: boolean;
 }
 
+/** A reusable image known to the project. References remain on the content that uses it. */
+export interface SiteImageAsset {
+  url: string;
+  name: string;
+}
+
 export interface LanternState {
   contentVersion: number;
   revision: number;
@@ -840,6 +846,8 @@ export interface LanternState {
   boardFolderRenames?: Record<string, string>;
   /** Board folders removed from the manager, including hidden built-in folders. */
   hiddenBoardFolders?: string[];
+  /** Friendly names for reusable images. Image URLs are still stored on their content. */
+  imageAssets?: SiteImageAsset[];
   widgets?: BoardWidget[];
   schedules: ScheduleEntry[];
   savedAnnouncements: SavedAnnouncement[];

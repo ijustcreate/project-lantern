@@ -8836,6 +8836,7 @@ function RecognitionSettingsView({ state, updateState, appearance, onAppearanceC
         </div>
         <button type="button" className="command-button secondary" onClick={onPullSiteChanges} disabled={!siteSyncAvailable || siteSyncing}><Download size={16} /> {siteSyncing ? "Pulling…" : "Pull latest site changes"}</button>
       </section>
+      <ImageLibraryManager state={state} updateState={updateState} />
       <section className="donor-vocabulary-settings">
         <button type="button" className={`settings-intro vocabulary-toggle${vocabularyExpanded ? " expanded" : ""}`} onClick={() => setVocabularyExpanded((expanded) => !expanded)} aria-expanded={vocabularyExpanded} aria-controls="donor-vocabulary-options">
           <div>
@@ -8854,6 +8855,66 @@ function RecognitionSettingsView({ state, updateState, appearance, onAppearanceC
       <GivingProgramsEditor state={state} updateState={updateState} />
     </section>
   );
+}
+
+function ImageLibraryManager({ state, updateState }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const images = useMemo(() => collectManagedImages(state), [state]);
+  const replaceEverywhere = (current: LanternState, oldUrl: string, newUrl?: string): LanternState => ({
+    ...current,
+    boardPrograms: current.boardPrograms.map((board) => ({ ...board, backgroundImage: board.backgroundImage === oldUrl ? newUrl : board.backgroundImage, panels: board.panels?.map((panel) => panel.imageUrl === oldUrl ? { ...panel, imageUrl: newUrl } : panel) })),
+    savedBlips: current.savedBlips.map((blip) => blip.imageUrl === oldUrl ? { ...blip, imageUrl: newUrl } : blip),
+    savedAnnouncements: current.savedAnnouncements.map((announcement) => ({ ...announcement, imageUrl: announcement.imageUrl === oldUrl ? newUrl : announcement.imageUrl, images: announcement.images?.map((image) => image.url === oldUrl ? { ...image, url: newUrl ?? "" } : image).filter((image) => image.url) })),
+    imageAssets: (current.imageAssets ?? []).filter((asset) => asset.url !== oldUrl)
+  });
+  const saveName = (url: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    updateState((current) => ({ ...current, imageAssets: [...(current.imageAssets ?? []).filter((asset) => asset.url !== url), { url, name: trimmed }] }));
+    setRenaming(null);
+  };
+  const replaceImage = async (url: string, file: File | undefined) => {
+    if (!file) return;
+    let newUrl = "";
+    await readSharedImageFile(file, (value) => { newUrl = value; });
+    if (!newUrl) return;
+    updateState((current) => ({ ...replaceEverywhere(current, url, newUrl), imageAssets: [...(current.imageAssets ?? []).filter((asset) => asset.url !== url && asset.url !== newUrl), { url: newUrl, name: file.name }] }));
+  };
+  return <section className="board-organization-settings image-library-settings">
+    <button type="button" className={`settings-intro vocabulary-toggle${expanded ? " expanded" : ""}`} onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls="image-library-options">
+      <div><p className="eyebrow">Site media</p><h2>Image library</h2><span>See every image in use, where it appears, and replace, rename, or remove it.</span></div>
+      <ChevronDown size={20} aria-hidden="true" />
+    </button>
+    {expanded && <div className="image-library-body" id="image-library-options">
+      {images.length ? images.map((image) => <article className="image-library-item" key={image.url}>
+        <img src={image.url} alt="" />
+        <div><strong>{image.name}</strong><small>Used by {image.uses.join(", ")}</small></div>
+        <span className="image-library-actions">
+          <button type="button" className="command-button secondary compact" onClick={() => { setRenaming(image.url); setName(image.name); }} title="Rename image"><Pencil size={14} /> Rename</button>
+          <label className="command-button secondary compact image-upload-button"><Upload size={14} /> Replace<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void replaceImage(image.url, event.target.files?.[0])} /></label>
+          <button type="button" className="icon-button danger-icon" onClick={() => updateState((current) => replaceEverywhere(current, image.url))} title="Remove image from every item using it" aria-label={`Remove ${image.name}`}><Trash2 size={15} /></button>
+        </span>
+        {renaming === image.url && <form className="image-library-rename" onSubmit={(event) => { event.preventDefault(); saveName(image.url); }}><input autoFocus value={name} onChange={(event) => setName(event.target.value)} aria-label="Image name" /><button type="submit" className="command-button primary compact">Save name</button><button type="button" className="command-button secondary compact" onClick={() => setRenaming(null)}>Cancel</button></form>}
+      </article>) : <p className="field-note">No images are currently in use. Add an image to a board, message, or Blip and it will appear here.</p>}
+    </div>}
+  </section>;
+}
+
+function collectManagedImages(state: LanternState) {
+  const names = new Map((state.imageAssets ?? []).map((asset) => [asset.url, asset.name]));
+  const items = new Map<string, { url: string; name: string; uses: string[] }>();
+  const add = (url: string | undefined, name: string, use: string) => {
+    if (!url) return;
+    const current = items.get(url);
+    if (current) { current.uses.push(use); return; }
+    items.set(url, { url, name: names.get(url) ?? name, uses: [use] });
+  };
+  state.boardPrograms.forEach((board) => { add(board.backgroundImage, `${board.name} background`, `board: ${board.name}`); board.panels?.forEach((panel) => add(panel.imageUrl, panel.title || "Board image", `board: ${board.name}`)); });
+  state.savedBlips.forEach((blip) => add(blip.imageUrl, blip.name, `Blip: ${blip.name}`));
+  state.savedAnnouncements.forEach((announcement) => { add(announcement.imageUrl, announcement.imageName || announcement.title || "Announcement image", `message: ${announcement.title}`); announcement.images?.forEach((image) => add(image.url, image.name || announcement.title || "Announcement image", `message: ${announcement.title}`)); });
+  return [...items.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function BoardOrganizationEditor({ state, updateState }: { state: LanternState; updateState: (updater: (current: LanternState) => LanternState) => void }) {

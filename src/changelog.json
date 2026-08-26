@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0427",
+    "title": "Fix Legacy Star scale and add image library",
+    "summary": "Legacy donor star artwork now displays at 200% without enlarging labels. Settings now includes an image library for viewing usage and renaming, replacing, or removing images.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 10:52 AM",
+    "areas": [
+      "Legacy Donor Star Walls",
+      "Settings"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0426",
     "title": "Repair Board Editor text arc and finish controls",
     "summary": "Board text now renders WordArt-style arcs in the shared display renderer, and the finish picker offers Flat, Outline, Bottom-up gradient, and Glow.",

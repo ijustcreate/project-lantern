@@ -7774,6 +7774,15 @@ textarea:focus-visible,
   text-transform: uppercase;
 }
 
+/* The Legacy Donor Star Wall enlarges only the artwork; donor labels retain
+   their independently authored scale. */
+.direct-board-panel[data-panel-id$="-star-image"] { overflow: visible; }
+.direct-board-panel[data-panel-id$="-star-image"] .direct-image-panel { overflow: visible; }
+.direct-board-panel[data-panel-id$="-star-image"] .direct-image-panel img {
+  transform: scale(2);
+  transform-origin: center;
+}
+
 .board-editor-view-controls {
   position: absolute;
   z-index: 20;
@@ -9073,6 +9082,15 @@ textarea:focus-visible,
   gap: 6px;
 }
 .board-organization-settings { display: grid; gap: 8px; }
+.image-library-body { display: grid; gap: 9px; padding: 12px; }
+.image-library-item { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px; border: 1px solid rgba(121, 202, 198, .2); border-radius: 8px; background: rgba(7, 21, 31, .32); }
+.image-library-item > img { width: 54px; height: 46px; border-radius: 5px; object-fit: contain; background: rgba(0, 0, 0, .22); }
+.image-library-item > div { display: grid; min-width: 0; gap: 3px; }
+.image-library-item strong, .image-library-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.image-library-item small { color: var(--muted); font-size: 10px; }
+.image-library-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 6px; }
+.image-library-rename { grid-column: 2 / -1; display: flex; gap: 7px; }
+.image-library-rename input { min-width: 0; flex: 1; }
 .board-organization-body { display: grid; gap: 9px; padding: 12px; border: 1px solid rgba(148, 158, 220, .14); border-radius: 8px; background: rgba(24, 27, 59, .5); }
 .board-organization-add { display: flex; align-items: end; gap: 8px; }
 .board-organization-add .field { flex: 1; }
