@@ -1,5 +1,100 @@
 [
   {
+    "id": "DEV-0426",
+    "title": "Repair Board Editor text arc and finish controls",
+    "summary": "Board text now renders WordArt-style arcs in the shared display renderer, and the finish picker offers Flat, Outline, Bottom-up gradient, and Glow.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 9:06 AM",
+    "areas": [
+      "Board Editor",
+      "Display rendering"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0425",
+    "title": "Scale Legacy Donor Star artwork",
+    "summary": "Legacy donor-wall star artwork now renders at 200% while its independent donor text layer keeps its original size and placement.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 8:59 AM",
+    "areas": [
+      "Legacy Donor Star Walls"
+    ],
+    "files": [
+      "src/display/BabylonDonorWall.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0424",
+    "title": "Fix joke Blip editing order and headline contrast",
+    "summary": "Joke subtext now precedes the punchline in the editor, and joke headlines remain readable in the Blip preview.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 8:55 AM",
+    "areas": [
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0423",
+    "title": "Add editor save status indicators",
+    "summary": "Messages and Blips now show whether changes are saved and include explicit Save changes controls.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 8:51 AM",
+    "areas": [
+      "Announcements",
+      "Blips"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0422",
+    "title": "Expand message editing and media controls",
+    "summary": "Message previews now support individual text placement, timer resizing and background color, preview edit mode, and repeatable image rows without hex labels beside color swatches.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 8:36 AM",
+    "areas": [
+      "Announcements",
+      "Display preview"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/types.ts",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0421",
+    "title": "Improve scheduled Blip editing and message placement",
+    "summary": "Schedule events now open their selected Blip in the Blip editor, while messages and Blips overlay board lanes instead of squeezing the schedule into extra columns.",
+    "author": "Codex",
+    "createdAt": "Aug 26, 2026, 8:27 AM",
+    "areas": [
+      "Schedule",
+      "Announcements"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
     "id": "DEV-0420",
     "title": "Fix mobile donor filter row",
     "summary": "Mobile donor filters now keep both navigation arrows and all four readable dropdowns on one row without horizontal clipping.",

@@ -1138,7 +1138,13 @@ function drawComposableBoard(
     }
 
     if (panel.type === "image") {
-      if (panel.imageUrl) drawBoardPanelImage(context, panel.imageUrl, left, y, contentWidth, panelHeight, panel.imageFit ?? "contain", panel.imageRotation, panel.imageMirrored);
+      if (panel.imageUrl) {
+        // Legacy wall labels are an independent text layer, so only expand the
+        // matching star artwork around its own center.
+        const legacyStarImage = /^legacy-photo[12]-.+-star-image$/.test(panel.id);
+        const starScale = legacyStarImage ? 2 : 1;
+        drawBoardPanelImage(context, panel.imageUrl, centerX - contentWidth * starScale / 2, centerY - panelHeight * starScale / 2, contentWidth * starScale, panelHeight * starScale, panel.imageFit ?? "contain", panel.imageRotation, panel.imageMirrored);
+      }
       else {
         context.fillStyle = palette.panelTint;
         context.fillRect(left, y, contentWidth, panelHeight);
@@ -1750,7 +1756,27 @@ function drawGenericTextPanel(
   const visibleLines = lines.slice(0, visibleLineCount);
   const x = alignment === "left" ? left + padding : alignment === "right" ? left + width - padding : left + width / 2;
   const startY = top + height / 2 - (visibleLines.length - 1) * lineHeight / 2;
-  visibleLines.forEach((line, index) => context.fillText(line, x, startY + index * lineHeight));
+  visibleLines.forEach((line, index) => {
+    const lineY = startY + index * lineHeight;
+    if (panel.textArc && panel.textArc !== "none") {
+      const characters = Array.from(line);
+      const total = Math.max(1, characters.length - 1);
+      const arcHeight = Math.min(height * .22, fontSize * .75) * (panel.textArc === "up" ? -1 : 1);
+      const fullWidth = context.measureText(line).width;
+      let cursor = x - (alignment === "center" ? fullWidth / 2 : alignment === "right" ? fullWidth : 0);
+      characters.forEach((character, characterIndex) => {
+        const characterWidth = context.measureText(character).width;
+        const ratio = characterIndex / total * 2 - 1;
+        context.save();
+        context.translate(cursor + characterWidth / 2, lineY + arcHeight * (1 - ratio * ratio));
+        context.rotate(ratio * (panel.textArc === "up" ? -.34 : .34));
+        context.textAlign = "center";
+        drawStyledText(context, character, 0, 0);
+        context.restore();
+        cursor += characterWidth;
+      });
+    } else drawStyledText(context, line, x, lineY);
+  });
 }
 
 function resolveBoardAssetUrl(source: string | undefined) {
@@ -2438,7 +2464,7 @@ function fitText(
   const textStyle = styledContext.__lanternTextStyle;
   const effectInset = textStyle
     ? Math.max(
-        textStyle.finish === "cut-brass" ? initialSize * 0.045 : 0,
+        textStyle.finish === "outline" ? initialSize * 0.045 : 0,
         textStyle.shadowEnabled ? textStyle.shadowDistance + initialSize * 0.025 : 0
       )
     : 0;
@@ -2452,7 +2478,7 @@ function fitText(
 
 type StyledTextContext = CanvasRenderingContext2D & {
   __lanternTextStyle?: {
-    finish: "flat" | "cut-brass";
+    finish: "flat" | "outline" | "gradient" | "glow";
     shadowEnabled: boolean;
     shadowStrength: number;
     shadowAngle: number;
@@ -2475,7 +2501,7 @@ function drawStyledText(context: CanvasRenderingContext2D, text: string, x: numb
     context.shadowOffsetX = Math.cos(radians) * Math.min(style.shadowDistance, fontSize * .08);
     context.shadowOffsetY = Math.sin(radians) * Math.min(style.shadowDistance, fontSize * .08);
   }
-  if (style.finish === "cut-brass") {
+  if (style.finish === "outline") {
     const originalFill = context.fillStyle;
     context.lineJoin = "round";
     context.lineWidth = Math.max(1, fontSize * .018);

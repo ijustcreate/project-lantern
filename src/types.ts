@@ -330,7 +330,10 @@ export interface BoardPanel {
   underline?: boolean;
   strikethrough?: boolean;
   /** Text treatment belongs to this panel only. */
-  textFinish?: "flat" | "cut-brass";
+  textFinish?: "flat" | "outline" | "gradient" | "glow";
+  textFinishColor?: string;
+  textFinishSecondaryColor?: string;
+  textGlowDistance?: number;
   textShadowEnabled?: boolean;
   textShadowStrength?: number;
   textShadowAngle?: number;
@@ -393,12 +396,24 @@ export interface Announcement {
   imageX?: number;
   imageY?: number;
   imageWidth?: number;
+  images?: AnnouncementImage[];
   layoutX?: number;
   layoutY?: number;
   layoutWidth?: number;
   layoutHeight?: number;
   timerX?: number;
   timerY?: number;
+  timerScale?: number;
+  timerBackgroundColor?: string;
+  titleX?: number;
+  titleY?: number;
+  titleWidth?: number;
+  messageX?: number;
+  messageY?: number;
+  messageWidth?: number;
+  detailsX?: number;
+  detailsY?: number;
+  detailsWidth?: number;
   targets?: ScreenId[];
   target: TargetScreen;
   priority: "Normal" | "Elevated" | "Urgent";
@@ -447,7 +462,18 @@ export interface Blip {
   sfxVolume: number;
   backgroundColor: string;
   accentColor: string;
+  textColor?: string;
+  borderColor?: string;
   motion: "slide" | "pop" | "gentle";
+}
+
+export interface AnnouncementImage {
+  id: string;
+  url: string;
+  name?: string;
+  x: number;
+  y: number;
+  width: number;
 }
 
 export type SavedBlip = Omit<Blip, "active" | "startedAt" | "targets">;

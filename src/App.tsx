@@ -129,6 +129,7 @@ import type {
   BoardDonorPresentation,
   BoardWidget,
   BoardPanelType,
+  AnnouncementImage,
   Donor,
   DonorBoardProgram,
   DonationRecord,
@@ -282,6 +283,7 @@ function ControlCenter() {
   const bugLauncherDrag = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const suppressBugLauncherClick = useRef(false);
   const [scheduleFocusId, setScheduleFocusId] = useState<string | null>(null);
+  const [requestedBlipEditorId, setRequestedBlipEditorId] = useState<string | null>(null);
   const [ideasOpen, setIdeasOpen] = useState(true);
   const [displayEditorTab, setDisplayEditorTab] = useState<"setup" | "room" | "names">("setup");
   const [displayEditorOpen, setDisplayEditorOpen] = useState(false);
@@ -1078,6 +1080,11 @@ function ControlCenter() {
             setAnnouncementTab("messages");
             setView("announcements");
           }}
+          onEditBlip={(blipId) => {
+            setRequestedBlipEditorId(blipId);
+            setAnnouncementTab("blips");
+            setView("announcements");
+          }}
         />}
         {view === "announcements" && (
           <section className="announcements-workspace">
@@ -1091,7 +1098,7 @@ function ControlCenter() {
             </div>
             {announcementTab === "messages"
               ? <AnnouncementsView state={state} updateState={updateState} toggleAnnouncement={toggleAnnouncement} />
-              : <BlipsView state={state} updateState={updateState} onOpenSchedule={(id) => { setScheduleFocusId(id); setView("schedule"); }} />}
+              : <BlipsView state={state} updateState={updateState} initialSelectedId={requestedBlipEditorId} onInitialSelectedHandled={() => setRequestedBlipEditorId(null)} onOpenSchedule={(id) => { setScheduleFocusId(id); setView("schedule"); }} />}
           </section>
         )}
         {view === "live" && (
@@ -3984,7 +3991,7 @@ function ThemeStudio({
               {selectedPanel.type === "donors" && <details className="inspector-details donor-style-section" open><summary>Style</summary><div className="inspector-block"><LabeledSelect label="Name font" info="Typeface used only by this donor-list element." value={selectedPanel.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /></div></details>}
               {selectedPanel.type !== "image" && <details className="inspector-details" open><summary>Typography</summary><div className="inspector-block"><LabeledSelect label="Element font" info="Typeface used only by this element." value={selectedPanel.fontFamily ?? "Montserrat"} options={boardFontOptions} optionLabels={boardFontLabels} onChange={(fontFamily) => patchPanel(selectedPanel.id, { fontFamily: fontFamily as BoardPanel["fontFamily"] })} /><div className="panel-type-row"><TypographyNumberField label="Font size" info="Type a point size or use the arrows. It applies directly to this element." value={selectedPanel.fontSize ?? (selectedPanel.type === "donors" ? display.nameSize ?? 28 : 24)} min={4} max={240} suffix="px" onChange={(fontSize) => patchPanel(selectedPanel.id, { fontSize })} /><ColorOverrideField label="Font color" value={selectedPanel.textColor} fallback="#F5F2EB" onChange={(textColor) => patchPanel(selectedPanel.id, { textColor })} /></div><div className="typography-number-row"><TypographyNumberField label="Letter spacing" info="Extra space between letters." value={selectedPanel.letterSpacing ?? 0} min={-8} max={40} step={0.1} suffix="px" onChange={(letterSpacing) => patchPanel(selectedPanel.id, { letterSpacing })} /><TypographyNumberField label="Line spacing" info="Space from one line of text to the next." value={selectedPanel.lineHeight ?? 1.2} min={0.6} max={4} step={0.1} suffix="×" onChange={(lineHeight) => patchPanel(selectedPanel.id, { lineHeight })} /></div><div className="typography-toolbar" aria-label="Text formatting"><button type="button" className={selectedPanel.fontWeight === "bold" ? "active" : ""} aria-pressed={selectedPanel.fontWeight === "bold"} title="Bold" onClick={() => patchPanel(selectedPanel.id, { fontWeight: selectedPanel.fontWeight === "bold" ? "normal" : "bold" })}><strong>B</strong></button><button type="button" className={selectedPanel.fontStyle === "italic" ? "active" : ""} aria-pressed={selectedPanel.fontStyle === "italic"} title="Italic" onClick={() => patchPanel(selectedPanel.id, { fontStyle: selectedPanel.fontStyle === "italic" ? "normal" : "italic" })}><em>I</em></button><button type="button" className={selectedPanel.underline ? "active" : ""} aria-pressed={Boolean(selectedPanel.underline)} title="Underline" onClick={() => patchPanel(selectedPanel.id, { underline: !selectedPanel.underline })}><u>U</u></button><button type="button" className={selectedPanel.strikethrough ? "active" : ""} aria-pressed={Boolean(selectedPanel.strikethrough)} title="Strikethrough" onClick={() => patchPanel(selectedPanel.id, { strikethrough: !selectedPanel.strikethrough })}><s>S</s></button></div><div className="typography-choice-row">{selectedPanel.type === "text" && <div className="field"><span>Text flow <InfoDot text="Wrap is the default. Fit one line keeps a heading on one line and reduces its size only when needed." /></span><SegmentedControl value={selectedPanel.textFlow ?? "wrap"} options={[["wrap", "Wrap"], ["fit-one-line", "Fit one line"]]} onChange={(textFlow) => patchPanel(selectedPanel.id, { textFlow: textFlow as BoardPanel["textFlow"] })} /></div>}<div className="field"><span>Text alignment</span><SegmentedControl value={selectedPanel.textAlign ?? "center"} options={[["left", "Left"], ["center", "Center"], ["right", "Right"]]} onChange={(textAlign) => patchPanel(selectedPanel.id, { textAlign: textAlign as BoardPanel["textAlign"] })} /></div><div className="field"><span>Text direction</span><SegmentedControl value={selectedPanel.textDirection ?? "horizontal"} options={[["horizontal", "Horizontal"], ["vertical", "Vertical"]]} onChange={(textDirection) => patchPanel(selectedPanel.id, { textDirection: textDirection as BoardPanel["textDirection"] })} /></div><div className="field"><span>Text arc</span><SegmentedControl value={selectedPanel.textArc ?? "none"} options={[["none", "Straight"], ["up", "Arc up"], ["down", "Arc down"]]} onChange={(textArc) => patchPanel(selectedPanel.id, { textArc: textArc as BoardPanel["textArc"] })} /></div></div></div></details>}
               {selectedPanel.type !== "image" && <details className="inspector-details"><summary>Text treatment</summary><div className="inspector-block">
-                <LabeledSelect label="Text finish" info="Applies only to this selected element." value={selectedPanel.textFinish ?? "flat"} options={["flat", "cut-brass"]} optionLabels={{ flat: "Flat color", "cut-brass": "Cut-out brass" }} onChange={(textFinish) => patchPanel(selectedPanel.id, { textFinish: textFinish as BoardPanel["textFinish"] })} />
+                <LabeledSelect label="Text finish" info="Applies only to this selected element." value={selectedPanel.textFinish ?? "flat"} options={["flat", "outline", "gradient", "glow"]} optionLabels={{ flat: "Flat color", outline: "Outline", gradient: "Bottom-up gradient", glow: "Glow" }} onChange={(textFinish) => patchPanel(selectedPanel.id, { textFinish: textFinish as BoardPanel["textFinish"] })} />
                 <label className="switch-row"><input type="checkbox" checked={selectedPanel.textShadowEnabled ?? false} onChange={(event) => patchPanel(selectedPanel.id, { textShadowEnabled: event.target.checked })} /><span>Shadow under text</span></label>
                 {selectedPanel.textShadowEnabled && <>
                   <Slider label="Shadow strength" info="Controls how dark and pronounced this element's text shadow appears." value={selectedPanel.textShadowStrength ?? 55} min={0} max={100} onChange={(textShadowStrength) => patchPanel(selectedPanel.id, { textShadowStrength })} />
@@ -4389,7 +4396,7 @@ function DirectBoardCanvas({
         "--board-text-shadow-y": `${Math.sin(((panel.textShadowAngle ?? 135) * Math.PI) / 180) * (panel.textShadowDistance ?? 5)}px`,
         "--board-text-shadow-blur": `${1 + (panel.textShadowStrength ?? 55) / 28}px`,
         "--board-text-shadow-alpha": panel.textShadowEnabled ? Math.min(.62, .1 + (panel.textShadowStrength ?? 55) / 165) : 0,
-        "--panel-text-stroke": panel.textFinish === "cut-brass" ? ".35px rgba(118, 81, 31, .72)" : "0 transparent"
+        "--panel-text-stroke": panel.textFinish === "outline" ? ".35px rgba(118, 81, 31, .72)" : "0 transparent"
       } as React.CSSProperties} onClick={(event) => { if (suppressPanelClickRef.current) { event.preventDefault(); event.stopPropagation(); suppressPanelClickRef.current = false; return; } event.stopPropagation(); onSelect(panel.id, event.shiftKey); }}>
         {panel.type === "text" && <AutoFitBoardContent className="direct-single-text-content" fitOneLine={panel.textFlow === "fit-one-line"} fontSize={panel.fontSize} fontFamily={panel.fontFamily ?? "Montserrat"}><EditableBoardText className="board-text" value={panel.title} multiline onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
         {panel.type === "heading" && <AutoFitBoardContent className="direct-single-text-content"><EditableBoardText className="board-title" value={panel.title} onCommit={(value) => commitText(panel, "title", value)} /></AutoFitBoardContent>}
@@ -4921,6 +4928,7 @@ function AnnouncementsView({
   const [scheduleDays, setScheduleDays] = useState<number[]>([new Date().getDay()]);
   const [scheduleHasEndDate, setScheduleHasEndDate] = useState(false);
   const [previewScreenId, setPreviewScreenId] = useState<ScreenId>(() => state.announcement.target === "all" ? firstDisplayId(state) : state.announcement.target);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "unsaved">("saved");
 
   useEffect(() => {
     const openVisitorSchedule = (event: Event) => {
@@ -4942,8 +4950,14 @@ function AnnouncementsView({
   const announcementImageName = state.announcement.imageName
     ?? state.announcement.imageUrl?.split("/").pop()?.split("?")[0]
     ?? "Selected image";
+  const announcementImages: AnnouncementImage[] = state.announcement.images?.length
+    ? state.announcement.images
+    : state.announcement.imageUrl
+      ? [{ id: "legacy-image", url: state.announcement.imageUrl, name: state.announcement.imageName ?? announcementImageName, x: state.announcement.imageX ?? 72, y: state.announcement.imageY ?? 50, width: state.announcement.imageWidth ?? 22 }]
+      : [];
   const effectiveTimerPosition = isTicker && state.announcement.timerPosition === "announcement-right" ? "top-right" : state.announcement.timerPosition;
   const patchAnnouncement = (patch: Partial<LanternState["announcement"]>) => {
+    setSaveStatus("unsaved");
     updateState((current) => ({ ...current, announcement: { ...current.announcement, ...patch } }));
   };
   const growSupportingMessage = (event: React.FormEvent<HTMLTextAreaElement>) => {
@@ -4996,6 +5010,7 @@ function AnnouncementsView({
       };
     });
     setSelectedSavedId(id);
+    setSaveStatus("saved");
   };
 
   const deleteSavedAnnouncement = (announcementId = selectedSavedId) => {
@@ -5119,7 +5134,7 @@ function AnnouncementsView({
                 {state.savedAnnouncements.map((item) => <option key={item.id} value={item.id}>{item.title || "Untitled announcement"}</option>)}
               </select>
               <small>{state.savedAnnouncements.length} saved</small>
-              <div className="announcement-library-actions"><button type="button" className="command-button secondary compact" onClick={newAnnouncement}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div>
+              <div className="announcement-library-actions"><small className={`save-indicator ${saveStatus}`}>{saveStatus === "saved" ? "Saved" : "Unsaved changes"}</small><button type="button" className="command-button secondary compact" onClick={newAnnouncement}><Plus size={15} /> New</button><button type="button" className="command-button primary compact" onClick={saveAnnouncement}><Save size={15} /> {selectedSavedId ? "Save changes" : "Save draft"}</button></div>
             </section>
           </div>
           <div className="announcement-form-scroll">
@@ -5158,22 +5173,18 @@ function AnnouncementsView({
           <details className="composer-section optional-section">
             <summary><span>2</span><div><strong>Optional enhancements</strong><small>{isTicker ? "Countdown and sounds" : "Image, countdown, and sounds"}</small></div><ChevronDown size={16} /></summary>
             <div className="optional-section-body">
-              {!isTicker ? <div className="optional-image-control">
-                <div><ImagePlus size={18} /><span><strong>Announcement image</strong><small>{state.announcement.imageUrl ? announcementImageName : "Add an optional PNG, JPG, GIF, or WebP to the message."}</small></span></div>
-                <label className="command-button secondary compact image-upload-button announcement-image-upload"><ImagePlus size={16} /><span>{state.announcement.imageUrl ? "Replace image" : "Add image"}</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; void readSharedImageFile(file, (imageUrl) => patchAnnouncement({ imageUrl, imageName: file?.name, imageX: 72, imageY: 50, imageWidth: 22 })); }} /></label>
-                {state.announcement.imageUrl && <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ imageUrl: undefined, imageName: undefined })} title="Remove announcement image"><Trash2 size={15} /></button>}
+              {!isTicker ? <div className="announcement-image-list">
+                {announcementImages.map((image, index) => <div className="optional-image-control" key={image.id}>
+                  <div><ImagePlus size={18} /><span><strong>{index ? `Announcement image ${index + 1}` : "Announcement image"}</strong><small>{image.name ?? image.url.split("/").pop() ?? "Selected image"}</small></span></div>
+                  <label className="command-button secondary compact image-upload-button announcement-image-upload"><ImagePlus size={16} /><span>Replace image</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (url) => patchAnnouncement({ images: announcementImages.map((item) => item.id === image.id ? { ...item, url, name: file.name } : item) })); }} /></label>
+                  <button type="button" className="icon-button danger-icon" onClick={() => patchAnnouncement({ images: announcementImages.filter((item) => item.id !== image.id), ...(announcementImages.length === 1 ? { imageUrl: undefined, imageName: undefined } : {}) })} title="Remove announcement image"><Trash2 size={15} /></button>
+                </div>)}
+                <label className="command-button secondary compact announcement-add-image"><Plus size={16} /><span>Add image</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; void readSharedImageFile(file, (url) => patchAnnouncement({ images: [...announcementImages, { id: `announcement-image-${Date.now()}`, url, name: file.name, x: 50, y: 50, width: 22 }], imageUrl: undefined, imageName: undefined })); }} /></label>
               </div> : <p className="ticker-image-note"><Megaphone size={16} /> News tickers keep the full width clear for readable moving text. Any saved announcement image is preserved and returns if you choose another layout.</p>}
               <div className="announcement-timer-controls">
                 <LabeledSelect label="Countdown" info="Add a live countdown to the announcement." value={state.announcement.timerStyle} options={["off", "digital", "progress", "circular"]} optionLabels={{ off: "Off", digital: "Digital clock", progress: "Progress bar", circular: "Circular timer" }} onChange={(value) => patchAnnouncement({ timerStyle: value as LanternState["announcement"]["timerStyle"], ...(isTicker && state.announcement.timerPosition === "announcement-right" ? { timerPosition: "top-right" as const } : {}) })} />
-                {state.announcement.timerStyle !== "off" && <><LabeledSelect label="Timer position" info={isTicker ? "Pin the timer to a screen corner so the ticker remains readable." : "Keep the timer beside the announcement or pin it to a screen corner."} value={effectiveTimerPosition} options={isTicker ? ["top-left", "top-right", "bottom-left", "bottom-right"] : ["announcement-right", "top-left", "top-right", "bottom-left", "bottom-right"]} optionLabels={{ "announcement-right": "Announcement right", "top-left": "Top left", "top-right": "Top right", "bottom-left": "Bottom left", "bottom-right": "Bottom right" }} onChange={(value) => patchAnnouncement({ timerPosition: value as LanternState["announcement"]["timerPosition"], timerX: undefined, timerY: undefined })} /><ColorControl label="Timer color" value={state.announcement.timerAccentColor} onChange={(timerAccentColor) => patchAnnouncement({ timerAccentColor })} /><ColorControl label="Timer track" value={state.announcement.timerTrackColor} onChange={(timerTrackColor) => patchAnnouncement({ timerTrackColor })} /></>}
+                {state.announcement.timerStyle !== "off" && <><button type="button" className="command-button secondary compact" onClick={() => document.querySelector<HTMLButtonElement>(".announcement-preview-stage .edit-toggle")?.click()}><Pencil size={14} /> Edit position</button><ColorControl label="Timer color" value={state.announcement.timerAccentColor} onChange={(timerAccentColor) => patchAnnouncement({ timerAccentColor })} /><ColorControl label="Timer background" value={state.announcement.timerBackgroundColor ?? "#07111e"} onChange={(timerBackgroundColor) => patchAnnouncement({ timerBackgroundColor })} /></>}
               </div>
-              {state.announcement.timerStyle !== "off" && effectiveTimerPosition !== "announcement-right" && <div className="announcement-placement-controls">
-                <div className="placement-control-heading"><span>Timer position</span><button type="button" onClick={() => patchAnnouncement({ timerX: undefined, timerY: undefined })}><RotateCcw size={13} /> Use corner default</button></div>
-                <div className="two-col">
-                  <Slider label="Timer X" info="Horizontal center of the floating timer." value={state.announcement.timerX ?? (effectiveTimerPosition.endsWith("left") ? 17 : 83)} min={4} max={96} onChange={(timerX) => patchAnnouncement({ timerX })} />
-                  <Slider label="Timer Y" info="Vertical center of the floating timer." value={state.announcement.timerY ?? (effectiveTimerPosition.startsWith("top") ? 15 : 84)} min={4} max={96} onChange={(timerY) => patchAnnouncement({ timerY })} />
-                </div>
-              </div>}
               <section className="sound-fx-section"><header><strong>Sound FX</strong><small>Choose a site sound for the finish, or add a sound file for the start or finish.</small></header><div className="announcement-sfx-controls"><LabeledSelect label="Site finish sound" info="Use a sound effect already available on the site." value={state.announcement.finishSfx} options={["off", "ding", "chime"]} optionLabels={{ off: "Off", ding: "Museum ding", chime: "Museum chime" }} onChange={(value) => patchAnnouncement({ finishSfx: value as LanternState["announcement"]["finishSfx"] })} /><Slider label="Sound volume" info="Volume used by site and uploaded sound effects." value={state.announcement.sfxVolume} onChange={(sfxVolume) => patchAnnouncement({ sfxVolume })} /></div><div className="sound-pickers"><SoundPicker label="Sound at start" value={state.announcement.startSoundUrl} onChange={(value) => patchAnnouncement({ startSoundUrl: value })} /><SoundPicker label="Sound at finish" value={state.announcement.endSoundUrl} onChange={(value) => patchAnnouncement({ endSoundUrl: value })} /></div></section>
             </div>
           </details>
@@ -5651,9 +5662,11 @@ function DirectLiveStage({
   );
 }
 
-function BlipsView({ state, updateState, onOpenSchedule }: {
+function BlipsView({ state, updateState, initialSelectedId, onInitialSelectedHandled, onOpenSchedule }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
+  initialSelectedId?: string | null;
+  onInitialSelectedHandled?: () => void;
   onOpenSchedule: (scheduleId: string) => void;
 }) {
   const [selectedId, setSelectedId] = useState(state.savedBlips[0]?.id ?? "");
@@ -5668,6 +5681,7 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
   const [scheduleTarget, setScheduleTarget] = useState<TargetScreen>(() => state.savedBlips[0]?.target ?? firstDisplayId(state));
   const [previewElapsedSeconds, setPreviewElapsedSeconds] = useState(0);
   const [blipImageError, setBlipImageError] = useState(false);
+  const [blipSaveStatus, setBlipSaveStatus] = useState<"saved" | "unsaved">("saved");
   const blipPickerRef = useRef<HTMLDetailsElement>(null);
   const selected = draftBlip?.id === selectedId ? draftBlip : state.savedBlips.find((blip) => blip.id === selectedId) ?? state.savedBlips[0];
   const previewScreen = state.screens[selected?.target === "all" ? firstDisplayId(state) : selected?.target] ?? Object.values(state.screens)[0];
@@ -5687,6 +5701,13 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
   }, [selected, state.savedBlips]);
 
   useEffect(() => {
+    if (!initialSelectedId || !state.savedBlips.some((blip) => blip.id === initialSelectedId)) return;
+    setDraftBlip(null);
+    setSelectedId(initialSelectedId);
+    onInitialSelectedHandled?.();
+  }, [initialSelectedId, onInitialSelectedHandled, state.savedBlips]);
+
+  useEffect(() => {
     setPreviewElapsedSeconds(0);
   }, [selected?.id]);
 
@@ -5700,6 +5721,7 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
 
   const patchBlip = (patch: Partial<LanternState["savedBlips"][number]>) => {
     if (!selected) return;
+    setBlipSaveStatus("unsaved");
     if (draftBlip?.id === selected.id) {
       setDraftBlip({ ...draftBlip, ...patch });
       return;
@@ -5811,13 +5833,13 @@ function BlipsView({ state, updateState, onOpenSchedule }: {
     <div className="blips-editor-layout">
       <section className="blip-display-panel"><header><div><p className="eyebrow">Display preview</p><h2>{previewScreen.label}</h2></div><small>{previewScreen.orientation}</small></header><div className="blip-preview-column"><div className={`blip-preview-frame ${orientationClass(previewScreen)}`}><BabylonDonorWall state={state} screenId={previewScreen.id} fitToScreen viewMode="2d" /><BlipComposition blip={{ ...selected, active: true }} previewElapsedSeconds={previewElapsedSeconds} /></div>{selected.kind !== "celebration" && <BlipPreviewTimeline blip={selected} orientation={orientationClass(previewScreen)} elapsedSeconds={previewElapsedSeconds} durationSeconds={previewDurationSeconds} onChange={setPreviewElapsedSeconds} onRevealChange={(seconds) => patchBlip({ countdownSeconds: seconds })} />}<p>{selected.kind === "celebration" ? "Celebrations stay on one screen." : "Scrub the timeline to inspect the setup, countdown, and answer reveal. Changing reveal timing saves to this Blip."}</p></div></section>
     <aside className="blip-editor">
-      <header><div><p className="eyebrow">{draftBlip ? "Unsaved draft" : `${selected.kind} blip`}</p><h2>{selected.name}</h2></div><div>{draftBlip ? <><button className="command-button secondary compact" onClick={cancelDraftBlip}>Cancel</button><button className="command-button primary compact" onClick={saveDraftBlip}>Save Blip</button></> : <><button className="command-button secondary compact" onClick={duplicateBlip}><ClipboardCopy size={14} /> Duplicate</button><button className="icon-button" onClick={deleteBlip} title="Delete Blip"><Trash2 size={16} /></button></>}</div></header>
+      <header><div><p className="eyebrow">{draftBlip ? "Unsaved draft" : `${selected.kind} blip`}</p><h2>{selected.name}</h2></div><div>{draftBlip ? <><button className="command-button secondary compact" onClick={cancelDraftBlip}>Cancel</button><button className="command-button primary compact" onClick={() => { saveDraftBlip(); setBlipSaveStatus("saved"); }}>Save Blip</button></> : <><small className={`save-indicator ${blipSaveStatus}`}>{blipSaveStatus === "saved" ? "Saved" : "Unsaved changes"}</small><button className="command-button primary compact" onClick={() => setBlipSaveStatus("saved")}><Save size={14} /> Save changes</button><button className="command-button secondary compact" onClick={duplicateBlip}><ClipboardCopy size={14} /> Duplicate</button><button className="icon-button" onClick={deleteBlip} title="Delete Blip"><Trash2 size={16} /></button></>}</div></header>
       <div className="blip-editor-body"><div className="blip-fields">
           <div className="two-col"><LabeledInput label="Saved name" value={selected.name} onChange={(name) => patchBlip({ name })} /><LabeledSelect label="Type" value={selected.kind} options={["joke", "quiz", "celebration"]} optionLabels={{ joke: "Joke", quiz: "Quiz time", celebration: "Celebration" }} onChange={(kind) => patchBlip({ kind: kind as typeof selected.kind })} /></div>
           <LabeledInput label="Headline" value={selected.headline} onChange={(headline) => patchBlip({ headline })} />
           <label className="field"><span>{selected.kind === "celebration" ? "Message" : "Question / setup"}</span><textarea value={selected.prompt} onChange={(event) => patchBlip({ prompt: event.target.value })} /></label>
-          {selected.kind !== "celebration" && <label className="field"><span>Answer / punchline</span><textarea value={selected.answer ?? ""} onChange={(event) => patchBlip({ answer: event.target.value })} /></label>}
           <LabeledInput label="Subtext (optional)" value={selected.subtext ?? ""} onChange={(subtext) => patchBlip({ subtext })} />
+          {selected.kind !== "celebration" && <label className="field"><span>Answer / punchline</span><textarea value={selected.answer ?? ""} onChange={(event) => patchBlip({ answer: event.target.value })} /></label>}
           <div className="two-col"><LabeledInput label={selected.kind === "celebration" ? "Countdown seconds" : "Answer reveals after (seconds)"} type="number" value={String(selected.countdownSeconds)} onChange={(value) => patchBlip({ countdownSeconds: Math.max(0, Number(value) || 0) })} /><LabeledInput label="Default run minutes" type="number" value={String(selected.durationMinutes)} onChange={(value) => patchBlip({ durationMinutes: Math.max(1, Number(value) || 1) })} /></div>
           <div className="blip-switches"><label><input type="checkbox" checked={selected.showCountdown} onChange={(event) => patchBlip({ showCountdown: event.target.checked })} /> Show countdown</label><label><input type="checkbox" checked={selected.ticking} onChange={(event) => patchBlip({ ticking: event.target.checked })} /> Ticking countdown</label></div>
           <div className="two-col"><LabeledSelect label="Opening SFX" value={selected.startSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(startSfx) => patchBlip({ startSfx: startSfx as typeof selected.startSfx })} /><LabeledSelect label="Reveal SFX" value={selected.revealSfx} options={["off", "bell", "applause", "level-up", "ba-dum-tss", "laughter"]} optionLabels={{ off: "Off", bell: "Bell", applause: "Applause", "level-up": "Level-up bwoosh", "ba-dum-tss": "Ba-dum-tss", laughter: "Laughter" }} onChange={(revealSfx) => patchBlip({ revealSfx: revealSfx as typeof selected.revealSfx })} /></div>
@@ -7054,6 +7076,7 @@ function AnnouncementLayer({
     y: number;
     width: number;
     height: number;
+    imageId?: string;
   } | null>(null);
   const placementDraftRef = useRef<Partial<LanternState["announcement"]> | null>(null);
   const [placementDraft, setPlacementDraft] = useState<Partial<LanternState["announcement"]> | null>(null);
@@ -7072,6 +7095,11 @@ function AnnouncementLayer({
   const imageX = placementDraft?.imageX ?? announcement.imageX ?? 72;
   const imageY = placementDraft?.imageY ?? announcement.imageY ?? 50;
   const imageWidth = placementDraft?.imageWidth ?? announcement.imageWidth ?? 22;
+  const images: AnnouncementImage[] = announcement.images?.length
+    ? announcement.images
+    : announcement.imageUrl
+      ? [{ id: "legacy-image", url: announcement.imageUrl, name: announcement.imageName, x: imageX, y: imageY, width: imageWidth }]
+      : [];
   const hasCustomHeight = placementDraft?.layoutHeight !== undefined || announcement.layoutHeight !== undefined;
   const hasCustomLayout = hasCustomHeight || placementDraft?.layoutX !== undefined || placementDraft?.layoutY !== undefined || placementDraft?.layoutWidth !== undefined || announcement.layoutX !== undefined || announcement.layoutY !== undefined || announcement.layoutWidth !== undefined;
   const stagePlacementPatch = (patch: Partial<LanternState["announcement"]>) => {
@@ -7091,7 +7119,7 @@ function AnnouncementLayer({
       transform: "translate(-50%, -50%)"
     } : {})
   } as React.CSSProperties;
-  const beginManipulation = (event: React.PointerEvent<HTMLElement>, kind: "layout" | "image", edge: "move" | string) => {
+  const beginManipulation = (event: React.PointerEvent<HTMLElement>, kind: "layout" | "image", edge: "move" | string, image?: AnnouncementImage) => {
     if (!editing || !onPatch) return;
     event.preventDefault();
     event.stopPropagation();
@@ -7102,9 +7130,10 @@ function AnnouncementLayer({
       edge,
       pointerX: event.clientX,
       pointerY: event.clientY,
-      x: kind === "layout" ? layoutX : imageX,
-      y: kind === "layout" ? layoutY : imageY,
-      width: kind === "layout" ? layoutWidth : imageWidth,
+      x: kind === "layout" ? layoutX : image?.x ?? imageX,
+      y: kind === "layout" ? layoutY : image?.y ?? imageY,
+      width: kind === "layout" ? layoutWidth : image?.width ?? imageWidth,
+      imageId: image?.id,
       height: kind === "layout" ? layoutHeight : 0
     };
   };
@@ -7116,6 +7145,10 @@ function AnnouncementLayer({
     const dx = (event.clientX - drag.pointerX) / bounds.width * 100;
     const dy = (event.clientY - drag.pointerY) / bounds.height * 100;
     if (drag.edge === "move") {
+      if (drag.kind === "image" && drag.imageId && drag.imageId !== "legacy-image") {
+        onPatch({ images: images.map((image) => image.id === drag.imageId ? { ...image, x: clamp(drag.x + dx, 0, 100), y: clamp(drag.y + dy, 0, 100) } : image) });
+        return;
+      }
       stagePlacementPatch(drag.kind === "layout"
         ? { layoutX: clamp(drag.x + dx, drag.width / 2 + 2, 100 - drag.width / 2 - 2), layoutY: clamp(drag.y + dy, 8, 92) }
         : { imageX: clamp(drag.x + dx, 0, 100), imageY: clamp(drag.y + dy, 0, 100) });
@@ -7127,6 +7160,10 @@ function AnnouncementLayer({
     const centerShift = drag.edge.includes("e") ? horizontal / 2 : drag.edge.includes("w") ? -horizontal / 2 : 0;
     const height = clamp(drag.height + vertical, 6, 85);
     const centerYShift = drag.edge.includes("s") ? vertical / 2 : drag.edge.includes("n") ? -vertical / 2 : 0;
+    if (drag.kind === "image" && drag.imageId && drag.imageId !== "legacy-image") {
+      onPatch({ images: images.map((image) => image.id === drag.imageId ? { ...image, width, x: clamp(drag.x + centerShift, 0, 100) } : image) });
+      return;
+    }
     stagePlacementPatch(drag.kind === "layout"
       ? { layoutWidth: width, layoutX: clamp(drag.x + centerShift, width / 2 + 2, 100 - width / 2 - 2), ...(vertical ? { layoutHeight: height, layoutY: clamp(drag.y + centerYShift, height / 2 + 2, 100 - height / 2 - 2) } : {}) }
       : { imageWidth: width, imageX: clamp(drag.x + centerShift, 0, 100) });
@@ -7140,8 +7177,8 @@ function AnnouncementLayer({
     setPlacementDraft(null);
     if (patch) onPatch?.(patch);
   };
-  const resizeHandles = (kind: "layout" | "image") => (kind === "layout" ? ["n", "ne", "e", "se", "s", "sw", "w", "nw"] : ["ne", "e", "se", "sw", "w", "nw"]).map((edge) =>
-    <span key={edge} className={`announcement-resize-handle direct-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, kind, edge)} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation} />
+  const resizeHandles = (kind: "layout" | "image", image?: AnnouncementImage) => (kind === "layout" ? ["n", "ne", "e", "se", "s", "sw", "w", "nw"] : ["ne", "e", "se", "sw", "w", "nw"]).map((edge) =>
+    <span key={edge} className={`announcement-resize-handle direct-resize-handle resize-${edge}`} onPointerDown={(event) => beginManipulation(event, kind, edge, image)} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation} />
   );
   const editableText = (field: "title" | "message" | "details") => ({
     contentEditable: editing,
@@ -7171,15 +7208,52 @@ function AnnouncementLayer({
           </div>
         </div>
       </> : <>
-        <strong {...editableText("title")}>{announcement.title || "Announcement title"}</strong>
-        <span {...editableText("message")}>{announcement.message || "Your message appears here."}</span>
-        {announcement.details && <small className="announcement-details" {...editableText("details")}>{announcement.details}</small>}
+        <EditableAnnouncementText field="title" as="strong" announcement={announcement} editing={editing} onPatch={onPatch} contentEditableProps={editableText("title")}>{announcement.title || "Announcement title"}</EditableAnnouncementText>
+        <EditableAnnouncementText field="message" as="span" announcement={announcement} editing={editing} onPatch={onPatch} contentEditableProps={editableText("message")}>{announcement.message || "Your message appears here."}</EditableAnnouncementText>
+        {announcement.details && <EditableAnnouncementText field="details" as="small" className="announcement-details" announcement={announcement} editing={editing} onPatch={onPatch} contentEditableProps={editableText("details")}>{announcement.details}</EditableAnnouncementText>}
       </>}
       {timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className="inside-announcement" />}
     </div>
-    {announcement.imageUrl && !isTicker && <div className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${imageX}%`, top: `${imageY}%`, width: `${imageWidth}%` }}><img className="announcement-image" src={announcement.imageUrl} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move")} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button><button type="button" className="announcement-edit-handle image-delete-handle" title="Remove announcement image" onPointerDown={(event) => event.stopPropagation()} onClick={() => onPatch?.({ imageUrl: undefined, imageName: undefined })}><Trash2 size={16} /></button>{resizeHandles("image")}</>}</div>}
+    {!isTicker && images.map((image) => <div key={image.id} className={`announcement-image-frame${editing ? " editable announcement-editable-element" : ""}`} style={{ left: `${image.x}%`, top: `${image.y}%`, width: `${image.width}%` }}><img className="announcement-image" src={image.url} alt="" draggable={false} />{editing && <><button type="button" className="announcement-edit-handle image-handle" title="Drag announcement image" onPointerDown={(event) => beginManipulation(event, "image", "move", image)} onPointerMove={moveManipulation} onPointerUp={endManipulation} onPointerCancel={endManipulation}><Move size={18} /></button><button type="button" className="announcement-edit-handle image-delete-handle" title="Remove announcement image" onPointerDown={(event) => event.stopPropagation()} onClick={() => image.id === "legacy-image" ? onPatch?.({ imageUrl: undefined, imageName: undefined }) : onPatch?.({ images: images.filter((item) => item.id !== image.id) })}><Trash2 size={16} /></button>{resizeHandles("image", image)}</>}</div>)}
     {announcement.timerStyle !== "off" && !timerInAnnouncement && <AnnouncementCountdown announcement={announcement} startedAt={startedAt} playOnComplete={playOnComplete} className={`floating ${floatingTimerPosition}${announcement.timerX !== undefined || announcement.timerY !== undefined ? " custom-position" : ""}`} editing={editing} onPatch={onPatch} />}
   </>;
+}
+
+function EditableAnnouncementText({ field, as: Tag, announcement, editing, onPatch, contentEditableProps, className, children }: {
+  field: "title" | "message" | "details";
+  as: "strong" | "span" | "small";
+  announcement: LanternState["announcement"];
+  editing: boolean;
+  onPatch?: (patch: Partial<LanternState["announcement"]>) => void;
+  contentEditableProps: React.HTMLAttributes<HTMLElement>;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const keys = field === "title" ? ["titleX", "titleY", "titleWidth"] as const : field === "message" ? ["messageX", "messageY", "messageWidth"] as const : ["detailsX", "detailsY", "detailsWidth"] as const;
+  const [xKey, yKey, widthKey] = keys;
+  const dragRef = useRef<{ pointerId: number; mode: "move" | "resize"; clientX: number; clientY: number; x: number; y: number; width: number } | null>(null);
+  const x = announcement[xKey] ?? 0;
+  const y = announcement[yKey] ?? 0;
+  const width = announcement[widthKey];
+  const move = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !onPatch) return;
+    const bounds = event.currentTarget.closest(".announcement-display-overlay")?.getBoundingClientRect();
+    if (!bounds) return;
+    const dx = (event.clientX - drag.clientX) / bounds.width * 100;
+    const dy = (event.clientY - drag.clientY) / bounds.height * 100;
+    onPatch(drag.mode === "move"
+      ? { [xKey]: clamp(drag.x + dx, -45, 45), [yKey]: clamp(drag.y + dy, -45, 45) }
+      : { [widthKey]: clamp(drag.width + dx, 12, 100) });
+  };
+  const start = (event: React.PointerEvent<HTMLElement>, mode: "move" | "resize") => {
+    if (!editing || !onPatch) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current = { pointerId: event.pointerId, mode, clientX: event.clientX, clientY: event.clientY, x, y, width: width ?? 100 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  return <Tag className={`${className ?? ""}${editing ? " announcement-text-box" : ""}`} style={{ transform: `translate(${x}%, ${y}%)`, width: width ? `${width}%` : undefined }} {...contentEditableProps}>{children}{editing && <><button type="button" className="announcement-edit-handle text-box-handle" title={`Move ${field} text`} onPointerDown={(event) => start(event, "move")} onPointerMove={move} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }}><Move size={14} /></button><button type="button" className="announcement-edit-handle text-box-resize-handle" title={`Resize ${field} text`} onPointerDown={(event) => start(event, "resize")} onPointerMove={move} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }}><Maximize2 size={13} /></button></>}</Tag>;
 }
 
 function AnnouncementCountdown({
@@ -7209,8 +7283,10 @@ function AnnouncementCountdown({
   const timerStyle = {
     "--timer-accent": announcement.timerAccentColor,
     "--timer-track": announcement.timerTrackColor,
+    "--timer-background": announcement.timerBackgroundColor ?? "#07111e",
     "--timer-progress": `${Math.max(0, Math.min(1, progress)) * 360}deg`,
     "--timer-progress-percent": `${Math.max(0, Math.min(1, progress)) * 100}%`,
+    scale: announcement.timerScale ?? 1,
     ...(announcement.timerX !== undefined || announcement.timerY !== undefined ? {
       left: `${announcement.timerX ?? (timerPosition.endsWith("left") ? 17 : 83)}%`,
       top: `${announcement.timerY ?? (timerPosition.startsWith("top") ? 15 : 84)}%`,
@@ -7228,10 +7304,19 @@ function AnnouncementCountdown({
       timerY: clamp((event.clientY - bounds.top) / bounds.height * 100, 0, 100)
     });
   };
-  const handle = editing && <button type="button" className="announcement-edit-handle timer-handle" title="Drag timer" onPointerDown={(event) => {
+  const timerResizeRef = useRef<{ pointerId: number; x: number; y: number; scale: number } | null>(null);
+  const resizeTimer = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = timerResizeRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !onPatch) return;
+    const bounds = event.currentTarget.closest(".announcement-fixed-canvas")?.getBoundingClientRect();
+    if (!bounds) return;
+    const distance = Math.max(event.clientX - drag.x, event.clientY - drag.y);
+    onPatch({ timerScale: clamp(drag.scale + distance / Math.min(bounds.width, bounds.height) * 2, .5, 2.5) });
+  };
+  const handle = editing && <><button type="button" className="announcement-edit-handle timer-handle" title="Drag timer" onPointerDown={(event) => {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-  }} onPointerMove={dragTimer}><Move size={18} /></button>;
+  }} onPointerMove={dragTimer}><Move size={18} /></button><button type="button" className="announcement-edit-handle timer-resize-handle" title="Resize timer" onPointerDown={(event) => { event.stopPropagation(); timerResizeRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, scale: announcement.timerScale ?? 1 }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={resizeTimer} onPointerUp={() => { timerResizeRef.current = null; }} onPointerCancel={() => { timerResizeRef.current = null; }}><Maximize2 size={15} /></button></>;
 
   useEffect(() => {
     setNow(Date.now());
@@ -7270,7 +7355,7 @@ function formatCountdown(seconds: number) {
 }
 
 function ColorControl({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="field announcement-color-control"><span>{label}</span><div><input type="color" value={value} onChange={(event) => onChange(event.target.value)} /><b>{value.toUpperCase()}</b></div></label>;
+  return <label className="field announcement-color-control"><span>{label}</span><div><input type="color" value={value} onChange={(event) => onChange(event.target.value)} /></div></label>;
 }
 
 function SoundPicker({ label, value, onChange }: { label: string; value?: string; onChange: (value?: string) => void }) {
@@ -7892,7 +7977,8 @@ function ScheduleCalendarView({
   initialSelectedId,
   onEditDisplay,
   onEditBoard,
-  onEditAnnouncement
+  onEditAnnouncement,
+  onEditBlip
 }: {
   state: LanternState;
   updateState: (updater: (current: LanternState) => LanternState) => void;
@@ -7900,6 +7986,7 @@ function ScheduleCalendarView({
   onEditDisplay: (target: TargetScreen) => void;
   onEditBoard: (boardId: string) => void;
   onEditAnnouncement: (announcementId: string) => void;
+  onEditBlip: (blipId: string) => void;
 }) {
   const dayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const [viewMode, setViewMode] = useState<"week" | "month" | "agenda">(() => window.innerWidth <= 760 ? "agenda" : "week");
@@ -8351,7 +8438,7 @@ function ScheduleCalendarView({
           </div>
         </div>
         <div className="two-col"><label className="field"><span>Starts</span><input type="time" value={selected.startTime} onChange={(event) => patchEntry(selected.id, { startTime: event.target.value })} /></label><label className="field"><span>Ends</span><input type="time" value={selected.endTime} onChange={(event) => patchEntry(selected.id, { endTime: event.target.value })} /></label></div>
-        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "blip" ? state.savedBlips.length ? <LabeledSelect label="Blip" info="Saved Blip to run during this calendar event." value={selected.blipId ?? state.savedBlips[0].id} options={state.savedBlips.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedBlips.map((item) => [item.id, item.name]))} onChange={(blipId) => { const item = state.savedBlips.find((candidate) => candidate.id === blipId); patchEntry(selected.id, { blipId, name: item?.name ?? selected.name, color: item?.accentColor ?? selected.color }); }} /> : <p className="field-note">Create a saved Blip before scheduling one.</p> : selected.contentType === "broadcast" ? <><LabeledSelect label="Broadcast source" info="Recorded video is the default scheduled broadcast source." value={selected.broadcastMode ?? "recorded"} options={["recorded", "live"]} optionLabels={{ recorded: "Recorded broadcast video", live: "Live feed" }} onChange={(value) => patchEntry(selected.id, { broadcastMode: value as ScheduleEntry["broadcastMode"] })} />{(selected.broadcastMode ?? "recorded") === "recorded" ? <label className="image-upload command-button secondary compact"><Upload size={15} /><span>{selected.broadcastVideoName ?? "Choose recorded broadcast video"}</span><input type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchEntry(selected.id, { broadcastVideoUrl: String(reader.result), broadcastVideoName: file.name }); reader.readAsDataURL(file); }} /></label> : <LabeledInput label="Presenter" info="User responsible for starting this live broadcast." value={selected.presenterName ?? ""} onChange={(presenterName) => patchEntry(selected.id, { presenterName })} />}</> : <><ScheduleBoardPicker programs={state.boardPrograms} value={selected.boardId} onChange={(boardId) => patchEntry(selected.id, { boardId })} /><button type="button" className="command-button secondary compact schedule-edit-board-button" onClick={() => onEditBoard(selected.boardId)}><SlidersHorizontal size={14} /> Edit board</button></>}
+        {selected.contentType === "announcement" ? state.savedAnnouncements.length ? <><LabeledSelect label="Announcement" info="Saved announcement to broadcast." value={selected.announcementId ?? state.savedAnnouncements[0].id} options={state.savedAnnouncements.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedAnnouncements.map((item) => [item.id, item.title || "Untitled announcement"]))} onChange={(announcementId) => { const item = state.savedAnnouncements.find((candidate) => candidate.id === announcementId); patchEntry(selected.id, { announcementId, name: item?.title ?? selected.name }); }} /><button type="button" className="command-button secondary compact" onClick={() => selected.announcementId && onEditAnnouncement(selected.announcementId)}><Pencil size={14} /> Edit announcement</button></> : <p className="field-note">Create a saved announcement before scheduling one.</p> : selected.contentType === "blip" ? state.savedBlips.length ? <><LabeledSelect label="Blip" info="Saved Blip to run during this calendar event." value={selected.blipId ?? state.savedBlips[0].id} options={state.savedBlips.map((item) => item.id)} optionLabels={Object.fromEntries(state.savedBlips.map((item) => [item.id, item.name]))} onChange={(blipId) => { const item = state.savedBlips.find((candidate) => candidate.id === blipId); patchEntry(selected.id, { blipId, name: item?.name ?? selected.name, color: item?.accentColor ?? selected.color }); }} /><button type="button" className="command-button secondary compact" disabled={!selected.blipId} onClick={() => selected.blipId && onEditBlip(selected.blipId)}><Pencil size={14} /> Edit Blip</button></> : <p className="field-note">Create a saved Blip before scheduling one.</p> : selected.contentType === "broadcast" ? <><LabeledSelect label="Broadcast source" info="Recorded video is the default scheduled broadcast source." value={selected.broadcastMode ?? "recorded"} options={["recorded", "live"]} optionLabels={{ recorded: "Recorded broadcast video", live: "Live feed" }} onChange={(value) => patchEntry(selected.id, { broadcastMode: value as ScheduleEntry["broadcastMode"] })} />{(selected.broadcastMode ?? "recorded") === "recorded" ? <label className="image-upload command-button secondary compact"><Upload size={15} /><span>{selected.broadcastVideoName ?? "Choose recorded broadcast video"}</span><input type="file" accept="video/*" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => patchEntry(selected.id, { broadcastVideoUrl: String(reader.result), broadcastVideoName: file.name }); reader.readAsDataURL(file); }} /></label> : <LabeledInput label="Presenter" info="User responsible for starting this live broadcast." value={selected.presenterName ?? ""} onChange={(presenterName) => patchEntry(selected.id, { presenterName })} />}</> : <><ScheduleBoardPicker programs={state.boardPrograms} value={selected.boardId} onChange={(boardId) => patchEntry(selected.id, { boardId })} /><button type="button" className="command-button secondary compact schedule-edit-board-button" onClick={() => onEditBoard(selected.boardId)}><SlidersHorizontal size={14} /> Edit board</button></>}
         <LabeledSelect label="Display" info="Display targeted by this event." value={selected.target === "all" ? firstDisplayId(state) : selected.target} options={scheduleTargetOptions(state)} optionLabels={targetOptionLabels(state)} onChange={(target) => { const nextTarget = target as ScreenId; patchEntry(selected.id, { target: nextTarget }); setDisplayFilter(nextTarget); }} /><div className="field"><span>Display on</span><div className="schedule-days">{dayLabels.map((label, index) => { const day = (index + 1) % 7; return <button type="button" className={selected.days.includes(day) ? "selected" : ""} key={label} onClick={() => { const days = selected.days.includes(day) ? selected.days.filter((value) => value !== day) : [...selected.days, day]; patchEntry(selected.id, { days, recurrence: "weekly", scheduleDate: selected.scheduleDate ?? toDateInputValue(new Date()) }); }}>{label.slice(0, 1)}</button>; })}</div></div><div className="two-col schedule-date-range"><label className="field"><span>From date</span><input type="date" value={selected.scheduleDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleDate: event.target.value || undefined, recurrence: event.target.value ? "weekly" : selected.recurrence })} /></label><label className="field"><span>To date</span><input type="date" min={selected.scheduleDate} value={selected.scheduleEndDate ?? ""} onChange={(event) => patchEntry(selected.id, { scheduleEndDate: event.target.value || undefined, recurrence: "weekly" })} /></label></div><div className="schedule-editor-actions"><button type="button" className="command-button secondary" onClick={closeEditor}>Cancel</button><button type="button" className="command-button primary schedule-save-button" onClick={saveEntry}>Save event</button></div>
       </div>
     </aside></>, document.body)}
@@ -8652,14 +8739,17 @@ function ScheduleView({
 }
 
 function scheduleLane(entry: ScheduleEntry, entries: ScheduleEntry[]) {
-  // Calendar lanes represent displays, rather than every item that happens to
-  // touch an event's time range. A long board used to inherit a lane for each
-  // short announcement or blip within it, reducing normal all-day schedules
-  // to unreadable slivers. Items for a display deliberately share its lane;
-  // their timing and content treatment still make short overlays identifiable.
-  const targets = [...new Set(entries.map((candidate) => candidate.target))].sort();
-  const index = targets.indexOf(entry.target);
-  return { index: Math.max(0, index), count: Math.max(1, targets.length) };
+  // Lanes represent the displays carrying boards or broadcasts. Messages and
+  // Blips are overlays, so they share an existing display lane instead of
+  // creating a third narrow column that squeezes the board content.
+  const laneEntries = entries.filter((candidate) => {
+    const type = candidate.contentType ?? "board";
+    return type === "board" || type === "broadcast";
+  });
+  const targets = [...new Set((laneEntries.length ? laneEntries : entries).map((candidate) => candidate.target).filter((target) => target !== "all"))].sort();
+  if (!targets.length) return { index: 0, count: 1 };
+  const index = entry.target === "all" ? 0 : targets.indexOf(entry.target);
+  return { index: Math.max(0, index), count: targets.length };
 }
 
 function timeToMinutes(value: string) { const [hours, minutes] = value.split(":").map(Number); return hours * 60 + minutes; }
@@ -9163,11 +9253,11 @@ function BlipComposition({ blip, startedAt, previewElapsedSeconds }: { blip: Lan
   const elapsed = previewElapsedSeconds ?? Math.max(0, (now - Date.parse(startedAt ?? new Date().toISOString())) / 1000);
   const remaining = Math.max(0, Math.ceil(blip.countdownSeconds - elapsed));
   const revealed = blip.kind === "celebration" || elapsed >= blip.countdownSeconds;
-  return <div className={`blip-overlay blip-${blip.kind} motion-${blip.motion}${revealed ? " revealed" : ""}`} style={{ "--blip-background": blip.backgroundColor, "--blip-accent": blip.accentColor } as React.CSSProperties}>
+  return <div className={`blip-overlay blip-${blip.kind} motion-${blip.motion}${revealed ? " revealed" : ""}`} style={{ "--blip-background": blip.backgroundColor, "--blip-accent": blip.accentColor, "--blip-text": blip.textColor ?? "#f5f7ff", "--blip-border": blip.borderColor ?? blip.accentColor } as React.CSSProperties}>
     <div className="blip-glow" />
     <article>
-      {blip.imageUrl && <div className="blip-image"><img src={blip.imageUrl} alt="Blip image" onError={(event) => event.currentTarget.parentElement?.classList.add("image-error")} /><span>Image unavailable</span></div>}
-      <div className="blip-copy"><span className="blip-kicker">{blip.kind === "celebration" ? "Museum moment" : blip.kind === "quiz" ? "Think fast" : "Just for fun"}</span><h1>{blip.headline}</h1><p className="blip-prompt">{blip.prompt}</p>{blip.subtext && <small>{blip.subtext}</small>}
+      {blip.imageUrl && <div className="blip-image"><img src={blip.imageUrl} alt="Blip image" onError={(event) => event.currentTarget.parentElement?.remove()} /></div>}
+      <div className="blip-copy">{blip.kind !== "celebration" && <span className="blip-kicker">{blip.kind === "quiz" ? "Think fast" : "Just for fun"}</span>}<h1>{blip.headline}</h1><p className="blip-prompt">{blip.prompt}</p>{blip.subtext && <small>{blip.subtext}</small>}
         {blip.kind !== "celebration" && <div className={`blip-answer${revealed ? " visible" : ""}`} aria-live="polite"><span>{blip.kind === "quiz" ? "Answer" : "Punchline"}</span><strong>{revealed ? blip.answer : "Get ready…"}</strong></div>}
       </div>
       {!revealed && blip.showCountdown && <div className="blip-countdown"><strong>{remaining}</strong><span>seconds</span><i style={{ "--countdown-progress": `${Math.max(0, Math.min(1, remaining / Math.max(1, blip.countdownSeconds))) * 360}deg` } as React.CSSProperties} /></div>}

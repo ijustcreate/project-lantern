@@ -129,8 +129,8 @@ body {
 .blip-overlay::before, .blip-overlay::after { content: ""; position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; background: color-mix(in srgb, var(--blip-accent) 18%, transparent); filter: blur(42px); opacity: .38; pointer-events: none; }.blip-overlay::before { left: 4%; top: 8%; }.blip-overlay::after { right: 4%; bottom: 8%; }
 .blip-overlay.motion-slide { animation: blip-slide-in .55s cubic-bezier(.2,.8,.2,1) both; }.blip-overlay.motion-pop article { animation: blip-pop-in .55s cubic-bezier(.18,.9,.25,1.25) both; }.blip-overlay.motion-gentle { animation: blip-fade-in .8s ease both; }
 .blip-overlay article { position: relative; z-index: 2; width: min(76%, 880px); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: clamp(20px, 5vw, 70px); padding: clamp(28px, 5vw, 72px); border: 1px solid color-mix(in srgb, var(--blip-accent) 48%, transparent); border-radius: clamp(22px, 3vw, 40px); background: linear-gradient(145deg, color-mix(in srgb, var(--blip-background) 88%, #050914), color-mix(in srgb, var(--blip-background) 74%, #050914)); box-shadow: 0 24px 60px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.14); backdrop-filter: blur(9px); pointer-events: auto; }
-.blip-image { grid-column: 1 / -1; justify-self: center; width: min(100%, 660px); aspect-ratio: 16 / 9; max-height: 34vh; overflow: hidden; border: 3px solid color-mix(in srgb, var(--blip-accent) 70%, white); border-radius: 24px; box-shadow: 0 18px 50px rgba(0,0,0,.35); }.blip-image img { display: block; width: 100%; height: 100%; object-fit: cover; }.blip-image > span { display: none; }.blip-image.image-error { display: grid; place-items: center; border-style: dashed; color: var(--blip-accent); background: color-mix(in srgb, var(--blip-background) 80%, #050914); }.blip-image.image-error img { display: none; }.blip-image.image-error > span { display: block; font: 800 clamp(10px, 1.2vw, 16px)/1 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
-.blip-copy { min-width: 0; }.blip-kicker { color: var(--blip-accent); font: 800 clamp(12px, 1.4vw, 20px)/1 Inter, sans-serif; letter-spacing: .16em; text-transform: uppercase; }.blip-copy h1 { margin: .45em 0 .3em; color: #fff; font: 850 clamp(34px, 5.8vw, 92px)/.94 Fredoka, Inter, sans-serif; letter-spacing: -.035em; text-wrap: balance; }.blip-prompt { margin: 0; max-width: 19ch; color: #f5f7ff; font: 650 clamp(24px, 3.4vw, 54px)/1.12 DM Sans, Inter, sans-serif; text-wrap: balance; }.blip-copy > small { display: block; margin-top: 15px; color: rgba(255,255,255,.68); font: 500 clamp(13px, 1.25vw, 20px)/1.4 Inter, sans-serif; }
+.blip-image { grid-column: 1 / -1; justify-self: center; width: min(100%, 660px); aspect-ratio: 16 / 9; max-height: 34vh; overflow: hidden; border: 3px solid var(--blip-border); border-radius: 24px; box-shadow: 0 18px 50px rgba(0,0,0,.35); }.blip-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.blip-copy { min-width: 0; }.blip-kicker { color: var(--blip-accent); font: 800 clamp(12px, 1.4vw, 20px)/1 Inter, sans-serif; letter-spacing: .16em; text-transform: uppercase; }.blip-copy h1 { margin: .45em 0 .3em; color: var(--blip-text, #fff) !important; font: 850 clamp(34px, 5.8vw, 92px)/.94 Fredoka, Inter, sans-serif; letter-spacing: -.035em; text-shadow: 0 2px 8px rgba(0,0,0,.48); text-wrap: balance; }.blip-prompt { margin: 0; max-width: 19ch; color: var(--blip-text, #f5f7ff); font: 650 clamp(24px, 3.4vw, 54px)/1.12 DM Sans, Inter, sans-serif; text-wrap: balance; }.blip-copy > small { display: block; margin-top: 15px; color: var(--blip-text, #f5f7ff); font: 600 clamp(16px, 1.55vw, 25px)/1.4 Inter, sans-serif; }
 .blip-countdown { position: relative; width: clamp(108px, 13vw, 200px); aspect-ratio: 1; display: grid; place-content: center; text-align: center; }.blip-countdown i { --countdown-progress: 360deg; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--blip-accent) var(--countdown-progress), rgba(255,255,255,.1) 0); -webkit-mask: radial-gradient(circle, transparent 57%, #000 59%); mask: radial-gradient(circle, transparent 57%, #000 59%); }.blip-countdown strong { color: white; font: 800 clamp(44px, 6vw, 88px)/.9 Fredoka, Inter, sans-serif; }.blip-countdown span { margin-top: 8px; color: var(--blip-accent); font: 800 clamp(9px, 1vw, 14px)/1 Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
 .blip-answer { grid-column: 1 / -1; max-height: 0; margin-top: 0; padding: 0 20px; border-left: 5px solid var(--blip-accent); opacity: 0; overflow: hidden; transform: translateY(15px); transition: max-height .5s ease, opacity .4s ease, transform .4s ease, margin .4s ease, padding .4s ease; }.blip-answer.visible { max-height: 260px; margin-top: clamp(22px, 3vw, 42px); padding: 8px 20px; opacity: 1; transform: none; }.blip-answer span, .blip-answer strong { display: block; }.blip-answer span { color: var(--blip-accent); font: 800 clamp(10px, 1vw, 15px)/1 Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; }.blip-answer strong { margin-top: 7px; color: white; font: 750 clamp(25px, 3.5vw, 56px)/1.08 DM Sans, Inter, sans-serif; text-wrap: balance; }
 .blip-celebration article { grid-template-columns: 1fr; text-align: center; }.blip-celebration .blip-prompt { max-width: 28ch; margin-inline: auto; }.blip-celebration .blip-copy h1 { color: var(--blip-accent); }
@@ -2032,6 +2032,7 @@ h2 {
 .announcement-countdown {
   --timer-accent: #6847e8;
   --timer-track: #e8e0d0;
+  --timer-background: #f6ead3;
   position: relative;
   z-index: 7;
   display: grid;
@@ -2122,7 +2123,7 @@ h2 {
   position: absolute;
   inset: 11%;
   border-radius: 50%;
-  background: rgba(246, 234, 211, 0.96);
+  background: var(--timer-background);
   content: "";
 }
 
@@ -2138,7 +2139,7 @@ h2 {
   padding: clamp(14px, 2vw, 28px);
   border: 1px solid rgba(246, 234, 211, 0.42);
   border-radius: 12px;
-  background: rgba(246, 234, 211, 0.94);
+  background: var(--timer-background);
   box-shadow: 0 18px 64px rgba(0, 0, 0, 0.32);
 }
 
@@ -5119,7 +5120,7 @@ textarea:focus-visible,
 
 .announcement-color-control > div {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 38px;
   min-height: 36px;
   align-items: center;
   gap: 7px;
@@ -5138,13 +5139,10 @@ textarea:focus-visible,
   background: transparent;
 }
 
-.announcement-color-control b {
-  min-width: 0;
-  overflow: hidden;
-  color: #b6bbd7;
-  font-size: 8px;
-  text-overflow: ellipsis;
-}
+.announcement-image-list { display: grid; gap: 7px; }
+.announcement-add-image { justify-self: end; }
+.save-indicator { white-space: nowrap; color: #8ae5bc; font-size: 9px; font-weight: 800; }
+.save-indicator.unsaved { color: #ffd17a; }
 
 .announcement-sfx-controls {
   display: grid;
@@ -5552,6 +5550,10 @@ textarea:focus-visible,
 .announcement-edit-handle.image-delete-handle { top: 4px; right: 4px; border-color: rgba(255, 125, 145, .85); color: #ffe4e9; background: rgba(79, 16, 31, .94); cursor: pointer; }
 .announcement-edit-handle.image-delete-handle:hover { border-color: #ffb2c0; background: #721b31; }
 .announcement-edit-handle.timer-handle { right: 4px; bottom: 4px; }
+.announcement-edit-handle.timer-resize-handle { right: 4px; top: 4px; cursor: nwse-resize; }
+.announcement-text-box { position: relative; overflow: visible; outline: 2px dashed rgba(7, 17, 30, .42); outline-offset: 3px; }
+.announcement-edit-handle.text-box-handle { left: -3px; bottom: -34px; width: 25px; height: 24px; }
+.announcement-edit-handle.text-box-resize-handle { right: -3px; bottom: -34px; width: 25px; height: 24px; cursor: ew-resize; }
 .announcement-editable-element { outline: 3px solid rgba(117, 224, 223, .9); outline-offset: 3px; overflow: visible; touch-action: none; }
 .announcement-display-overlay.announcement-editable-element { cursor: move; }
 .announcement-editable-element [contenteditable="true"] { min-width: 1em; border-radius: 3px; outline: 2px dashed rgba(7, 17, 30, .4); outline-offset: 3px; cursor: text; }
@@ -10558,6 +10560,10 @@ body.theme-light {
   background: linear-gradient(135deg, color-mix(in srgb, var(--event-color, #4f63cf) 78%, #27436f), var(--event-color, #4f63cf));
 }
 .calendar-event.layer-announcement {
+  /* Messages are board overlays: keep them in the board lane, just inset. */
+  margin-left: 7px;
+  width: calc(100% - 12px) !important;
+  z-index: 5;
   border-style: dashed;
   border-color: rgba(255, 225, 151, .86);
   border-left-style: solid;
