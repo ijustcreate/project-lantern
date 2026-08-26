@@ -3317,8 +3317,19 @@ function boardBackgroundChoice(color?: string) {
 
 const defaultBoardFolderOptions = ["Honor rolls", "Supporter spotlights", "Program information", "Good deeds", "Custom boards"];
 
-function boardFolderOptions(programs: DonorBoardProgram[], savedFolders: string[] = []) {
-  return [...new Set([...defaultBoardFolderOptions, ...savedFolders, ...programs.map(boardFolderFor)].map((folder) => folder.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+function resolveBoardFolderName(folder: string, renames: Record<string, string> = {}) {
+  let resolved = folder;
+  const visited = new Set<string>();
+  while (renames[resolved]?.trim() && !visited.has(resolved)) {
+    visited.add(resolved);
+    resolved = renames[resolved].trim();
+  }
+  return resolved;
+}
+
+function boardFolderOptions(programs: DonorBoardProgram[], savedFolders: string[] = [], renames: Record<string, string> = {}, hiddenFolders: string[] = []) {
+  const hidden = new Set(hiddenFolders.map((folder) => folder.trim()).filter(Boolean));
+  return [...new Set([...defaultBoardFolderOptions, ...savedFolders, ...programs.map(boardFolderFor)].map((folder) => resolveBoardFolderName(folder.trim(), renames)).filter((folder) => folder && !hidden.has(folder)))].sort((left, right) => left.localeCompare(right));
 }
 
 function boardFolderFor(program: DonorBoardProgram) {
@@ -8735,18 +8746,20 @@ function RecognitionSettingsView({ state, updateState, appearance, onAppearanceC
         </div>
         <button type="button" className="command-button secondary" onClick={onPullSiteChanges} disabled={!siteSyncAvailable || siteSyncing}><Download size={16} /> {siteSyncing ? "Pulling…" : "Pull latest site changes"}</button>
       </section>
-      <button type="button" className={`settings-intro vocabulary-toggle${vocabularyExpanded ? " expanded" : ""}`} onClick={() => setVocabularyExpanded((expanded) => !expanded)} aria-expanded={vocabularyExpanded} aria-controls="donor-vocabulary-options">
-        <div>
-          <p className="eyebrow">Recognition controls</p>
-          <h2>Donor vocabulary</h2>
-        </div>
-        <ChevronDown size={20} aria-hidden="true" />
-      </button>
-      {vocabularyExpanded && <div className="settings-columns" id="donor-vocabulary-options">
+      <section className="donor-vocabulary-settings">
+        <button type="button" className={`settings-intro vocabulary-toggle${vocabularyExpanded ? " expanded" : ""}`} onClick={() => setVocabularyExpanded((expanded) => !expanded)} aria-expanded={vocabularyExpanded} aria-controls="donor-vocabulary-options">
+          <div>
+            <p className="eyebrow">Recognition controls</p>
+            <h2>Donor vocabulary</h2>
+          </div>
+          <ChevronDown size={20} aria-hidden="true" />
+        </button>
+        {vocabularyExpanded && <div className="settings-columns" id="donor-vocabulary-options">
           <VocabularyEditor title="Tiers" description="Recognition levels" values={state.recognitionSettings.tiers} onChange={(next, previous, replacement) => changeVocabulary("tiers", next, previous, replacement)} />
           <VocabularyEditor title="Categories" description="Donor types" values={state.recognitionSettings.categories} onChange={(next, previous, replacement) => changeVocabulary("categories", next, previous, replacement)} />
           <VocabularyEditor title="Tags" description="Search labels" values={state.recognitionSettings.tags} onChange={(next, previous, replacement) => changeVocabulary("tags", next, previous, replacement)} />
         </div>}
+      </section>
       <BoardOrganizationEditor state={state} updateState={updateState} />
       <GivingProgramsEditor state={state} updateState={updateState} />
     </section>
@@ -8757,37 +8770,92 @@ function BoardOrganizationEditor({ state, updateState }: { state: LanternState; 
   const [expanded, setExpanded] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [editing, setEditing] = useState<{ kind: "board" | "folder"; id: string; value: string } | null>(null);
-  const folders = boardFolderOptions(state.boardPrograms, state.boardFolders ?? []);
+  const [pendingDelete, setPendingDelete] = useState<{ kind: "board" | "folder"; id: string; name: string; boardCount: number } | null>(null);
+  const folders = boardFolderOptions(state.boardPrograms, state.boardFolders ?? [], state.boardFolderRenames ?? {}, state.hiddenBoardFolders ?? []);
   const startEditing = (kind: "board" | "folder", id: string, value: string) => setEditing({ kind, id, value });
-  const finishEditing = () => {
-    if (!editing) return;
-    const nextName = editing.value.trim();
-    if (!nextName) return;
+  const finishEditing = (draft = editing) => {
+    if (!draft) return;
+    const nextName = draft.value.trim();
+    if (!nextName) {
+      setEditing(null);
+      return;
+    }
     updateState((current) => {
-      if (editing.kind === "board") return {
+      if (draft.kind === "board") return {
         ...current,
-        boardPrograms: current.boardPrograms.map((board) => board.id === editing.id ? { ...board, name: nextName } : board)
+        boardPrograms: current.boardPrograms.map((board) => board.id === draft.id ? { ...board, name: nextName } : board)
       };
-      const existingFolders = boardFolderOptions(current.boardPrograms, current.boardFolders ?? []);
-      const nextFolders = [...new Set(existingFolders.map((folder) => folder === editing.id ? nextName : folder))];
+      const existingFolders = boardFolderOptions(current.boardPrograms, current.boardFolders ?? [], current.boardFolderRenames ?? {});
+      const nextFolders = [...new Set(existingFolders.map((folder) => folder === draft.id ? nextName : folder))];
+      const nextRenames = Object.fromEntries(Object.entries(current.boardFolderRenames ?? {}).map(([original, renamed]) => [original, renamed === draft.id ? nextName : renamed]));
+      nextRenames[draft.id] = nextName;
       return {
         ...current,
         boardFolders: nextFolders,
-        boardPrograms: current.boardPrograms.map((board) => boardFolderFor(board) === editing.id ? { ...board, folder: nextName } : board)
+        boardFolderRenames: nextRenames,
+        boardPrograms: current.boardPrograms.map((board) => boardFolderFor(board) === draft.id ? { ...board, folder: nextName } : board)
       };
     });
     setEditing(null);
   };
+  const renameForm = (draft: NonNullable<typeof editing>, label: string) => <form className="board-organization-rename" onSubmit={(event) => { event.preventDefault(); finishEditing(draft); }}>
+    <input
+      autoFocus
+      value={draft.value}
+      onChange={(event) => setEditing({ ...draft, value: event.target.value })}
+      onBlur={(event) => finishEditing({ ...draft, value: event.currentTarget.value })}
+      onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditing(null); } }}
+      aria-label={label}
+    />
+    <span className="board-organization-rename-actions" onPointerDown={(event) => event.preventDefault()}>
+      <button type="submit" className="icon-button" disabled={!draft.value.trim()} title="Save name" aria-label="Save name"><Save size={14} /></button>
+      <button type="button" className="icon-button" onClick={() => setEditing(null)} title="Cancel rename" aria-label="Cancel rename"><X size={14} /></button>
+    </span>
+  </form>;
   const addFolder = () => {
     const name = newFolderName.trim();
     if (!name) return;
-    updateState((current) => ({ ...current, boardFolders: [...new Set([...(current.boardFolders ?? []), name])] }));
+    updateState((current) => ({
+      ...current,
+      boardFolders: [...new Set([...(current.boardFolders ?? []), name])],
+      hiddenBoardFolders: (current.hiddenBoardFolders ?? []).filter((folder) => folder !== name)
+    }));
     setNewFolderName("");
   };
   const moveBoard = (boardId: string, folder: string) => updateState((current) => ({
     ...current,
     boardPrograms: current.boardPrograms.map((board) => board.id === boardId ? { ...board, folder } : board)
   }));
+  const deleteBoard = (boardId: string) => updateState((current) => {
+    if (current.boardPrograms.length <= 1) return current;
+    const fallbackBoardId = current.boardPrograms.find((board) => board.id !== boardId)?.id;
+    return {
+      ...current,
+      donors: current.donors.map((donor) => ({ ...donor, boardIds: (donor.boardIds ?? []).filter((id) => id !== boardId) })),
+      boardPrograms: current.boardPrograms.filter((board) => board.id !== boardId),
+      schedules: current.schedules.map((entry) => entry.boardId === boardId && fallbackBoardId ? { ...entry, boardId: fallbackBoardId } : entry),
+      screens: Object.fromEntries(Object.entries(current.screens).map(([id, screen]) => [id, screen.boardProgramId === boardId ? { ...screen, boardProgramId: fallbackBoardId } : screen])) as LanternState["screens"]
+    };
+  });
+  const deleteFolder = (folder: string) => updateState((current) => {
+    const currentFolders = boardFolderOptions(current.boardPrograms, current.boardFolders ?? [], current.boardFolderRenames ?? {}, current.hiddenBoardFolders ?? []);
+    const fallbackFolder = currentFolders.find((candidate) => candidate !== folder) ?? (folder === "Custom boards" ? "Honor rolls" : "Custom boards");
+    const hiddenSources = defaultBoardFolderOptions.filter((candidate) => resolveBoardFolderName(candidate, current.boardFolderRenames ?? {}) === folder);
+    const nextRenames = Object.fromEntries(Object.entries(current.boardFolderRenames ?? {}).filter(([original, renamed]) => original !== folder && renamed !== folder));
+    return {
+      ...current,
+      boardFolders: (current.boardFolders ?? []).filter((candidate) => candidate !== folder),
+      boardFolderRenames: nextRenames,
+      hiddenBoardFolders: [...new Set([...(current.hiddenBoardFolders ?? []).filter((candidate) => candidate !== fallbackFolder), folder, ...hiddenSources])],
+      boardPrograms: current.boardPrograms.map((board) => resolveBoardFolderName(boardFolderFor(board), current.boardFolderRenames ?? {}) === folder ? { ...board, folder: fallbackFolder } : board)
+    };
+  });
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    if (pendingDelete.kind === "board") deleteBoard(pendingDelete.id);
+    else deleteFolder(pendingDelete.id);
+    setPendingDelete(null);
+  };
 
   return <section className="board-organization-settings">
     <button type="button" className={`settings-intro vocabulary-toggle${expanded ? " expanded" : ""}`} onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls="board-organization-options">
@@ -8802,18 +8870,30 @@ function BoardOrganizationEditor({ state, updateState }: { state: LanternState; 
           const boards = state.boardPrograms.filter((board) => boardFolderFor(board) === folder);
           const folderEditing = editing?.kind === "folder" && editing.id === folder;
           return <section className="board-organization-folder" key={folder} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const boardId = event.dataTransfer.getData("text/project-lantern-board"); if (boardId) moveBoard(boardId, folder); }}>
-            <header>{folderEditing ? <form onSubmit={(event) => { event.preventDefault(); finishEditing(); }}><input autoFocus value={editing.value} onChange={(event) => setEditing({ ...editing, value: event.target.value })} onBlur={finishEditing} aria-label={`Rename ${folder} folder`} /></form> : <><span><Folder size={16} /><strong>{folder}</strong><small>{boards.length}</small></span><button type="button" className="icon-button" onClick={() => startEditing("folder", folder, folder)} title={`Edit ${folder} folder`} aria-label={`Edit ${folder} folder`}><Pencil size={14} /></button></>}</header>
+            <header>{folderEditing ? renameForm(editing!, `Rename ${folder} folder`) : <><span><Folder size={16} /><strong>{folder}</strong><small>{boards.length}</small></span><span className="board-organization-item-actions"><button type="button" className="icon-button" onClick={() => startEditing("folder", folder, folder)} title={`Edit ${folder} folder`} aria-label={`Edit ${folder} folder`}><Pencil size={14} /></button><button type="button" className="icon-button danger-icon" onClick={() => setPendingDelete({ kind: "folder", id: folder, name: folder, boardCount: boards.length })} title={`Delete ${folder} folder`} aria-label={`Delete ${folder} folder`}><Trash2 size={14} /></button></span></>}</header>
             <div className="board-organization-dropzone">{boards.length ? boards.map((board) => {
               const boardEditing = editing?.kind === "board" && editing.id === board.id;
               return <article className="board-organization-board" key={board.id} draggable={!boardEditing} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/project-lantern-board", board.id); }}>
                 <GripVertical size={16} aria-hidden="true" />
-                {boardEditing ? <form onSubmit={(event) => { event.preventDefault(); finishEditing(); }}><input autoFocus value={editing.value} onChange={(event) => setEditing({ ...editing, value: event.target.value })} onBlur={finishEditing} aria-label={`Rename ${board.name}`} /></form> : <><BoardOrientationIcon orientation={board.orientation} /><span><strong>{board.name}</strong><small>{board.orientation}</small></span><button type="button" className="icon-button" onClick={() => startEditing("board", board.id, board.name)} title={`Edit ${board.name}`} aria-label={`Edit ${board.name}`}><Pencil size={14} /></button></>}
+                {boardEditing ? renameForm(editing!, `Rename ${board.name}`) : <><BoardOrientationIcon orientation={board.orientation} /><span><strong>{board.name}</strong><small>{board.orientation}</small></span><span className="board-organization-item-actions"><button type="button" className="icon-button" onClick={() => startEditing("board", board.id, board.name)} title={`Edit ${board.name}`} aria-label={`Edit ${board.name}`}><Pencil size={14} /></button><button type="button" className="icon-button danger-icon" disabled={state.boardPrograms.length <= 1} onClick={() => setPendingDelete({ kind: "board", id: board.id, name: board.name, boardCount: 1 })} title={state.boardPrograms.length <= 1 ? "At least one board is required" : `Delete ${board.name}`} aria-label={`Delete ${board.name}`}><Trash2 size={14} /></button></span></>}
               </article>;
             }) : <span className="board-organization-empty">Drop boards here</span>}</div>
           </section>;
         })}
       </div>
     </div>}
+    {pendingDelete && <LanternConfirmDialog
+      eyebrow={pendingDelete.kind === "board" ? "Delete board" : "Delete board group"}
+      title={`Delete “${pendingDelete.name}”?`}
+      description={pendingDelete.kind === "board"
+        ? "This permanently removes the board. Displays and schedules using it will move to another available board. Donor profiles remain available."
+        : pendingDelete.boardCount
+          ? `This removes the group and moves its ${pendingDelete.boardCount} ${pendingDelete.boardCount === 1 ? "board" : "boards"} to another group. The boards themselves will not be deleted.`
+          : "This removes the empty group from the Board Manager."}
+      confirmLabel={pendingDelete.kind === "board" ? "Delete board" : "Delete group"}
+      onCancel={() => setPendingDelete(null)}
+      onConfirm={confirmDelete}
+    />}
   </section>;
 }
 

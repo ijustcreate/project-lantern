@@ -810,6 +810,10 @@ export interface LanternState {
   boardPrograms: DonorBoardProgram[];
   /** Named board folders, including empty folders created in Settings. */
   boardFolders?: string[];
+  /** Display-name overrides for built-in board folders that an operator renamed. */
+  boardFolderRenames?: Record<string, string>;
+  /** Board folders removed from the manager, including hidden built-in folders. */
+  hiddenBoardFolders?: string[];
   widgets?: BoardWidget[];
   schedules: ScheduleEntry[];
   savedAnnouncements: SavedAnnouncement[];

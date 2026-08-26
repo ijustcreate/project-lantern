@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0419",
+    "title": "Fix Board Manager organization controls",
+    "summary": "Board and group names now save as replacements through Enter, click-away, or an explicit Save action. Board and group deletion now requires confirmation, and expanded donor vocabulary controls remain above Board Organization.",
+    "author": "Codex",
+    "createdAt": "Aug 25, 2026, 5:59 PM",
+    "areas": [
+      "Settings",
+      "Board Manager"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/types.ts"
+    ],
+    "tests": "npm run build; Playwright rename-by-Enter, delete-dialog cancellation, and settings layout checks; git diff --check"
+  },
+  {
     "id": "DEV-0418",
     "title": "Fix announcement schedule build",
     "summary": "Removed the obsolete schedule-panel state update so the live production build succeeds.",
