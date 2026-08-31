@@ -353,7 +353,7 @@ export async function loadSharedLanternStateSnapshot(): Promise<SharedLanternSta
     response = await fetch(`${LANTERN_READ_SERVICE_ROOT}/state`, {
       cache: "no-store",
       signal: controller?.signal,
-      headers: { "Accept": "application/json", "Cache-Control": "no-cache" }
+      headers: { "Accept": "application/json" }
     });
   } finally {
     if (timeout !== undefined) window.clearTimeout(timeout);

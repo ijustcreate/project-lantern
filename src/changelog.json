@@ -1,5 +1,20 @@
 [
   {
+    "id": "DEV-0428",
+    "title": "Restore shared display state reads",
+    "summary": "Removed the unnecessary Cache-Control request header that caused the live Worker CORS preflight to reject shared-state reads, while retaining no-store fetch caching.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 10:43 AM",
+    "areas": [
+      "Display sync",
+      "Shared state"
+    ],
+    "files": [
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; production build with live shared-service endpoint; public display verification after deployment"
+  },
+  {
     "id": "DEV-0427",
     "title": "Fix Legacy Star scale and add image library",
     "summary": "Legacy donor star artwork now displays at 200% without enlarging labels. Settings now includes an image library for viewing usage and renaming, replacing, or removing images.",
