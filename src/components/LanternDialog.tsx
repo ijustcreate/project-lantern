@@ -28,14 +28,18 @@ export function LanternConfirmDialog({
   description,
   confirmLabel,
   cancelLabel = "Cancel",
+  secondaryActionLabel,
   tone = "danger",
   onCancel,
-  onConfirm
+  onConfirm,
+  onSecondaryAction
 }: DialogBaseProps & {
   confirmLabel: string;
   cancelLabel?: string;
+  secondaryActionLabel?: string;
   tone?: "danger" | "primary";
   onConfirm: () => void;
+  onSecondaryAction?: () => void;
 }) {
   const titleId = useId();
   const descriptionId = useId();
@@ -58,6 +62,7 @@ export function LanternConfirmDialog({
         </div>
         <div className="editor-modal-actions">
           <button ref={cancelRef} type="button" className="command-button secondary" onClick={onCancel}>{cancelLabel}</button>
+          {secondaryActionLabel && onSecondaryAction && <button type="button" className="command-button secondary" onClick={onSecondaryAction}>{secondaryActionLabel}</button>}
           <button type="button" className={`command-button ${tone === "danger" ? "danger" : "primary"}`} onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </section>

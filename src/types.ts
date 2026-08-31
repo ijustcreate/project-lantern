@@ -52,6 +52,8 @@ export interface Donor {
   pledgeStartYear?: string;
   pledgeStatus?: "Pledged" | "Active" | "Fulfilled" | "Paused";
   recognitionOrder?: number;
+  /** Curatorial status. Deprecated legacy records remain visible for historical continuity. */
+  recordStatus?: "current" | "deprecated-legacy";
 }
 
 export interface GivingLevel {
@@ -804,6 +806,12 @@ export interface DisplayProfile {
   roomFaceTrackingEnabled?: boolean;
 }
 
+/** The device currently responsible for an opened recognition board/display. */
+export interface BoardOpenOwner {
+  deviceId: string;
+  openedAt: string;
+}
+
 export interface RevisionRecord {
   id: number;
   note: string;
@@ -840,6 +848,8 @@ export interface LanternState {
   theme: LanternTheme;
   board: BoardContent;
   boardPrograms: DonorBoardProgram[];
+  /** Shared ownership for opened display boards. This is also the authoritative live-routing destination list. */
+  boardOpenOwners?: Record<ScreenId, BoardOpenOwner>;
   /** Named board folders, including empty folders created in Settings. */
   boardFolders?: string[];
   /** Display-name overrides for built-in board folders that an operator renamed. */
@@ -864,7 +874,9 @@ export type HostMessage =
   | { type: "state-update"; state: LanternState }
   | { type: "identify-screen"; screenId: ScreenId }
   | { type: "live-stop"; target: TargetScreen }
+  | { type: "live-media-state"; target: TargetScreen; state: "available" | "paused" | "unavailable"; detail: string }
   | { type: "display-presence"; screenId: ScreenId; timestamp: string }
+  | { type: "close-display"; screenId: ScreenId; targetDeviceId: string }
   | { type: "display-video-status"; screenId: ScreenId; status: "connecting" | "receiving" | "reconnecting" | "unavailable"; timestamp: string; detail?: string; fps?: number; bitrateKbps?: number }
   | { type: "webrtc-offer"; target: ScreenId; source: "control"; sdp: RTCSessionDescriptionInit }
   | { type: "webrtc-answer"; target: "control"; source: ScreenId; sdp: RTCSessionDescriptionInit }

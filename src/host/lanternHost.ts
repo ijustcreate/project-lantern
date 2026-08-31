@@ -1,7 +1,7 @@
-import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION, QUESTIONING_TOY_SOLDIER_CONTENT_VERSION } from "../sampleData";
+import { ANNOUNCEMENT_LAYOUT_CONTENT_VERSION, BOARD_LIBRARY_CLEANUP_CONTENT_VERSION, brigadeAnnouncements, brigadeBlips, brigadeBoardPrograms, CONFIRMED_DONOR_ROSTER_CONTENT_VERSION, confirmedGeneralDonors, DONOR_ROSTER_BOARDS_CONTENT_VERSION, generousDonorBoardPrograms, initialState, legacyBoardPrograms, legacyDonors, LEGACY_DONOR_STARS_CONTENT_VERSION, LEGACY_DONOR_TAGS_CONTENT_VERSION, LEGACY_STAR_LAYER_CONTENT_VERSION, LEGACY_STAR_RECOVERY_CONTENT_VERSION, LANTERN_CONTENT_VERSION, QUESTIONING_TOY_SOLDIER_CONTENT_VERSION } from "../sampleData";
 import { withBrigadeOpeningPayment } from "../donorDomain";
 import { appendMissingPhase3Content, migratePhase3Schedules, phase3Announcements, PHASE3_CONTENT_VERSION, replacePhase3Announcements } from "../phase3Schedule";
-import type { Announcement, BoardDonorPresentation, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
+import type { Announcement, BoardDonorPresentation, BoardOpenOwner, BoardPanel, Donor, GivingProgram, HostMessage, LanternState, LiveSource, ScheduleEntry, ScreenId, TargetScreen } from "../types";
 import { normalizeVisitorMessageRotation, normalizeVisitorMessages } from "../visitorMessages";
 import { normalizeBroadcastComposition } from "../broadcastComposition";
 import { normalizeEffectStudioState, normalizePhase4LiveEffects, PHASE4_CONTENT_VERSION } from "../effectStudio";
@@ -11,6 +11,7 @@ import { localStateIsNewer } from "../stateAuthority";
 export const LANTERN_CHANNEL = "project-lantern-host-v1";
 export const LANTERN_STORAGE_KEY = "project-lantern-state-v1";
 const LANTERN_LOCAL_STATE_UPDATED_AT_KEY = "project-lantern-state-updated-at-v1";
+const LANTERN_DEVICE_ID_KEY = "project-lantern-device-id-v1";
 const DEMO_DATA_VERSION_KEY = "project-lantern-demo-data-version";
 const DEMO_DATA_VERSION = "8";
 const LANTERN_PROTECTED_SNAPSHOTS_KEY = "project-lantern-protected-snapshots-v1";
@@ -36,6 +37,19 @@ const MAX_BROADCAST_REMINDER_ACKNOWLEDGEMENTS = 250;
 let sharedPersistenceEnabled = false;
 let sharedSaveTimer: number | undefined;
 let stateUsesIndexedDb = false;
+
+/** Stable per-browser/device identity used for shared board ownership. */
+export function getLanternDeviceId() {
+  try {
+    const existing = window.localStorage.getItem(LANTERN_DEVICE_ID_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    window.localStorage.setItem(LANTERN_DEVICE_ID_KEY, created);
+    return created;
+  } catch {
+    return realtimeClientId;
+  }
+}
 
 type Listener = (message: HostMessage) => void;
 type WireHostMessage = HostMessage & {
@@ -420,9 +434,13 @@ export function enableSharedStatePersistence() {
   sharedPersistenceEnabled = true;
 }
 
-function queueSharedStateSave(state: LanternState) {
+function queueSharedStateSave(state: LanternState, immediate = false) {
   if (!sharedPersistenceEnabled || !LANTERN_WRITE_SERVICE_ROOT) return;
   window.clearTimeout(sharedSaveTimer);
+  if (immediate) {
+    void saveSharedLanternState(state).catch(() => undefined);
+    return;
+  }
   sharedSaveTimer = window.setTimeout(() => {
     void saveSharedLanternState(state).catch(() => undefined);
   }, 450);
@@ -645,9 +663,9 @@ export function createHostChannel(listener: Listener) {
   };
 }
 
-export function publishState(state: LanternState, options: { persist?: boolean; shared?: boolean } = {}) {
+export function publishState(state: LanternState, options: { persist?: boolean; shared?: boolean; immediateShared?: boolean } = {}) {
   const savedLocally = options.persist === false || saveLanternState(state);
-  if (options.shared !== false) queueSharedStateSave(state);
+  if (options.shared !== false) queueSharedStateSave(state, options.immediateShared);
   const message = { type: "state-update", state } satisfies HostMessage;
   const wireMessage = wireHostMessage(message);
   try {
@@ -707,6 +725,10 @@ export interface DisplayWindowOpenResult {
   opened: string[];
   blocked: string[];
   pending: string[];
+}
+
+export function openedBoardIds(state: LanternState) {
+  return Object.keys(state.boardOpenOwners ?? {}).filter((screenId) => Boolean(state.screens[screenId]));
 }
 
 function preserveCollection<T extends { id: string }>(local: readonly T[], shared: readonly T[], label: string, report: DataProtectionReport) {
@@ -1391,6 +1413,8 @@ export function normalizeState(state: LanternState): LanternState {
   const needsLegacyStarLayerMigration = incomingContentVersion < LEGACY_STAR_LAYER_CONTENT_VERSION;
   const needsAnnouncementLayoutMigration = incomingContentVersion < ANNOUNCEMENT_LAYOUT_CONTENT_VERSION;
   const needsQuestioningToySoldierMigration = incomingContentVersion < QUESTIONING_TOY_SOLDIER_CONTENT_VERSION;
+  const needsConfirmedDonorRosterMigration = incomingContentVersion < CONFIRMED_DONOR_ROSTER_CONTENT_VERSION;
+  const needsBoardLibraryCleanup = incomingContentVersion < BOARD_LIBRARY_CLEANUP_CONTENT_VERSION;
   const normalizedContentVersion = Math.max(incomingContentVersion, LANTERN_CONTENT_VERSION);
 
   const incomingDonors = state.donors ?? initialState.donors;
@@ -1401,11 +1425,22 @@ export function normalizeState(state: LanternState): LanternState {
     ? appendMissingById(donorMigration.donors, legacyDonors)
     : donorMigration.donors;
   const legacyDonorIds = new Set(legacyDonors.map((donor) => donor.id));
-  const donors = needsLegacyDonorTagsMigration
+  const taggedDonors = needsLegacyDonorTagsMigration
     ? starWallDonors.map((donor) => legacyDonorIds.has(donor.id)
-      ? { ...donor, tier: "Legacy donor", category: "Legacy", tags: uniqueStrings(donor.tags, ["Legacy"]) }
+      ? { ...donor, tier: "Legacy donor", category: "Legacy", tags: uniqueStrings(donor.tags, ["Legacy"]), recordStatus: "deprecated-legacy" as const }
       : donor)
     : starWallDonors;
+  const supersededConfirmedAliases = new Set(["toy-play-10", "toy-play-15", "toy-play-20"]);
+  const donorRecordsWithStatus = needsConfirmedDonorRosterMigration
+    ? taggedDonors.map((donor) => legacyDonorIds.has(donor.id) || supersededConfirmedAliases.has(donor.id)
+      ? { ...donor, recordStatus: "deprecated-legacy" as const, tags: uniqueStrings(donor.tags, ["Deprecated/Legacy"]) }
+      : donor)
+    : taggedDonors;
+  const normalizeDonorName = (name: string) => name.toLowerCase().replace(/\s*&\s*/g, " and ").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  const existingNormalizedNames = new Set(donorRecordsWithStatus.map((donor) => normalizeDonorName(donor.name)));
+  const donors = needsConfirmedDonorRosterMigration
+    ? [...donorRecordsWithStatus, ...confirmedGeneralDonors.filter((donor) => !existingNormalizedNames.has(normalizeDonorName(donor.name)))]
+    : donorRecordsWithStatus;
   const donorAliases = donorMigration.aliases;
 
   const incomingPrograms = state.boardPrograms ?? initialState.boardPrograms;
@@ -1434,7 +1469,38 @@ export function normalizeState(state: LanternState): LanternState {
   const programsWithDonorRosterBoards = needsDonorRosterBoardsMigration
     ? appendMissingById(programsWithLegacyDonorWalls, generousDonorBoardPrograms)
     : programsWithLegacyDonorWalls;
-  const normalizedBoardPrograms = programsWithDonorRosterBoards.map((incomingProgram) => {
+  const removedMemberHonorBoardIds = new Set([
+    "board-supporter-spotlight-member-honor-portrait",
+    "board-supporter-spotlight-member-honor-landscape"
+  ]);
+  const aboutLandscapeBoard = programsWithDonorRosterBoards.find((program) => program.id === "board-toy-about-landscape");
+  const cleanedBoardPrograms = needsBoardLibraryCleanup
+    ? programsWithDonorRosterBoards
+        .filter((program) => !removedMemberHonorBoardIds.has(program.id))
+        .map((program) => {
+          const folderKey = program.folder?.trim().toLocaleLowerCase();
+          const normalizedFolder = folderKey === "honor rolls" ? "Donor Boards"
+            : folderKey === "supporter spotlights" ? "Supporter Spotlights"
+              : folderKey === "program information" ? "Program Information"
+                : folderKey === "good deeds" ? "Good Deeds"
+                  : folderKey === "custom boards" ? "Custom Boards"
+                    : program.folder;
+          const organized = normalizedFolder === program.folder ? program : { ...program, folder: normalizedFolder };
+          if (/^Our Generous Donors(?:\b|\s*[·—-])/i.test(organized.name)) return { ...organized, folder: "Donor Boards" };
+          if (organized.id === "board-legacy-stars-photo-1") return { ...organized, name: "Legacy Star Wall · Portrait", folder: "Donor Boards" };
+          if (organized.id === "board-legacy-stars-photo-2") return { ...organized, name: "Legacy Star Wall · Landscape", folder: "Donor Boards" };
+          if (organized.id === "board-toy-about-portrait") return { ...organized, name: "What Is the Toy Soldier Brigade? — Portrait", folder: "Program Information", palette: aboutLandscapeBoard?.palette ?? "brigade-cream", backgroundColor: aboutLandscapeBoard?.backgroundColor };
+          if (organized.id === "board-toy-about-landscape") return { ...organized, name: "What Is the Toy Soldier Brigade? — Landscape", folder: "Program Information" };
+          if (organized.id === "board-supporter-spotlight-portrait") return { ...organized, name: "Supporter Spotlight — Francesca Vera — Portrait", folder: "Supporter Spotlights" };
+          if (organized.id === "board-supporter-spotlight-landscape") return { ...organized, name: "Supporter Spotlight — Francesca Vera — Landscape", folder: "Supporter Spotlights" };
+          if (organized.id === "board-supporter-spotlight-partnership-portrait") return { ...organized, name: "Supporter Spotlight — Francesca and John Vera — Portrait", folder: "Supporter Spotlights" };
+          if (organized.id === "board-supporter-spotlight-partnership-landscape") return { ...organized, name: "Supporter Spotlight — Francesca and John Vera — Landscape", folder: "Supporter Spotlights" };
+          if (organized.templatePurpose === "roster" || organized.templatePurpose === "level") return { ...organized, folder: "Donor Boards" };
+          if (organized.templatePurpose === "good-deeds") return { ...organized, folder: "Good Deeds" };
+          return organized;
+        })
+    : programsWithDonorRosterBoards;
+  const normalizedBoardPrograms = cleanedBoardPrograms.map((incomingProgram) => {
     const hasVisibleDonors = incomingProgram.donorIds.some((donorId) => donors.some((donor) => donor.id === donorId && donor.active));
     const isGenerousDonorBoard = /generous donors/i.test(incomingProgram.name);
     const generousDefault = /legacy/i.test(incomingProgram.name)
@@ -1478,13 +1544,15 @@ export function normalizeState(state: LanternState): LanternState {
             ? "/assets/donor-icons/legacy-star-flat.svg"
             : panel.imageUrl;
           const isLegacyStarLayer = /^legacy-photo[12]-.+-star-(image|text)$/.test(panel.id);
+          const isLegacyStarText = /^legacy-photo[12]-.+-star-text$/.test(panel.id);
           return {
             ...panel,
             ...(donorIds ? { donorIds } : {}),
             imageUrl: flatStarImage,
             ...(needsLegacyStarLayerMigration && isLegacyStarLayer
               ? { groupId: undefined, lineHeight: panel.type === "text" ? (panel.lineHeight ?? .92) : panel.lineHeight }
-              : {})
+              : {}),
+            ...(needsConfirmedDonorRosterMigration && isLegacyStarText ? { textColor: "#77736c" } : {})
           };
         })
     };
@@ -1566,6 +1634,12 @@ export function normalizeState(state: LanternState): LanternState {
       };
     });
 
+  const memberHonorReplacement = (boardId: string, orientation?: "Portrait" | "Landscape") => {
+    if (!needsBoardLibraryCleanup || !removedMemberHonorBoardIds.has(boardId)) return boardId;
+    const resolvedOrientation = orientation ?? (boardId.endsWith("-landscape") ? "Landscape" : "Portrait");
+    return `board-supporter-spotlight-partnership-${resolvedOrientation.toLowerCase()}`;
+  };
+
   const remappedScreens = Object.fromEntries(Object.entries(screens).map(([id, screen]) => {
     const legacyScreen = legacyScreens[id];
     const migrateUntouchedDemoScreen = needsLegacyContentMigration
@@ -1584,6 +1658,9 @@ export function normalizeState(state: LanternState): LanternState {
     const normalizedScreen = {
       ...migratedScreen,
       ...legacyStarWall,
+      boardProgramId: (legacyStarWall?.boardProgramId ?? migratedScreen.boardProgramId)
+        ? memberHonorReplacement((legacyStarWall?.boardProgramId ?? migratedScreen.boardProgramId)!, migratedScreen.orientation)
+        : undefined,
       donorIds: remapDonorIds(migratedScreen.donorIds, donorAliases) ?? [],
       donorSubtextVisibility: Object.fromEntries(Object.entries(migratedScreen.donorSubtextVisibility ?? {}).map(([donorId, visible]) => [donorAliases.get(donorId) ?? donorId, visible]))
     };
@@ -1601,7 +1678,10 @@ export function normalizeState(state: LanternState): LanternState {
   const retainedSchedules = needsLegacyContentMigration
     ? migratedSchedules.filter((entry) => !isKnownDemoSchedule(entry, retiredAnnouncementIds))
     : migratedSchedules;
-  const phase3MigratedSchedules = migratePhase3Schedules(retainedSchedules, incomingContentVersion);
+  const phase3MigratedSchedules = migratePhase3Schedules(retainedSchedules, incomingContentVersion).map((entry) => {
+    const targetScreen = entry.target !== "all" ? remappedScreens[entry.target] : undefined;
+    return { ...entry, boardId: memberHonorReplacement(entry.boardId, targetScreen?.orientation) };
+  });
   const boardIds = new Set(boardPrograms.map((program) => program.id));
   const announcementIds = new Set(savedAnnouncements.map((announcement) => announcement.id));
   const blipIds = new Set(savedBlips.map((blip) => blip.id));
@@ -1632,6 +1712,24 @@ export function normalizeState(state: LanternState): LanternState {
   );
   const visitorMessages = normalizeVisitorMessages(state.visitorMessages);
   const visitorMessageRotation = normalizeVisitorMessageRotation(state.visitorMessageRotation, visitorMessages);
+  const normalizeBoardFolder = (folder: string) => {
+    const normalized = folder.trim().toLocaleLowerCase();
+    if (normalized === "honor rolls") return "Donor Boards";
+    if (normalized === "supporter spotlights") return "Supporter Spotlights";
+    if (normalized === "program information") return "Program Information";
+    if (normalized === "good deeds") return "Good Deeds";
+    if (normalized === "custom boards") return "Custom Boards";
+    return folder.trim();
+  };
+  const boardFolders = needsBoardLibraryCleanup
+    ? [...new Set((state.boardFolders ?? []).map(normalizeBoardFolder))]
+    : state.boardFolders;
+  const boardFolderRenames = needsBoardLibraryCleanup
+    ? Object.fromEntries(Object.entries(state.boardFolderRenames ?? {}).map(([from, to]) => [normalizeBoardFolder(from), normalizeBoardFolder(to)]))
+    : state.boardFolderRenames;
+  const hiddenBoardFolders = needsBoardLibraryCleanup
+    ? [...new Set((state.hiddenBoardFolders ?? []).map(normalizeBoardFolder))]
+    : state.hiddenBoardFolders;
   const effectStudio = normalizeEffectStudioState(state.effectStudio, userMigration.users, needsEffectStudioMigration);
   effects = normalizePhase4LiveEffects(effects, initialState.live.effects, effectStudio);
 
@@ -1646,6 +1744,9 @@ export function normalizeState(state: LanternState): LanternState {
     dismissedAnnouncementOccurrences: Array.from(new Set(state.dismissedAnnouncementOccurrences ?? [])).slice(-250),
     visitorMessages,
     visitorMessageRotation,
+    boardFolders,
+    boardFolderRenames,
+    hiddenBoardFolders,
     effectStudio,
     nextScheduledEvent: needsLegacyContentMigration && /^Test Message\b/i.test(state.nextScheduledEvent ?? "")
       ? initialState.nextScheduledEvent
@@ -1775,8 +1876,16 @@ export function normalizeState(state: LanternState): LanternState {
       effects,
       target: normalizeTarget(state.live?.target)
     }),
-    screens: remappedScreens
+    screens: remappedScreens,
+    boardOpenOwners: normalizeBoardOpenOwners(state.boardOpenOwners, remappedScreens)
   };
+}
+
+function normalizeBoardOpenOwners(value: unknown, screens: LanternState["screens"]): Record<ScreenId, BoardOpenOwner> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(Object.entries(value as Record<string, Partial<BoardOpenOwner>>)
+    .filter(([screenId, owner]) => Boolean(screens[screenId]) && typeof owner.deviceId === "string" && owner.deviceId.length > 0)
+    .map(([screenId, owner]) => [screenId, { deviceId: owner.deviceId!, openedAt: typeof owner.openedAt === "string" ? owner.openedAt : new Date(0).toISOString() }])) as Record<ScreenId, BoardOpenOwner>;
 }
 
 function normalizeScreen(

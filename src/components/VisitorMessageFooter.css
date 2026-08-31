@@ -104,10 +104,15 @@
 
 @media (max-width: 560px) {
   .dashboard-visitor-message-drawer { right: 10px; bottom: 228px; left: 10px; max-height: calc(100vh - 260px); }
-  .visitor-message-footer { grid-template-columns: 1fr; }
+  .visitor-message-footer { grid-template-columns: 1fr; gap: .5rem; padding: .65rem .75rem; }
   .visitor-message-footer-icon { display: none; }
-  .visitor-message-footer-actions label,
-  .visitor-message-footer-actions select,
-  .visitor-message-footer-actions .primary { width: 100%; }
+  .visitor-message-footer-copy p { font-size: .6rem; }
+  .visitor-message-footer-copy h3 { display: -webkit-box; max-height: 2.25em; font-size: 1.05rem; line-height: 1.08; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .visitor-message-footer-copy span { display: none; }
+  .visitor-message-footer-actions { flex-wrap: nowrap; gap: .25rem; }
+  .visitor-message-footer-actions button,
+  .visitor-message-footer-actions select { min-width: 0; min-height: 34px; padding: .4rem .45rem; font-size: .66rem; white-space: nowrap; }
+  .visitor-message-footer-actions label { min-width: 0; flex: 1 1 0; }
+  .visitor-message-footer-actions label select { width: 100%; }
   .visitor-message-footer-actions .primary { justify-content: center; }
 }

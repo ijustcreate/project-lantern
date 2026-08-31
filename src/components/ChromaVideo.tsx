@@ -36,6 +36,8 @@ export interface ChromaVideoProps {
   onMediaSurfaceChange?: (surface: HTMLCanvasElement | HTMLVideoElement | null) => void;
   /** Costume/effect-studio hook. Receives normalized landmarks after stabilization. */
   renderTrackedOverlay?: TrackingOverlayRenderer;
+  /** Public displays always retain the real feed while diagnostic points are visible. */
+  preserveVideoUnderDiagnostics?: boolean;
 }
 
 interface PointTransform {
@@ -64,7 +66,9 @@ const SEGMENT_INTERVAL_MS = 1000 / 10;
 const BODY_INTERVAL_MS = 1000 / 15;
 const MOUTH_ANALYSIS_INTERVAL_MS = 1000 / 10;
 const STABLE_FACE_INTERVAL_MS = 1000 / 12;
-const IDLE_FACE_SCAN_INTERVAL_MS = 850;
+// A face-only accessory must react promptly after a camera starts. The old
+// empty-scene cadence made the first detection look like a multi-second stall.
+const IDLE_FACE_SCAN_INTERVAL_MS = 100;
 const STABLE_BODY_INTERVAL_MS = 1000 / 4;
 const IDLE_BODY_SCAN_INTERVAL_MS = 1_500;
 
@@ -82,7 +86,7 @@ function drawScreenlessGradient(context: CanvasRenderingContext2D, width: number
   context.fillRect(0, 0, width, height);
 }
 
-export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill", className, onTrackingStatus, onMediaSurfaceChange, renderTrackedOverlay }: ChromaVideoProps) {
+export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill", className, onTrackingStatus, onMediaSurfaceChange, renderTrackedOverlay, preserveVideoUnderDiagnostics = false }: ChromaVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const settingsRef = useRef({ chromaKey, effects, crop });
@@ -381,7 +385,7 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         // Framing belongs to the shared CSS transform applied to both the raw
         // video and processed canvas below. Cropping here as well made effects
         // square the zoom and double the pan whenever processing was enabled.
-        sourceContext.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        drawCoverMedia(sourceContext, video, OUTPUT_WIDTH, OUTPUT_HEIGHT, video.videoWidth, video.videoHeight);
 
         const adaptiveFps = performanceMonitor.getAdaptiveFps();
         const faceNearEdge = Boolean(landmarks && [1, 10, 152, 234, 454].some((index) => {
@@ -512,7 +516,9 @@ export function ChromaVideo({ stream, chromaKey, effects, crop, fitMode = "fill"
         context.clearRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
 
         const trackedPointsOverlay = currentRuntimeEffects.trackedPointsOverlay ?? currentEffects.trackingDebug ?? false;
-        const showCameraUnderLandmarks = currentRuntimeEffects.trackingCameraUnderlay ?? false;
+        // A diagnostic overlay must not turn a public display into a dark
+        // canvas. The studio can still opt into its isolated debug surface.
+        const showCameraUnderLandmarks = preserveVideoUnderDiagnostics || (currentRuntimeEffects.trackingCameraUnderlay ?? false);
         if (trackedPointsOverlay) {
           if (showCameraUnderLandmarks) context.drawImage(source, 0, 0);
           else {
@@ -673,6 +679,14 @@ function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, w
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+/** Draw a camera frame without ever stretching portrait video into landscape. */
+function drawCoverMedia(context: CanvasRenderingContext2D, media: CanvasImageSource, width: number, height: number, sourceWidth: number, sourceHeight: number) {
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  context.drawImage(media, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function point(landmarks: TrackingPoint[], index: number, transform: PointTransform) {

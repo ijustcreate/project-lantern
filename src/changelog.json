@@ -1,5 +1,217 @@
 [
   {
+    "id": "DEV-0440",
+    "title": "Improve mobile donor and Board Editor workflows",
+    "summary": "Phone donor controls, deletion and reordering are clearer; the Board Editor keeps saved status outside its panned canvas and prevents focus zoom.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 2:29 PM",
+    "areas": [
+      "Donors",
+      "Board Editor",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; iPhone 15 browser smoke check; git diff --check"
+  },
+  {
+    "id": "DEV-0439",
+    "title": "Recover mobile live camera video",
+    "summary": "Public displays retain camera video under diagnostics, report media lifecycle state, and let iPhone presenters resume an interrupted camera without ending the live session.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 2:29 PM",
+    "areas": [
+      "Broadcast stream",
+      "Live display",
+      "iPhone broadcast"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/host/videoBridge.ts",
+      "src/types.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npm run build; node scripts/test-tracking-runtime.mjs; node scripts/test-broadcast-composition.mjs; git diff --check"
+  },
+  {
+    "id": "DEV-0438",
+    "title": "Repair Site Media library uploads",
+    "summary": "Site Media now resolves published asset previews correctly and preserves directly added reusable images for later Board Editor selection.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 2:29 PM",
+    "areas": [
+      "Settings",
+      "Site media",
+      "Board Editor"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "src/components/VisitorMessageFooter.css"
+    ],
+    "tests": "npm run build; iPhone 15 browser smoke check; git diff --check"
+  },
+  {
+    "id": "DEV-0437",
+    "title": "Clean up board library organization",
+    "summary": "Renamed and regrouped the requested board categories, clarified Vera and Toy Soldier information titles, matched the portrait information background to landscape, and removed only the two Member Honor duplicates while preserving references.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:38 PM",
+    "areas": [
+      "Board Editor",
+      "Board library",
+      "Schedule"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npx vite build; fresh-state Settings load and board ID inventory verification"
+  },
+  {
+    "id": "DEV-0436",
+    "title": "Refine mobile broadcast streaming",
+    "summary": "Keep active phone broadcasts visible in Studio, preserve camera aspect ratio, tighten landscape layout, and speed face-only accessory activation.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:15 PM",
+    "areas": [
+      "Broadcast stream",
+      "Mobile layout",
+      "Tracking"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/styles.css",
+      "scripts/test-tracking-runtime.mjs"
+    ],
+    "tests": "tracking and broadcast fixtures; npm run build; npm run build:worker; git diff --check"
+  },
+  {
+    "id": "DEV-0435",
+    "title": "Refine mobile broadcast streaming",
+    "summary": "Keep active phone broadcasts visible in Studio, preserve camera aspect ratio, tighten landscape layout, and speed face-only accessory activation.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:14 PM",
+    "areas": [
+      "Broadcast stream",
+      "Mobile layout",
+      "Tracking"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/components/ChromaVideo.tsx",
+      "src/styles.css",
+      "scripts/test-tracking-runtime.mjs"
+    ],
+    "tests": "tracking and broadcast fixtures; npm run build; npm run build:worker; git diff --check"
+  },
+  {
+    "id": "DEV-0434",
+    "title": "Improve mobile donor browsing",
+    "summary": "Keep rapid donor scrolling responsive and clarify mobile donor filters.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:02 PM",
+    "areas": [
+      "Donors",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright 390px donor view"
+  },
+  {
+    "id": "DEV-0433",
+    "title": "Stop stale mobile live broadcasts",
+    "summary": "End phone broadcast media and clear shared Live state on lifecycle exits so inactive cameras cannot leave a stale on-air status.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:01 PM",
+    "areas": [
+      "Mobile broadcast",
+      "Broadcast routing"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0432",
+    "title": "Stop stale mobile live broadcasts",
+    "summary": "End phone broadcast media and clear shared Live state on lifecycle exits so inactive cameras cannot leave a stale on-air status.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:00 PM",
+    "areas": [
+      "Mobile broadcast",
+      "Broadcast routing"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0431",
+    "title": "Improve mobile donor browsing",
+    "summary": "Keep rapid donor scrolling responsive and clarify mobile donor filters.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 1:00 PM",
+    "areas": [
+      "Donors",
+      "Mobile"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npm run build; Playwright 390px donor view"
+  },
+  {
+    "id": "DEV-0430",
+    "title": "Make opened boards device-aware",
+    "summary": "Persist board ownership across devices, confirm move-or-copy decisions, and route phone broadcasts only to owned open boards.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 12:52 PM",
+    "areas": [
+      "Board ownership",
+      "Broadcast routing"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/host/lanternHost.ts",
+      "src/types.ts",
+      "src/components/LanternDialog.tsx"
+    ],
+    "tests": "npm run build; git diff --check"
+  },
+  {
+    "id": "DEV-0429",
+    "title": "Reconcile confirmed museum donor roster",
+    "summary": "Added only the seven confirmed names missing from the museum roster as untiered general donors, while retaining older records and clearly marking historical or superseded entries as Deprecated/Legacy with accessible muted presentation.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 9:11 AM",
+    "areas": [
+      "Donors",
+      "Recognition displays"
+    ],
+    "files": [
+      "src/sampleData.ts",
+      "src/host/lanternHost.ts",
+      "src/types.ts",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "src/styles.css"
+    ],
+    "tests": "npx tsc --noEmit --pretty false; npx vite build; Playwright clean-state donor roster and accessibility verification"
+  },
+  {
     "id": "DEV-0428",
     "title": "Restore shared display state reads",
     "summary": "Removed the unnecessary Cache-Control request header that caused the live Worker CORS preflight to reject shared-state reads, while retaining no-store fetch caching.",

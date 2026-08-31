@@ -421,7 +421,7 @@ export function BabylonDonorWall({ state, screenId, interactive = false, fitToSc
     <section className="sr-only board-accessible-summary" aria-label={`${activeProgram?.name ?? "Recognition board"} supporter list`}>
       <h2>{activeProgram?.heading ?? activeProgram?.name ?? "Recognition board"}</h2>
       {activeProgram?.description && <p>{activeProgram.description}</p>}
-      <ul>{accessibleDonors.map((donor) => <li key={donor.id}>{donor.name}, {donor.tier} Level</li>)}</ul>
+      <ul>{accessibleDonors.map((donor) => <li key={donor.id}>{donor.name}{donor.tier ? `, ${donor.tier} Level` : ", general donor, tier pending"}{donor.recordStatus === "deprecated-legacy" ? ", Deprecated legacy donor record" : ""}</li>)}</ul>
     </section>
   </>;
 }

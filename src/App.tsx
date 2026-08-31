@@ -109,10 +109,12 @@ import {
   deleteLanternMedia,
   enableSharedStatePersistence,
   fitWarnings,
+  getLanternDeviceId,
   loadAuthoritativeLanternState,
   loadSharedLanternStateSnapshot,
   loadLanternState,
   openDisplayWindows,
+  openedBoardIds,
   publishState,
   saveLanternStateDurably,
   saveSharedLanternState,
@@ -290,6 +292,7 @@ function ControlCenter() {
   const [openAssignedRoomCamera, setOpenAssignedRoomCamera] = useState(false);
   const [scheduledBroadcastPrompt, setScheduledBroadcastPrompt] = useState<{ entry: ScheduleEntry; occurrenceKey: string } | null>(null);
   const [displayOpenNotice, setDisplayOpenNotice] = useState<{ message: string; outstanding?: ScreenId[] } | null>(null);
+  const [boardOwnershipPrompt, setBoardOwnershipPrompt] = useState<ScreenId | null>(null);
   const [announcementTab, setAnnouncementTab] = useState<"messages" | "blips">("messages");
   const [visitorMessageManagerOpen, setVisitorMessageManagerOpen] = useState(false);
   const visitorPageEntryRef = useRef<View | null>(null);
@@ -726,6 +729,43 @@ function ControlCenter() {
     window.setTimeout(() => publishState(state), 700);
   };
 
+  const openOwnedBoard = (screenId: ScreenId, closeExisting = false) => {
+    const screen = state.screens[screenId];
+    if (!screen) return;
+    const deviceId = getLanternDeviceId();
+    const existingOwner = state.boardOpenOwners?.[screenId];
+    if (!closeExisting && existingOwner && existingOwner.deviceId !== deviceId) {
+      setBoardOwnershipPrompt(screenId);
+      return;
+    }
+    if (closeExisting && existingOwner && existingOwner.deviceId !== deviceId) {
+      const channel = createHostChannel(() => undefined);
+      channel.post({ type: "close-display", screenId, targetDeviceId: existingOwner.deviceId });
+      channel.close();
+    }
+    updateState((current) => ({
+      ...current,
+      boardOpenOwners: { ...current.boardOpenOwners, [screenId]: { deviceId, openedAt: new Date().toISOString() } }
+    }));
+    window.setTimeout(() => void openDisplayWindows([screen]), 0);
+  };
+
+  const openBoardCopy = (screenId: ScreenId) => {
+    const source = state.screens[screenId];
+    if (!source) return;
+    const id = `display-copy-${Date.now()}`;
+    const copy: DisplayProfile = { ...source, id, label: `${source.label} copy` };
+    const deviceId = getLanternDeviceId();
+    updateState((current) => ({
+      ...current,
+      screens: { ...current.screens, [id]: copy },
+      boardOpenOwners: { ...current.boardOpenOwners, [id]: { deviceId, openedAt: new Date().toISOString() } }
+    }));
+    setSelectedDisplayId(id);
+    setBoardOwnershipPrompt(null);
+    window.setTimeout(() => void openDisplayWindows([copy]), 0);
+  };
+
   const scheduleBoardNow = (screenId: ScreenId, boardId: string) => {
     const now = new Date();
     const start = now.getHours() * 60 + now.getMinutes();
@@ -789,7 +829,15 @@ function ControlCenter() {
 
   const stopLive = () => {
     videoBridge.current?.stop(state.live.target);
-    updateState((current) => ({ ...current, live: { ...current.live, active: false } }));
+    setState((current) => {
+      if (!current.live.active) return current;
+      const actor = current.users.find((user) => user.id === activeUserIdRef.current) ?? current.users[0] ?? { id: "local-operator", name: currentBugUser() };
+      const next = withAuditHistory(current, { ...current, live: { ...current.live, active: false } }, { id: actor.id, name: actor.name });
+      // A mobile page can be frozen immediately after pagehide. Send the stop
+      // state to the shared authority without waiting for the normal debounce.
+      publishState(next, { immediateShared: true });
+      return next;
+    });
   };
 
   const addDonor = () => {
@@ -1029,6 +1077,7 @@ function ControlCenter() {
             }}
             editRoomCamera={(screenId) => openDisplayEditor(screenId, "room", Boolean(state.screens[screenId]?.roomVideoDeviceId))}
             scheduleBoardNow={scheduleBoardNow}
+            openBoard={openOwnedBoard}
           />
           {visitorMessageManagerOpen && <div className="dashboard-visitor-message-drawer">
             <VisitorMessageManager
@@ -1210,6 +1259,16 @@ function ControlCenter() {
         actionLabel={displayOpenNotice.outstanding?.length ? `Open ${state.screens[displayOpenNotice.outstanding[0]]?.label ?? "next display"}` : undefined}
         onAction={displayOpenNotice.outstanding?.length ? openNextDisplayWindow : undefined}
         onDismiss={() => setDisplayOpenNotice(null)}
+      />}
+      {boardOwnershipPrompt && state.screens[boardOwnershipPrompt] && <LanternConfirmDialog
+        eyebrow="Board already open"
+        title={`“${state.screens[boardOwnershipPrompt].label}” is open on another device`}
+        description="Choose whether to move the active board here or open an independent copy. Moving it keeps phone broadcasts routed to this board on this device."
+        confirmLabel="Close there and open here"
+        onCancel={() => setBoardOwnershipPrompt(null)}
+        onConfirm={() => { const screenId = boardOwnershipPrompt; setBoardOwnershipPrompt(null); openOwnedBoard(screenId, true); }}
+        secondaryActionLabel="Open a copy here"
+        onSecondaryAction={() => openBoardCopy(boardOwnershipPrompt)}
       />}
       {bugLauncherVisible && <button className="bug-report-fab" style={{ left: bugLauncherPosition.x, top: bugLauncherPosition.y }}
         onPointerDown={(event) => { bugLauncherDrag.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: bugLauncherPosition.x, originY: bugLauncherPosition.y, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); }}
@@ -2175,7 +2234,8 @@ function Dashboard({
   editDisplay,
   editBoard,
   editRoomCamera,
-  scheduleBoardNow
+  scheduleBoardNow,
+  openBoard
 }: {
   state: LanternState;
   selectedDisplayId: ScreenId;
@@ -2187,6 +2247,7 @@ function Dashboard({
   editBoard: (screenId: ScreenId, boardId: string) => void;
   editRoomCamera: (screenId: ScreenId) => void;
   scheduleBoardNow: (screenId: ScreenId, boardId: string) => void;
+  openBoard: (screenId: ScreenId) => void;
 }) {
   const displays = Object.values(state.screens);
   const [preview3d, setPreview3d] = useState<Record<string, boolean>>({});
@@ -2252,7 +2313,7 @@ function Dashboard({
                     </div>
                     <span>{screen.orientation} · {screen.resolution}</span>
                   </div>
-                  <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => void openDisplayWindows([screen])} title={`Open ${screen.label}`}><Monitor size={15} /> Open</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button></div>
+                  <div className="dashboard-display-status"><button className="command-button secondary compact" onClick={() => openBoard(screen.id)} title={`Open ${screen.label}`}><Monitor size={15} /> Open Board</button><button className="icon-button dashboard-display-edit" onClick={() => editDisplay(screen.id)} title={`Edit ${screen.label}`} aria-label={`Edit ${screen.label}`}><Settings size={16} /></button></div>
                 </header>
                 <div className={`dashboard-display-preview ${orientationClass(screen)}${activeBoard ? ` mode-${preview3d[screen.id] ? "3d" : "2d"}` : " idle"}${displayBlip ? " blip-active" : ""}${liveMessage ? " announcement-active" : ""}`}>
                   {activeBoard ? <>
@@ -2394,6 +2455,7 @@ function DonorsView({
   const [draft, setDraft] = useState<Donor | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [reorderMode, setReorderMode] = useState(false);
   const [reorderTooltip, setReorderTooltip] = useState<{ left: number; top: number; text: string } | null>(null);
   const [tagFilter, setTagFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
@@ -2432,8 +2494,10 @@ function DonorsView({
   const [donorPendingDelete, setDonorPendingDelete] = useState<Donor | null>(null);
   const [groupPromptOpen, setGroupPromptOpen] = useState(false);
   const donorListRef = useRef<HTMLDivElement>(null);
-  const donorFilterRef = useRef<HTMLDivElement>(null);
-  const [donorListScroll, setDonorListScroll] = useState(0);
+  const donorListPositionRef = useRef<HTMLInputElement>(null);
+  const donorListScrollFrame = useRef<number | null>(null);
+  const donorGroupRef = useRef<HTMLDivElement>(null);
+  const [groupPillsOverflow, setGroupPillsOverflow] = useState(false);
   const allTags = Array.from(new Set([...state.recognitionSettings.tags, ...state.donors.flatMap((donor) => donor.tags ?? [])])).sort();
   const visibleDonors = donors
     .filter((donor) => (tagFilter === "all" || donor.tags?.includes(tagFilter)) && (groupFilter === "all" || donor.groupId === groupFilter) && (typeFilter === "all" || donor.donationType === typeFilter))
@@ -2456,10 +2520,15 @@ function DonorsView({
     setSortOrder(state.userPreferences.find((preferences) => preferences.userId === activeUserId)?.donorSort ?? "manual");
   }, [activeUserId, state.userPreferences]);
   const updateDonorListScroll = useCallback(() => {
-    const list = donorListRef.current;
-    if (!list) return;
-    const available = Math.max(0, list.scrollHeight - list.clientHeight);
-    setDonorListScroll(available ? Math.round((list.scrollTop / available) * 100) : 0);
+    if (donorListScrollFrame.current !== null) return;
+    donorListScrollFrame.current = window.requestAnimationFrame(() => {
+      donorListScrollFrame.current = null;
+      const list = donorListRef.current;
+      const position = donorListPositionRef.current;
+      if (!list || !position) return;
+      const available = Math.max(0, list.scrollHeight - list.clientHeight);
+      position.value = String(available ? Math.round((list.scrollTop / available) * 100) : 0);
+    });
   }, []);
   useEffect(() => {
     const list = donorListRef.current;
@@ -2467,9 +2536,24 @@ function DonorsView({
     updateDonorListScroll();
     list.addEventListener("scroll", updateDonorListScroll, { passive: true });
     window.addEventListener("resize", updateDonorListScroll);
-    return () => { list.removeEventListener("scroll", updateDonorListScroll); window.removeEventListener("resize", updateDonorListScroll); };
+    return () => {
+      list.removeEventListener("scroll", updateDonorListScroll);
+      window.removeEventListener("resize", updateDonorListScroll);
+      if (donorListScrollFrame.current !== null) window.cancelAnimationFrame(donorListScrollFrame.current);
+      donorListScrollFrame.current = null;
+    };
   }, [updateDonorListScroll, visibleDonors.length]);
-  const nudgeDonorFilters = (direction: -1 | 1) => donorFilterRef.current?.scrollBy({ left: direction * 180, behavior: "smooth" });
+  const updateGroupPillsOverflow = useCallback(() => {
+    const pills = donorGroupRef.current;
+    const next = Boolean(pills && pills.scrollWidth > pills.clientWidth + 1);
+    setGroupPillsOverflow((current) => current === next ? current : next);
+  }, []);
+  useEffect(() => {
+    updateGroupPillsOverflow();
+    window.addEventListener("resize", updateGroupPillsOverflow);
+    return () => window.removeEventListener("resize", updateGroupPillsOverflow);
+  }, [state.donorGroups.length, updateGroupPillsOverflow]);
+  const nudgeGroupPills = (direction: -1 | 1) => donorGroupRef.current?.scrollBy({ left: direction * 180, behavior: "smooth" });
   const setDonorListPosition = (position: number) => {
     const list = donorListRef.current;
     if (!list) return;
@@ -2646,21 +2730,17 @@ function DonorsView({
   };
 
   return (
-    <section className="content-grid donors-grid compact-donors">
+    <section className={`content-grid donors-grid compact-donors${reorderMode ? " reorder-mode" : ""}`}>
       <div className="toolbar-row">
         <div className="search-field">
           <Search size={18} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search names, tags, groups, notes" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search donors" />
         </div>
-        <div className="donor-filter-scroller">
-          <button type="button" className="donor-filter-nudge" onClick={() => nudgeDonorFilters(-1)} aria-label="Show earlier donor filters"><ChevronLeft size={15} /></button>
-        <div className="donor-filter-row" ref={donorFilterRef}>
+        <div className="donor-filter-row">
           <select className="toolbar-select" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}><option value="all">All tags</option>{allTags.map((tag) => <option key={tag}>{tag}</option>)}</select>
           <select className="toolbar-select" aria-label="Filter by donor group" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="all">Groups</option>{state.donorGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select>
           <select className="toolbar-select" aria-label="Filter by donation type" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">All types</option>{["Cash", "In-kind", "Sponsorship", "Legacy", "Volunteer"].map((type) => <option key={type}>{type}</option>)}</select>
           <select className="toolbar-select" aria-label="Sort donors" value={sortOrder} onChange={(event) => setDonorSort(event.target.value as typeof sortOrder)} title="Choose how donor names are ordered"><option value="manual">Manual</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option></select>
-        </div>
-          <button type="button" className="donor-filter-nudge" onClick={() => nudgeDonorFilters(1)} aria-label="Show more donor filters"><ChevronRight size={15} /></button>
         </div>
         <button className="command-button primary" onClick={addDonor}>
           <Plus size={18} />
@@ -2668,7 +2748,15 @@ function DonorsView({
         </button>
       </div>
 
-      <div className="donor-groups-row"><button className={groupFilter === "all" ? "group-chip selected" : "group-chip"} onClick={() => setGroupFilter("all")}>All donors <b>{state.donors.length}</b></button>{state.donorGroups.map((group) => <button className={groupFilter === group.id ? "group-chip selected" : "group-chip"} style={{ "--group-color": group.color } as React.CSSProperties} key={group.id} onClick={() => setGroupFilter(group.id)}>{group.name} <b>{state.donors.filter((donor) => donor.groupId === group.id).length}</b></button>)}<button className="group-chip add" onClick={() => setGroupPromptOpen(true)}><Plus size={14} /> New group</button></div>
+      <button type="button" className="command-button secondary compact mobile-reorder-toggle" aria-pressed={reorderMode} onClick={() => setReorderMode((enabled) => !enabled)}>
+        <GripVertical size={15} /> {reorderMode ? "Done ordering" : "Reorder"}
+      </button>
+
+      <div className={`donor-group-scroller${groupPillsOverflow ? " has-overflow" : ""}`}>
+        {groupPillsOverflow && <button type="button" className="donor-group-nudge" onClick={() => nudgeGroupPills(-1)} aria-label="Show earlier donor groups"><ChevronLeft size={16} /></button>}
+        <div className="donor-groups-row" ref={donorGroupRef} onScroll={updateGroupPillsOverflow}><button className={groupFilter === "all" ? "group-chip selected" : "group-chip"} onClick={() => setGroupFilter("all")}>All donors <b>{state.donors.length}</b></button>{state.donorGroups.map((group) => <button className={groupFilter === group.id ? "group-chip selected" : "group-chip"} style={{ "--group-color": group.color } as React.CSSProperties} key={group.id} onClick={() => setGroupFilter(group.id)}>{group.name} <b>{state.donors.filter((donor) => donor.groupId === group.id).length}</b></button>)}<button className="group-chip add" onClick={() => setGroupPromptOpen(true)}><Plus size={14} /> New group</button></div>
+        {groupPillsOverflow && <button type="button" className="donor-group-nudge" onClick={() => nudgeGroupPills(1)} aria-label="Show more donor groups"><ChevronRight size={16} /></button>}
+      </div>
 
       {createdDonorName && <div className="donor-created-banner" role="status"><CheckCircle2 size={17} /><span><strong>{createdDonorName}</strong> is set up and ready.</span><button type="button" className="icon-button" onClick={() => setCreatedDonorName(null)} title="Dismiss"><X size={14} /></button></div>}
 
@@ -2681,12 +2769,13 @@ function DonorsView({
           const hiddenTagCount = Math.max(0, (donor.tags?.length ?? 0) - visibleTags.length);
           return (
             <article
-              className={`${editing ? "donor-card editing" : "donor-card"}${draggedId === donor.id ? " dragging" : ""}${dragOverId === donor.id && draggedId !== donor.id ? " drop-target" : ""}`}
+              className={`${editing ? "donor-card editing" : "donor-card"}${donor.recordStatus === "deprecated-legacy" ? " deprecated-legacy" : ""}${draggedId === donor.id ? " dragging" : ""}${dragOverId === donor.id && draggedId !== donor.id ? " drop-target" : ""}`}
               key={donor.id}
               onDragOver={(event) => { if (draggedId && sortOrder === "manual") { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDragOverId(donor.id); } }}
               onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverId((current) => current === donor.id ? null : current); }}
               onDrop={(event) => { event.preventDefault(); moveDonor(donor.id); endDonorDrag(); }}
             >
+              <span className={`donor-status-mark${donor.active ? "" : " inactive"}`} title={donor.active ? "Active donor" : "Inactive donor"}><CheckCircle2 size={17} /></span>
               <button className="icon-button drag-button" draggable={!editing && sortOrder === "manual"} onPointerEnter={showReorderTooltip} onPointerLeave={() => setReorderTooltip(null)} onFocus={showReorderTooltip} onBlur={() => setReorderTooltip(null)} onDragStart={(event) => beginDonorDrag(event, donor)} onDragEnd={endDonorDrag} disabled={sortOrder !== "manual"} aria-label={`Reorder ${donor.name}`}>
                 <GripVertical size={17} />
               </button>
@@ -2723,8 +2812,8 @@ function DonorsView({
                   </>
                 ) : (
                   <>
-                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong></div>
-                    <div className="donor-details-row"><span className="donor-recognition-summary"><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" />{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span><small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small></div>
+                    <div className="donor-title-row"><strong title={donor.name}>{donor.name}</strong>{donor.recordStatus === "deprecated-legacy" && <span className="donor-status-badge" aria-label="Deprecated legacy donor record">Deprecated / Legacy</span>}</div>
+                    <div className="donor-details-row"><span className="donor-recognition-summary">{donor.tier && <><b>{donor.tier}{donor.givingProgramId ? " Level" : ""}</b><i aria-hidden="true" /></>}{donor.category}<i aria-hidden="true" />Since {donor.pledgeStartYear ?? donor.donationDate ?? donor.since}</span><small className="donor-giving-summary">{donor.pledgeAnnualAmount ? `$${donor.pledgeAnnualAmount.toLocaleString()}/year · ${donor.pledgeYears ?? 5}-year pledge · ${donor.pledgeStatus ?? "Pledged"}` : donor.category === "General donor" ? "Tier not yet confirmed" : `${donor.donationType ?? "Cash"}${donor.amountUnknown ? " · amount unknown" : donor.amount ? ` · $${donor.amount.toLocaleString()}` : ""}`}</small></div>
                     {!!visibleTags.length && <div className="donor-meta-row">{visibleTags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>)}{hiddenTagCount > 0 && <span className="tag-chip donor-more-tags" title={(donor.tags ?? []).slice(visibleTags.length).join(", ")}>+{hiddenTagCount} more</span>}</div>}
                   </>
                 )}
@@ -2757,7 +2846,7 @@ function DonorsView({
       </div>
       <label className="donor-list-scroll-indicator" aria-label="Donor list position">
         <span className="sr-only">Donor list position</span>
-        <input type="range" min="0" max="100" value={donorListScroll} onChange={(event) => setDonorListPosition(Number(event.target.value))} />
+        <input ref={donorListPositionRef} type="range" min="0" max="100" defaultValue="0" onChange={(event) => setDonorListPosition(Number(event.target.value))} />
       </label>
       </div>
       <div className="donor-filter-count">Showing all {visibleDonors.length} matching donor{visibleDonors.length === 1 ? "" : "s"}</div>
@@ -2797,8 +2886,8 @@ function DonorsView({
           <div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setDiscardDraftPending(false)}>Keep editing</button><button type="button" className="command-button danger" onClick={discardEditor}>Discard changes</button></div>
         </section>
       </div>, document.body)}
-      {donorPendingDelete && createPortal(<div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDonorPendingDelete(null); }}>
-        <section className="editor-modal" role="dialog" aria-modal="true" aria-labelledby="delete-donor-title">
+      {donorPendingDelete && createPortal(<div className="modal-backdrop donor-delete-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDonorPendingDelete(null); }}>
+        <section className="editor-modal donor-delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-donor-title">
           <div className="editor-modal-head"><div><p className="eyebrow">Permanent deletion</p><h2 id="delete-donor-title">Delete {donorPendingDelete.name}?</h2></div><button type="button" className="icon-button" onClick={() => setDonorPendingDelete(null)} title="Cancel deletion"><X size={18} /></button></div>
           <div className="editor-modal-body"><p>This will permanently delete all data for this donor and remove them from every board they are assigned to. This action cannot be undone.</p></div>
           <div className="editor-modal-actions"><button type="button" className="command-button secondary" onClick={() => setDonorPendingDelete(null)}>Cancel</button><button type="button" className="command-button danger" onClick={() => deleteDonor(donorPendingDelete.id)}><Trash2 size={17} /> Delete donor</button></div>
@@ -3322,7 +3411,7 @@ function boardBackgroundChoice(color?: string) {
   return match?.[0] ?? (color ? "custom" : "classic");
 }
 
-const defaultBoardFolderOptions = ["Honor rolls", "Supporter spotlights", "Program information", "Good deeds", "Custom boards"];
+const defaultBoardFolderOptions = ["Donor Boards", "Supporter Spotlights", "Program Information", "Good Deeds", "Custom Boards"];
 
 function resolveBoardFolderName(folder: string, renames: Record<string, string> = {}) {
   let resolved = folder;
@@ -3341,11 +3430,11 @@ function boardFolderOptions(programs: DonorBoardProgram[], savedFolders: string[
 
 function boardFolderFor(program: DonorBoardProgram) {
   if (program.folder) return program.folder;
-  if (program.templatePurpose === "story") return "Supporter spotlights";
-  if (program.templatePurpose === "roster" || program.templatePurpose === "level") return "Honor rolls";
-  if (program.templatePurpose === "invitation") return "Program information";
-  if (program.templatePurpose === "good-deeds") return "Good deeds";
-  return "Custom boards";
+  if (program.templatePurpose === "story") return "Supporter Spotlights";
+  if (program.templatePurpose === "roster" || program.templatePurpose === "level") return "Donor Boards";
+  if (program.templatePurpose === "invitation") return "Program Information";
+  if (program.templatePurpose === "good-deeds") return "Good Deeds";
+  return "Custom Boards";
 }
 
 function groupBoardPrograms(programs: DonorBoardProgram[]) {
@@ -3501,13 +3590,14 @@ function ThemeStudio({
   const boardImageLibrary = useMemo(() => {
     const entries = [
       { name: "Brass board accent", imageUrl: "/assets/board-accents/brass-arch.png" },
+      ...(state.imageAssets ?? []).map((asset) => ({ name: asset.name, imageUrl: asset.url })),
       ...state.boardPrograms.flatMap((program) => [
         ...(program.backgroundImage ? [{ name: `${program.name} background`, imageUrl: program.backgroundImage }] : []),
         ...(program.panels ?? []).flatMap((panel) => panel.imageUrl ? [{ name: panel.title || `${program.name} image`, imageUrl: panel.imageUrl }] : [])
       ])
     ];
     return [...new Map(entries.map((entry) => [entry.imageUrl, entry])).values()];
-  }, [state.boardPrograms]);
+  }, [state.boardPrograms, state.imageAssets]);
   const donorPageCount = Math.max(1, Math.ceil(filteredBoardDonors.length / donorPageSize));
   const donorPageItems = filteredBoardDonors.slice(donorPage * donorPageSize, donorPage * donorPageSize + donorPageSize);
   useEffect(() => {
@@ -3880,7 +3970,6 @@ function ThemeStudio({
           if (!(event.target as Element).closest(".direct-board-canvas")) setSelectedPanelId("");
         }}>
           <div className="board-stage-meta"><span><strong>{selectedProgram.name}</strong> · Click any panel or text to edit · Shift-click two panels to group them; right-click a grouped panel to ungroup.</span></div>
-          <div className="board-stage-save-slot"><button type="button" className="board-stage-save command-button primary compact" disabled={saveStatus === "saving" || !hasUnsavedChanges} onClick={() => void saveBoard()} title={hasUnsavedChanges ? "Save changes to this board and publish them to live displays" : "No unsaved board changes"}><Save size={15} /> {saveStatus === "saving" ? "Savingâ€¦" : hasUnsavedChanges ? "Save" : "Saved"}</button></div>
           <DirectBoardCanvas
             state={state}
             display={boardDisplay}
@@ -4452,7 +4541,7 @@ function DirectBoardDonorName({ donor, display, panel, palette, onRename }: {
   });
   const showIcon = Boolean(panel.showIcons) && presentation.recognitionIcon !== "none";
   return <div
-    className={`direct-donor-name board-highlight-${presentation.highlight} board-animation-${presentation.animation}`}
+    className={`direct-donor-name board-highlight-${presentation.highlight} board-animation-${presentation.animation}${donor.recordStatus === "deprecated-legacy" ? " deprecated-legacy" : ""}`}
     style={{
       "--board-donor-name": presentation.nameColor,
       "--board-donor-accent": presentation.accentColor,
@@ -4477,7 +4566,7 @@ function DirectStarDonorName({ donor, fallbackName, imageUrl, fontFamily, fontSi
   onRename: (donorId: string, name: string) => void;
 }) {
   const name = donor?.name ?? fallbackName;
-  return <div className="direct-star-donor" style={{ "--star-donor-font-size": `${fontSize}px`, "--star-donor-color": textColor, fontFamily } as React.CSSProperties}>
+  return <div className={`direct-star-donor${donor?.recordStatus === "deprecated-legacy" ? " deprecated-legacy" : ""}`} aria-label={donor?.recordStatus === "deprecated-legacy" ? `${name}, Deprecated legacy donor record` : name} style={{ "--star-donor-font-size": `${fontSize}px`, "--star-donor-color": textColor, fontFamily } as React.CSSProperties}>
     {imageUrl ? <img src={resolveProjectAssetUrl(imageUrl)} alt="" /> : <span className="direct-star-placeholder">★</span>}
     <EditableBoardText className="direct-star-donor-name" value={name} multiline onCommit={(value) => donor && onRename(donor.id, value)} />
   </div>;
@@ -5324,7 +5413,9 @@ function DirectLiveStage({
   const scheduledBoard = resolveCurrentBoardSchedule(state, screen.id);
   // A manually chosen preview board is useful while editing; otherwise the studio
   // should faithfully show the board that is actually scheduled for this display.
-  const backgroundBoardId = boardProgramId ?? scheduledBoard?.boardId;
+  // Keep the assigned board visible in Studio when a phone returns while the
+  // live session is still running but no schedule is currently active.
+  const backgroundBoardId = boardProgramId ?? scheduledBoard?.boardId ?? screen.boardProgramId;
   const hasBoardBackground = showBoard && Boolean(backgroundBoardId);
   const hasUnscheduledDisplayBackground = showBoard && !backgroundBoardId;
   const textureBacked3d = hasBoardBackground && boardViewMode === "3d";
@@ -5908,6 +5999,7 @@ function LivePreviewPanel({
   const [sourcePromptOpen, setSourcePromptOpen] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [cameraRecovery, setCameraRecovery] = useState<"none" | "paused" | "resume">("none");
   const [popupBlocked, setPopupBlocked] = useState(false);
   const [directMode, setDirectMode] = useState<"frame" | "crop">("frame");
   const [boardViewMode, setBoardViewMode] = useState<"2d" | "3d">("2d");
@@ -5927,6 +6019,9 @@ function LivePreviewPanel({
   const recordingActive = recordingPhase === "starting" || recordingPhase === "recording";
   const previewStreamRef = useRef<MediaStream | null>(null);
   const previewLeaseRef = useRef<MediaDeviceLease | null>(null);
+  const liveActiveRef = useRef(state.live.active);
+  const shutdownMobileBroadcastRef = useRef<() => void>(() => undefined);
+  const deferredUnmountShutdownRef = useRef<number | null>(null);
   const roomCameraLeaseRef = useRef<MediaDeviceLease | null>(null);
   const roomCameraWindowRef = useRef<Window | null>(null);
   const previewWindowRef = useRef<Window | null>(null);
@@ -5944,6 +6039,7 @@ function LivePreviewPanel({
   const sourceRecordingPlaybackRef = useRef<HTMLVideoElement | null>(null);
   const sourceRecordingUrlRef = useRef<string | null>(null);
   const recordingMenuRef = useRef<HTMLDivElement | null>(null);
+  const broadcastSessionRef = useRef(0);
   const refreshMediaDevices = useCallback(() => {
     void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => setDevices([]));
   }, []);
@@ -5977,6 +6073,14 @@ function LivePreviewPanel({
   }, []);
 
   useEffect(() => { previewStreamRef.current = previewStream; }, [previewStream]);
+  useEffect(() => {
+    if (!state.live.active) {
+      setCameraRecovery("none");
+      return;
+    }
+    if (phoneMode && !previewStream && !previewBusy) setCameraRecovery("resume");
+  }, [phoneMode, previewBusy, previewStream, state.live.active]);
+  useEffect(() => { liveActiveRef.current = state.live.active; }, [state.live.active]);
   useEffect(() => {
     if (state.live.source === "demo") patchLive({ source: "camera" });
   }, [state.live.source]);
@@ -6060,8 +6164,11 @@ function LivePreviewPanel({
   const cameraOptions = deviceOptionList(cameraDevices, "Default camera", "Camera");
   const micOptions = deviceOptionList(micDevices, "Default mic", "Mic");
   const allScreens = Object.values(state.screens);
-  const openScreens = allScreens.filter((screen) => openDisplayIds.includes(screen.id));
-  const openTargetOptions = openScreens.map((screen) => screen.id);
+  // Persisted ownership, rather than local presence pings, is the authority for
+  // where a phone broadcast is allowed to route. Presence remains useful only
+  // for delivery telemetry below.
+  const openTargetOptions = openedBoardIds(state);
+  const openScreens = allScreens.filter((screen) => openTargetOptions.includes(screen.id));
   const openTargetLabels = Object.fromEntries(openScreens.map((screen) => [screen.id, `${screen.label} (${screen.orientation})`]));
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
   const previewScreens = state.live.target === "all" ? allScreens : [previewScreen];
@@ -6292,8 +6399,21 @@ function LivePreviewPanel({
       }
       stream.getVideoTracks().forEach((track) => track.addEventListener("ended", () => {
         setPreviewStream(null);
-        setPreviewError(source === "screen" ? "Screen sharing ended. Choose a window again to resume." : source === "recording" ? "Recording playback ended. Select it again to resume." : "The camera stopped. Reconnect it or choose another camera.");
+        if (source === "camera") setCameraRecovery("resume");
+        setPreviewError(source === "screen" ? "Screen sharing ended. Choose a window again to resume." : source === "recording" ? "Recording playback ended. Select it again to resume." : "Camera video ended. Keep this page open, then tap Resume camera to restore the broadcast.");
       }, { once: true }));
+      if (source === "camera") {
+        stream.getVideoTracks().forEach((track) => {
+          track.addEventListener("mute", () => {
+            setCameraRecovery("paused");
+            setPreviewError("Camera video is paused. Keep this page open; if it does not return, tap Resume camera.");
+          });
+          track.addEventListener("unmute", () => {
+            setCameraRecovery("none");
+            setPreviewError((current) => current?.startsWith("Camera video") ? null : current);
+          });
+        });
+      }
       const previousLease = previewLeaseRef.current;
       const previousStream = previewStreamRef.current;
       if (source === "screen" || source === "recording" || phoneMode) {
@@ -6575,6 +6695,8 @@ function LivePreviewPanel({
   };
 
   const endLivePresentation = () => {
+    broadcastSessionRef.current += 1;
+    setCameraRecovery("none");
     recordingPlaybackRef.current?.pause();
     recordingPlaybackRef.current = null;
     if (recordingPlaybackUrlRef.current) URL.revokeObjectURL(recordingPlaybackUrlRef.current);
@@ -6582,6 +6704,77 @@ function LivePreviewPanel({
     setSendingRecordingId(null);
     stopLive();
   };
+
+  const startPhoneBroadcast = async (sourceStream: MediaStream) => {
+    const session = ++broadcastSessionRef.current;
+    const broadcastStream = sourceStream.clone();
+    const setRecovery = (state: "paused" | "resume", detail: string) => {
+      if (broadcastSessionRef.current !== session) return;
+      setCameraRecovery(state);
+      setPreviewError(detail);
+    };
+    broadcastStream.getVideoTracks().forEach((track) => {
+      track.addEventListener("ended", () => setRecovery("resume", "Camera video ended. Tap Resume camera to restore the live picture; your title and message will stay live."), { once: true });
+      track.addEventListener("mute", () => setRecovery("paused", "Camera video is paused. Keep this page open; if it does not return, tap Resume camera."));
+      track.addEventListener("unmute", () => {
+        if (broadcastSessionRef.current !== session) return;
+        setCameraRecovery("none");
+        setPreviewError((current) => current?.startsWith("Camera video") ? null : current);
+      });
+    });
+    setCameraRecovery("none");
+    await startLiveStream(broadcastStream, "Using approved camera preview.");
+  };
+
+  const resumePhoneCamera = async () => {
+    stopPreviewStream(true);
+    const connected = await startPreview("camera");
+    const recoveredStream = previewStreamRef.current;
+    if (connected && recoveredStream) await startPhoneBroadcast(recoveredStream);
+  };
+
+  const shutdownMobileBroadcast = () => {
+    if (!liveActiveRef.current) return;
+    // The WebRTC bridge owns a cloned stream, so ending the session alone does
+    // not release the phone's camera. Release both before clearing Live.
+    stopPreviewStream(true);
+    endLivePresentation();
+  };
+  shutdownMobileBroadcastRef.current = shutdownMobileBroadcast;
+
+  useEffect(() => {
+    if (!phoneMode) return;
+    const shutdown = () => shutdownMobileBroadcastRef.current();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") shutdown();
+    };
+    const existingDeferredShutdown = deferredUnmountShutdownRef.current;
+    if (existingDeferredShutdown !== null) {
+      window.clearTimeout(existingDeferredShutdown);
+      deferredUnmountShutdownRef.current = null;
+    }
+    window.addEventListener("pagehide", shutdown);
+    window.addEventListener("beforeunload", shutdown);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", shutdown);
+      window.removeEventListener("beforeunload", shutdown);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [phoneMode]);
+
+  useEffect(() => {
+    const existingDeferredShutdown = deferredUnmountShutdownRef.current;
+    if (existingDeferredShutdown !== null) {
+      window.clearTimeout(existingDeferredShutdown);
+      deferredUnmountShutdownRef.current = null;
+    }
+    return () => {
+      // React Strict Mode simulates an unmount during development. Defer the
+      // actual route-unmount shutdown one tick so a replacement mount cancels it.
+      deferredUnmountShutdownRef.current = window.setTimeout(() => shutdownMobileBroadcastRef.current(), 0);
+    };
+  }, []);
 
   const broadcastSourceReady = Boolean(previewStream);
   const broadcastStartNotice = state.live.source === "camera"
@@ -6604,6 +6797,10 @@ function LivePreviewPanel({
       return;
     }
     if (previewStream && state.live.source !== "demo") {
+      if (phoneMode && state.live.source === "camera") {
+        void startPhoneBroadcast(previewStream);
+        return;
+      }
       void startLiveStream(previewStream.clone(), state.live.source === "screen" ? "Using approved screen share." : state.live.source === "recording" ? `Playing saved recording: ${selectedSourceRecording?.title ?? "Recording"}.` : "Using approved camera preview.");
       return;
     }
@@ -6708,6 +6905,7 @@ function LivePreviewPanel({
           <div className="phone-camera-frame"><span>LIVE CAMERA</span><span>{previewScreen?.label ?? "No display selected"}</span></div>
           {previewError && <p className="phone-broadcast-error">{previewError}</p>}
         </div>
+        {cameraRecovery !== "none" && <p className="phone-broadcast-error" role="status">{cameraRecovery === "paused" ? "Camera paused. Keep this page open; tap Resume camera if it does not return." : "Camera connection ended. Tap Resume camera; your live title and message will remain on the display."}</p>}
         {phoneSettingsOpen && <div className="phone-broadcast-fields">
           <LabeledInput label="Your name" value={state.live.title} onChange={(title) => patchLive({ title })} />
           <LabeledInput label="Message" value={state.live.lowerThird} onChange={(lowerThird) => patchLive({ lowerThird })} />
@@ -6717,7 +6915,7 @@ function LivePreviewPanel({
         {phoneMode && state.live.active && <PhoneBroadcastDelivery screen={previewScreen} delivery={previewScreen ? displayDelivery[previewScreen.id] : undefined} />}
         <footer className="phone-broadcast-actions">
           <button type="button" className="phone-round-control" onClick={() => setPhoneSettingsOpen((open) => !open)} title="Broadcast settings"><Settings2 size={20} /><span>Settings</span></button>
-          <button type="button" className={previewStream ? "phone-round-control active" : "phone-round-control"} disabled={previewBusy} onClick={previewStream ? () => stopPreviewStream() : () => void startPreview("camera")}><Camera size={21} /><span>{previewStream ? "Camera" : "Start camera"}</span></button>
+          <button type="button" className={previewStream ? "phone-round-control active" : "phone-round-control"} disabled={previewBusy || (state.live.active && cameraRecovery === "none")} onClick={cameraRecovery !== "none" || (state.live.active && !previewStream) ? () => void resumePhoneCamera() : previewStream ? () => stopPreviewStream() : () => void startPreview("camera")} title={state.live.active && cameraRecovery === "none" ? "Camera stays on during a live broadcast." : undefined}><Camera size={21} /><span>{cameraRecovery !== "none" || (state.live.active && !previewStream) ? "Resume camera" : previewStream ? "Camera" : "Start camera"}</span></button>
           <button type="button" className={state.live.active ? "phone-end-live" : "phone-go-live"} onClick={state.live.active ? endLivePresentation : beginLivePresentation}>{state.live.active ? <Square size={20} /> : <Radio size={20} />}{state.live.active ? "End" : "Go live"}</button>
         </footer>
       </section> : <>
@@ -8861,6 +9059,7 @@ function ImageLibraryManager({ state, updateState }: { state: LanternState; upda
   const [expanded, setExpanded] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [uploading, setUploading] = useState(false);
   const images = useMemo(() => collectManagedImages(state), [state]);
   const replaceEverywhere = (current: LanternState, oldUrl: string, newUrl?: string): LanternState => ({
     ...current,
@@ -8882,15 +9081,32 @@ function ImageLibraryManager({ state, updateState }: { state: LanternState; upda
     if (!newUrl) return;
     updateState((current) => ({ ...replaceEverywhere(current, url, newUrl), imageAssets: [...(current.imageAssets ?? []).filter((asset) => asset.url !== url && asset.url !== newUrl), { url: newUrl, name: file.name }] }));
   };
+  const addImage = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      let url = "";
+      await readSharedImageFile(file, (value) => { url = value; });
+      if (!url) return;
+      updateState((current) => ({
+        ...current,
+        imageAssets: [...(current.imageAssets ?? []).filter((asset) => asset.url !== url), { url, name: file.name }]
+      }));
+    } finally {
+      setUploading(false);
+    }
+  };
   return <section className="board-organization-settings image-library-settings">
     <button type="button" className={`settings-intro vocabulary-toggle${expanded ? " expanded" : ""}`} onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls="image-library-options">
-      <div><p className="eyebrow">Site media</p><h2>Image library</h2><span>See every image in use, where it appears, and replace, rename, or remove it.</span></div>
+      <div><p className="eyebrow">Site media</p><h2>Image library</h2><span>Add reusable images, see where each one appears, and replace, rename, or remove it.</span></div>
       <ChevronDown size={20} aria-hidden="true" />
     </button>
     {expanded && <div className="image-library-body" id="image-library-options">
+      <label className="command-button primary compact image-upload-button image-library-add"><Upload size={14} /> {uploading ? "Adding…" : "Add image"}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploading} onChange={(event) => { void addImage(event.target.files?.[0]); event.target.value = ""; }} /></label>
+      <p className="field-note image-library-note">Added images are saved in this library and can be selected later from the Board Editor.</p>
       {images.length ? images.map((image) => <article className="image-library-item" key={image.url}>
-        <img src={image.url} alt="" />
-        <div><strong>{image.name}</strong><small>Used by {image.uses.join(", ")}</small></div>
+        <img src={resolveProjectAssetUrl(image.url)} alt="" />
+        <div><strong>{image.name}</strong><small>{image.uses.length ? `Used by ${image.uses.join(", ")}` : "Saved in library — not yet in use"}</small></div>
         <span className="image-library-actions">
           <button type="button" className="command-button secondary compact" onClick={() => { setRenaming(image.url); setName(image.name); }} title="Rename image"><Pencil size={14} /> Rename</button>
           <label className="command-button secondary compact image-upload-button"><Upload size={14} /> Replace<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void replaceImage(image.url, event.target.files?.[0])} /></label>
@@ -8908,9 +9124,10 @@ function collectManagedImages(state: LanternState) {
   const add = (url: string | undefined, name: string, use: string) => {
     if (!url) return;
     const current = items.get(url);
-    if (current) { current.uses.push(use); return; }
-    items.set(url, { url, name: names.get(url) ?? name, uses: [use] });
+    if (current) { if (use) current.uses.push(use); return; }
+    items.set(url, { url, name: names.get(url) ?? name, uses: use ? [use] : [] });
   };
+  (state.imageAssets ?? []).forEach((asset) => add(asset.url, asset.name, ""));
   state.boardPrograms.forEach((board) => { add(board.backgroundImage, `${board.name} background`, `board: ${board.name}`); board.panels?.forEach((panel) => add(panel.imageUrl, panel.title || "Board image", `board: ${board.name}`)); });
   state.savedBlips.forEach((blip) => add(blip.imageUrl, blip.name, `Blip: ${blip.name}`));
   state.savedAnnouncements.forEach((announcement) => { add(announcement.imageUrl, announcement.imageName || announcement.title || "Announcement image", `message: ${announcement.title}`); announcement.images?.forEach((image) => add(image.url, image.name || announcement.title || "Announcement image", `message: ${announcement.title}`)); });
@@ -8990,7 +9207,7 @@ function BoardOrganizationEditor({ state, updateState }: { state: LanternState; 
   });
   const deleteFolder = (folder: string) => updateState((current) => {
     const currentFolders = boardFolderOptions(current.boardPrograms, current.boardFolders ?? [], current.boardFolderRenames ?? {}, current.hiddenBoardFolders ?? []);
-    const fallbackFolder = currentFolders.find((candidate) => candidate !== folder) ?? (folder === "Custom boards" ? "Honor rolls" : "Custom boards");
+  const fallbackFolder = currentFolders.find((candidate) => candidate !== folder) ?? (folder === "Custom Boards" ? "Donor Boards" : "Custom Boards");
     const hiddenSources = defaultBoardFolderOptions.filter((candidate) => resolveBoardFolderName(candidate, current.boardFolderRenames ?? {}) === folder);
     const nextRenames = Object.fromEntries(Object.entries(current.boardFolderRenames ?? {}).filter(([original, renamed]) => original !== folder && renamed !== folder));
     return {
@@ -9442,6 +9659,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   // background. This avoids a blank screen while a TV browser wakes its Wi-Fi.
   const [stateReady, setStateReady] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [liveMediaNotice, setLiveMediaNotice] = useState<string | null>(null);
   const [identify, setIdentify] = useState(false);
   const [fitToScreen, setFitToScreen] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
@@ -9451,6 +9669,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
   const blipSoundKeyRef = useRef("");
   const identifyTimerRef = useRef<number | null>(null);
   const screen = state.screens[screenId] ?? Object.values(state.screens)[0];
+  const deviceId = getLanternDeviceId();
   const showIdentity = useCallback(() => {
     if (identifyTimerRef.current) window.clearTimeout(identifyTimerRef.current);
     setIdentify(true);
@@ -9498,7 +9717,10 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
     };
   }, []);
 
-  useEffect(() => attachDisplayVideoReceiver(screenId, setStream), [screenId]);
+  useEffect(() => attachDisplayVideoReceiver(screenId, (nextStream) => {
+    setStream(nextStream);
+    if (nextStream) setLiveMediaNotice(null);
+  }), [screenId]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -9519,12 +9741,36 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       if (message.type === "identify-screen" && message.screenId === screenId) {
         showIdentity();
       }
+      if (message.type === "live-stop" && targetIncludes(message.target, screenId)) {
+        setLiveMediaNotice(null);
+      }
+      if (message.type === "live-media-state" && targetIncludes(message.target, screenId)) {
+        setLiveMediaNotice(message.state === "available" ? null : message.detail);
+      }
+      if (message.type === "close-display" && message.screenId === screenId && message.targetDeviceId === deviceId) {
+        window.close();
+      }
     });
 
     return () => {
       channel.close();
     };
-  }, [screenId, showIdentity]);
+  }, [deviceId, screenId, showIdentity]);
+
+  useEffect(() => {
+    // Only release an owner that still belongs to this device. A transfer may
+    // already have reassigned the board before the remote window finishes closing.
+    const releaseOwnership = () => setState((current) => {
+      if (current.boardOpenOwners?.[screenId]?.deviceId !== deviceId) return current;
+      const boardOpenOwners = { ...current.boardOpenOwners };
+      delete boardOpenOwners[screenId];
+      const next = { ...current, boardOpenOwners };
+      publishState(next);
+      return next;
+    });
+    window.addEventListener("pagehide", releaseOwnership);
+    return () => window.removeEventListener("pagehide", releaseOwnership);
+  }, [deviceId, screenId]);
 
   const showLive = state.live.active && targetIncludes(state.live.target, screenId);
   const liveComposition = normalizeBroadcastComposition(liveCompositionForDisplay(state.live, screenId));
@@ -9643,10 +9889,10 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
         <div className={`live-overlay broadcast-frame-surface mask-${liveComposition.frame.maskShape ?? "rectangle"}${!liveComposition.chromaKey.enabled && liveComposition.effects.background === "remove" ? " screenless-transparent" : ""}`} style={{ left: `${liveComposition.frame.x}%`, top: `${liveComposition.frame.y}%`, width: `${liveComposition.frame.width}%`, height: `${liveComposition.frame.height}%`, clipPath: liveComposition.frame.maskShape === "polygon" ? livePolygonClip(liveComposition.frame) : undefined, ...frameSurfaceStyle(liveComposition), ...(!liveComposition.chromaKey.enabled && liveComposition.effects.background === "remove" ? { backgroundColor: "transparent" } : {}) }}>
           <div className="broadcast-crop-viewport" style={{ clipPath: `inset(${liveCropEdges.top}% ${liveCropEdges.right}% ${liveCropEdges.bottom}% ${liveCropEdges.left}%)` }}>
             <div className="live-camera-transform" style={broadcastSourceTransformStyle(liveComposition)}>
-              <ChromaVideo stream={stream} chromaKey={liveComposition.chromaKey} effects={liveComposition.effects} crop={liveComposition.frame.crop} fitMode={liveComposition.frame.fitMode} renderTrackedOverlay={displayCostumeRenderer} />
+              <ChromaVideo stream={stream} chromaKey={liveComposition.chromaKey} effects={liveComposition.effects} crop={liveComposition.frame.crop} fitMode={liveComposition.frame.fitMode} renderTrackedOverlay={displayCostumeRenderer} preserveVideoUnderDiagnostics />
             </div>
           </div>
-          {!stream && <div className="video-waiting">Waiting for local video signal</div>}
+          {(!stream || liveMediaNotice) && <div className="video-waiting">{liveMediaNotice ?? "Waiting for local video signal"}</div>}
         </div>
       )}
       {showLive && <div className="live-broadcast-text live-broadcast-title" style={{ left: `${liveComposition.titlePosition.x}%`, top: `${liveComposition.titlePosition.y}%` }}><strong>{liveComposition.title}</strong></div>}

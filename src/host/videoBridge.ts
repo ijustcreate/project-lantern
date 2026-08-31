@@ -27,6 +27,7 @@ export class DirectorVideoBridge {
   private pendingRemoteCandidates = new Map<ScreenId, RTCIceCandidateInit[]>();
   private reconnectTimers = new Map<ScreenId, number>();
   private activeTarget: TargetScreen = "display-2";
+  private sourceSession = 0;
 
   constructor(private onStatus: StatusListener) {
   }
@@ -40,6 +41,8 @@ export class DirectorVideoBridge {
       : source === "screen"
         ? await getScreenOrDemoStream((status, detail) => this.onStatus(status, detail), audioDeviceId)
         : createDemoVideoStream();
+    this.watchSourceTracks();
+    this.announceMediaState("available", this.stream.__cleanup ? "Generated video is ready." : "Camera video is ready.");
     this.onStatus(this.stream.__cleanup ? "demo" : "camera", this.stream.__cleanup ? "Using generated test video." : "Using camera.");
   }
 
@@ -47,6 +50,8 @@ export class DirectorVideoBridge {
     this.clearMedia();
     this.activeTarget = target;
     this.stream = stream as DemoStream;
+    this.watchSourceTracks();
+    this.announceMediaState("available", detail);
     this.onStatus("camera", detail);
   }
 
@@ -133,6 +138,7 @@ export class DirectorVideoBridge {
   }
 
   private clearMedia() {
+    this.sourceSession += 1;
     this.reconnectTimers.forEach((timer) => window.clearTimeout(timer));
     this.reconnectTimers.clear();
     this.peers.forEach((peer) => peer.close());
@@ -143,9 +149,38 @@ export class DirectorVideoBridge {
     this.stream = null;
   }
 
+  private announceMediaState(state: "available" | "paused" | "unavailable", detail: string) {
+    this.channel.post({ type: "live-media-state", target: this.activeTarget, state, detail } satisfies HostMessage);
+  }
+
+  private watchSourceTracks() {
+    const stream = this.stream;
+    if (!stream) return;
+    const session = this.sourceSession;
+    stream.getVideoTracks().forEach((track) => {
+      track.addEventListener("ended", () => {
+        if (this.sourceSession !== session || this.stream !== stream) return;
+        this.clearMedia();
+        this.announceMediaState("unavailable", "Camera video ended. Keep the presenter page open, then tap Resume camera.");
+        this.onStatus("ended", "Camera video ended. Resume camera to restore the live picture.");
+      }, { once: true });
+      track.addEventListener("mute", () => {
+        if (this.sourceSession !== session || this.stream !== stream) return;
+        this.announceMediaState("paused", "Camera video is paused. Keep the presenter page open, or tap Resume camera if it does not return.");
+        this.onStatus("connecting", "Camera video is paused.");
+      });
+      track.addEventListener("unmute", () => {
+        if (this.sourceSession !== session || this.stream !== stream) return;
+        this.announceMediaState("available", "Camera video resumed.");
+        this.onStatus("camera", "Camera video resumed.");
+      });
+    });
+  }
+
   close() {
     // Component teardown (navigation, refresh, StrictMode, or HMR) is not an
     // operator request to end the museum broadcast. Only stop() sends live-stop.
+    if (this.stream) this.announceMediaState("unavailable", "Presenter connection closed. Reopen it and tap Resume camera to restore video.");
     this.clearMedia();
     this.channel.close();
   }
@@ -268,6 +303,14 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
     }
 
     if (message.type === "live-stop" && targetIncludes(message.target, screenId)) {
+      peer?.close();
+      peer = null;
+      activeOfferKey = "";
+      pendingRemoteCandidates = [];
+      onStream(null);
+    }
+
+    if (message.type === "live-media-state" && targetIncludes(message.target, screenId) && message.state === "unavailable") {
       peer?.close();
       peer = null;
       activeOfferKey = "";

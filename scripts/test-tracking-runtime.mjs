@@ -157,6 +157,8 @@ assert.match(rendererSource, /outputFaceBlendshapes: true/);
 assert.match(rendererSource, /trackingCameraUnderlay/);
 assert.match(rendererSource, /renderTrackedOverlay/);
 assert.match(rendererSource, /warmVisionResources/);
+assert.match(rendererSource, /const IDLE_FACE_SCAN_INTERVAL_MS = 100/);
+assert.match(rendererSource, /drawCoverMedia\(sourceContext, video/);
 
 console.log(JSON.stringify({
   reportedBefore: {

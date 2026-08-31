@@ -20,7 +20,45 @@ export const QUESTIONING_TOY_SOLDIER_CONTENT_VERSION = 16;
 /** Removes retired display attachment, heartbeat, and manual live-toggle state. */
 export const DISPLAY_STATUS_REMOVAL_CONTENT_VERSION = 17;
 export const SCHEDULE_RESET_CONTENT_VERSION = 19;
-export const LANTERN_CONTENT_VERSION = SCHEDULE_RESET_CONTENT_VERSION;
+/** Reconciles the Development Director's confirmed roster without deleting historical names. */
+export const CONFIRMED_DONOR_ROSTER_CONTENT_VERSION = 20;
+export const BOARD_LIBRARY_CLEANUP_CONTENT_VERSION = 21;
+export const LANTERN_CONTENT_VERSION = BOARD_LIBRARY_CLEANUP_CONTENT_VERSION;
+
+export const confirmedDonorNames = [
+  "Denise and Rob Aitken", "Diane Batres", "Mary Bava", "Patricia Busher", "Sandra and Clarence Chan",
+  "Andrew Chesley and Leslie Potter", "Lisa Corren", "Kevin and Julie Dougherty", "Edward Figueroa",
+  "Judith & Walter Ghio", "George and Cherie Gibson", "Patricia and Anthony Gutierrez", "Merrill Hambright",
+  "Phillip Herrera", "Craig and Denise Holmes", "Kevin and Sandy Huber", "Loreen Huey", "Duane Isetti",
+  "Kathy and Dean Janssen", "Patrick and Marggie Johnston", "Stefanie and Ted Leland",
+  "Linda and Anthony Lucaccini", "Carolyn and Dan Natividad", "Ana Pacheco", "John and Rosa Solis",
+  "Beth Stoebner and David Worfolk", "Francesca and John Vera", "Joanne Waters", "Tina Wells Lee and Clem Lee",
+  "Mark Williams"
+] as const;
+
+export const confirmedGeneralDonors: Donor[] = [
+  "Andrew Chesley and Leslie Potter",
+  "Judith & Walter Ghio",
+  "Patricia and Anthony Gutierrez",
+  "Kathy and Dean Janssen",
+  "Linda and Anthony Lucaccini",
+  "Carolyn and Dan Natividad",
+  "Beth Stoebner and David Worfolk"
+].map((name, index) => ({
+  id: `confirmed-general-${String(index + 1).padStart(2, "0")}`,
+  name,
+  tier: "",
+  category: "General donor",
+  active: true,
+  since: "Confirmed",
+  note: "Confirmed by the museum Development Director; donor tier has not yet been provided.",
+  basicInfo: "Confirmed general donor · tier pending",
+  tags: ["Confirmed donor", "General donor", "Tier pending"],
+  donations: [],
+  displayIds: [],
+  boardIds: [],
+  recordStatus: "current"
+}));
 
 const exploreNames = [
   "Kevin & Sandy Huber",
@@ -121,7 +159,10 @@ const withOpeningPayment = (donor: Donor): Donor => ({
 });
 const exploreDonors = exploreNames.map((name, index) => withOpeningPayment(makeBrigadeDonor(name, index, toySoldierProgram.levels[0])));
 const playDonors = playNames.map((name, index) => withOpeningPayment(makeBrigadeDonor(name, index, toySoldierProgram.levels[1])));
-const officialDonors = [...exploreDonors, ...playDonors];
+const supersededConfirmedAliasIds = new Set(["toy-play-10", "toy-play-15", "toy-play-20"]);
+const officialDonors = [...exploreDonors, ...playDonors].map((donor) => supersededConfirmedAliasIds.has(donor.id)
+  ? { ...donor, recordStatus: "deprecated-legacy" as const, tags: [...(donor.tags ?? []), "Deprecated/Legacy"] }
+  : donor);
 const exploreIds = exploreDonors.map((donor) => donor.id);
 const playIds = playDonors.map((donor) => donor.id);
 const brigadeIds = [...exploreIds, ...playIds];
@@ -192,7 +233,8 @@ function makeLegacyDonor(name: string, photo: 1 | 2, index: number): Donor {
     donations: [],
     displayIds: [],
     boardIds: ["board-legacy-donors-portrait", `board-legacy-stars-photo-${photo}`],
-    recognitionOrder: index + 1
+    recognitionOrder: index + 1,
+    recordStatus: "deprecated-legacy"
   };
 }
 
@@ -209,7 +251,7 @@ function legacyStarPanels(donorId: string, position: [number, number, number, nu
   const donor = legacyDonors.find((item) => item.id === donorId);
   return [
     { id: `${donorId}-star-image`, type: "image", title: "Recognition star", size: "standard", x: position[0], y: position[1], width: position[2], height: position[3], imageUrl: "/assets/donor-icons/legacy-star-flat.svg", imageFit: "contain" },
-    { id: `${donorId}-star-text`, type: "text", title: donor?.name ?? "Legacy donor", size: "standard", x: position[0], y: position[1], width: position[2], height: position[3], fontFamily: "DM Sans", fontSize, textColor: "#201708", lineHeight: .92 }
+    { id: `${donorId}-star-text`, type: "text", title: donor?.name ?? "Legacy donor", size: "standard", x: position[0], y: position[1], width: position[2], height: position[3], fontFamily: "DM Sans", fontSize, textColor: "#77736c", lineHeight: .92 }
   ];
 }
 
@@ -221,7 +263,7 @@ function legacyStarWallBoard(
   const ids = photo === 1 ? legacyPhoto1Ids : legacyPhoto2Ids;
   return {
     id: `board-legacy-stars-photo-${photo}`,
-    name: `Legacy Donor Star Wall · ${orientation}`,
+    name: `Legacy Star Wall · ${orientation}`,
     orientation,
     heading: "LEGACY DONORS",
     subtitle: "A WALL OF GRATITUDE",
@@ -230,6 +272,7 @@ function legacyStarWallBoard(
     columns: 1,
     donorIds: ids,
     active: true,
+    folder: "Donor Boards",
     templatePurpose: "roster",
     palette: photo === 1 ? "legacy-navy" : "legacy-sky",
     fontFamily: "DM Sans",
@@ -268,6 +311,7 @@ function legacyDonorsBoard(): DonorBoardProgram {
     columns: 2,
     donorIds: legacyDonorIds,
     active: true,
+    folder: "Donor Boards",
     templatePurpose: "roster",
     palette: "classic",
     fontFamily: "Libre Baskerville",
@@ -307,6 +351,7 @@ function generousDonorRosterBoard(audience: "brigade" | "legacy"): DonorBoardPro
     columns: 2,
     donorIds,
     active: true,
+    folder: "Donor Boards",
     givingProgramId: brigade ? toySoldierProgram.id : undefined,
     templatePurpose: "roster",
     palette: "classic",
@@ -343,6 +388,7 @@ function fullRosterBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgr
     columns: 2,
     donorIds: brigadeIds,
     active: true,
+    folder: "Donor Boards",
     givingProgramId: toySoldierProgram.id,
     templatePurpose: "roster",
     palette: "brigade-blue",
@@ -386,6 +432,7 @@ function levelBoard(level: "Explore" | "Play", orientation: "Portrait" | "Landsc
     columns: portrait ? 1 : 2,
     donorIds: ids,
     active: true,
+    folder: "Donor Boards",
     givingProgramId: toySoldierProgram.id,
     templatePurpose: "level",
     palette: isExplore ? "brigade-blue" : "brigade-red",
@@ -406,7 +453,7 @@ function aboutBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgram {
   const short = `about-${portrait ? "p" : "l"}`;
   return {
     id: `board-toy-about-${orientation.toLowerCase()}`,
-    name: `What Is the Brigade? · ${orientation}`,
+    name: `What Is the Toy Soldier Brigade? — ${orientation}`,
     orientation,
     heading: "WHAT IS THE TOY SOLDIER BRIGADE?",
     subtitle: "PHILANTHROPY WITH PURPOSE",
@@ -415,6 +462,7 @@ function aboutBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgram {
     columns: 1,
     donorIds: [],
     active: true,
+    folder: "Program Information",
     givingProgramId: toySoldierProgram.id,
     templatePurpose: "invitation",
     palette: "brigade-cream",
@@ -457,6 +505,7 @@ function goodDeedsBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgra
     columns: 1,
     donorIds: [],
     active: true,
+    folder: "Good Deeds",
     givingProgramId: toySoldierProgram.id,
     templatePurpose: "good-deeds",
     palette: "brigade-sunshine",
@@ -481,7 +530,7 @@ function spotlightBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgra
   const short = `spot-${portrait ? "p" : "l"}`;
   return {
     id: `board-supporter-spotlight-${orientation.toLowerCase()}`,
-    name: `Supporter Spotlight · Gallery Portrait · ${orientation}`,
+    name: `Supporter Spotlight — Francesca Vera — ${orientation}`,
     orientation,
     heading: "SUPPORTER SPOTLIGHT",
     subtitle: "FRANCESCA VERA",
@@ -490,6 +539,7 @@ function spotlightBoard(orientation: "Portrait" | "Landscape"): DonorBoardProgra
     columns: 1,
     donorIds: ["toy-explorer-5"],
     active: true,
+    folder: "Supporter Spotlights",
     givingProgramId: toySoldierProgram.id,
     templatePurpose: "story",
     palette: "brigade-cream",
@@ -515,7 +565,7 @@ function partnershipSpotlightBoard(orientation: "Portrait" | "Landscape"): Donor
   const short = `partner-${portrait ? "p" : "l"}`;
   return {
     id: `board-supporter-spotlight-partnership-${orientation.toLowerCase()}`,
-    name: `Supporter Spotlight · Partnership · ${orientation}`,
+    name: `Supporter Spotlight — Francesca and John Vera — ${orientation}`,
     orientation,
     heading: "A PARTNERSHIP FOR PLAY",
     subtitle: "FRANCESCA & JOHN VERA",
@@ -524,6 +574,7 @@ function partnershipSpotlightBoard(orientation: "Portrait" | "Landscape"): Donor
     columns: 1,
     donorIds: ["toy-explorer-5"],
     active: true,
+    folder: "Supporter Spotlights",
     givingProgramId: toySoldierProgram.id,
     templatePurpose: "story",
     palette: "classic",
@@ -600,8 +651,6 @@ export const brigadeBoardPrograms: DonorBoardProgram[] = [
   spotlightBoard("Landscape"),
   partnershipSpotlightBoard("Portrait"),
   partnershipSpotlightBoard("Landscape"),
-  memberHonorBoard("Portrait"),
-  memberHonorBoard("Landscape")
 ];
 
 const announcementBase = {
@@ -664,7 +713,7 @@ export const initialState: LanternState = {
   publishedAt: "Class of 2026 launch",
   nextScheduledEvent: "Toy Soldier Brigade recognition at 9:00 AM",
   lastBackup: "Ready for museum review",
-  donors: [...officialDonors, ...legacyDonors],
+  donors: [...officialDonors, ...confirmedGeneralDonors, ...legacyDonors],
   users: localDemoUsers,
   userPreferences: defaultUserPreferences,
   auditHistory: [],
