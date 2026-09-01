@@ -14922,3 +14922,51 @@ body.theme-light {
     -webkit-text-size-adjust: 100%;
   }
 }
+
+/* Mobile preview surfaces are deliberately square. The surrounding controls
+   * continue to scroll normally, while the rendered display has enough height
+   * to be reviewed instead of being compressed into a banner. */
+@media (max-width: 760px) {
+  .dashboard-display-tile {
+    grid-template-rows: auto auto auto auto;
+  }
+
+  .dashboard-display-preview {
+    aspect-ratio: 1 / 1;
+    min-height: 0;
+  }
+
+  .announcements-workspace .announcement-preview-stage.portrait,
+  .announcements-workspace .announcement-preview-stage.landscape {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+  }
+
+  .announcements-workspace .announcement-preview-card {
+    min-height: 0;
+  }
+
+  /* Saving an edit remains available beside the preview on phones. */
+  .announcement-preview-actions .command-button.primary {
+    display: inline-flex;
+  }
+
+  .blip-preview-column {
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+    padding: 14px;
+  }
+
+  .blip-preview-frame,
+  .blip-preview-frame.portrait {
+    width: min(100%, 430px);
+    aspect-ratio: 1 / 1;
+  }
+
+  .direct-board-stage {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+  }
+}

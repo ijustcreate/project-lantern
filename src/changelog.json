@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0445",
+    "title": "Square mobile display previews",
+    "summary": "Mobile board, announcement, Blip, and board-editor preview surfaces now use a taller square format, while announcement Save changes stays visible.",
+    "author": "Codex",
+    "createdAt": "Aug 31, 2026, 9:28 PM",
+    "areas": [
+      "Mobile previews",
+      "Announcements",
+      "Blips",
+      "Board editor"
+    ],
+    "files": [
+      "src/styles.css"
+    ],
+    "tests": "npm run build"
+  },
+  {
     "id": "DEV-0440",
     "title": "Improve mobile donor and Board Editor workflows",
     "summary": "Phone donor controls, deletion and reordering are clearer; the Board Editor keeps saved status outside its panned canvas and prevents focus zoom.",
