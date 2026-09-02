@@ -208,6 +208,7 @@ async function saveBug(request: Request, env: Env) {
 
   const now = new Date().toISOString();
   const saved: BugRecord = {
+    ...existing,
     ...input,
     bugId,
     // Submitted report copy is evidence. Keep spelling and whitespace exactly as

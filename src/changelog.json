@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0447",
+    "title": "Harden bug workflow persistence",
+    "summary": "Preserved existing diagnostics and future workflow fields in worker and development saves, and initialized desktop reports with an auditable open-status event.",
+    "author": "Codex",
+    "createdAt": "Sep 1, 2026, 7:46 PM",
+    "areas": [
+      "Bug reports",
+      "Persistence"
+    ],
+    "files": [
+      "worker/bugs.ts",
+      "vite.config.ts",
+      "src-tauri/src/lib.rs"
+    ],
+    "tests": "npm run test:bug-workflow; npm run build; npm run build:worker; git diff --check"
+  },
+  {
     "id": "DEV-0446",
     "title": "Add Assigned to Codex bug workflow",
     "summary": "Added an explicit Codex-approval status, durable milestone comments and status history, preserved report wording and screenshots, and kept native/shared saves lossless.",

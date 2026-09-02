@@ -21,6 +21,9 @@ async function saveBug(bug: any) {
   const bugId = bug.bugId.toUpperCase();
   const folder = path.join(bugRoot, bugId);
   await mkdir(folder, { recursive: true });
+  let existing: any = null;
+  try { existing = JSON.parse(await readFile(path.join(folder, "catalog.json"), "utf8")); }
+  catch { /* A new report has no catalogue entry yet. */ }
   const evidenceFolder = path.join(folder, "evidence");
   await mkdir(evidenceFolder, { recursive: true });
   const savedEvidence = [];
@@ -32,7 +35,17 @@ async function saveBug(bug: any) {
     await writeFile(path.join(evidenceFolder, safeName), Buffer.from(match[2], "base64"));
     savedEvidence.push({ name: safeName, path: path.relative(folder, path.join(evidenceFolder, safeName)), mimeType: match[1] });
   }
-  const updated = { ...bug, bugId, evidence: savedEvidence.length ? savedEvidence : (bug.evidence ?? []), attachments: savedEvidence.length ? savedEvidence.map((item) => item.path) : (bug.attachments ?? []), agentWork: bug.agentWork ?? [], folder: path.relative(process.cwd(), folder), updatedAt: bug.updatedAt || new Date().toISOString() };
+  const updated = {
+    ...existing,
+    ...bug,
+    bugId,
+    evidence: savedEvidence.length ? savedEvidence : (bug.evidence ?? existing?.evidence ?? []),
+    attachments: savedEvidence.length ? savedEvidence.map((item) => item.path) : (bug.attachments ?? existing?.attachments ?? []),
+    agentWork: bug.agentWork ?? existing?.agentWork ?? [],
+    statusHistory: bug.statusHistory ?? existing?.statusHistory ?? [],
+    folder: path.relative(process.cwd(), folder),
+    updatedAt: bug.updatedAt || new Date().toISOString()
+  };
   await writeFile(path.join(folder, "catalog.json"), JSON.stringify(updated, null, 2));
   await writeFile(path.join(folder, "report.md"), `# ${bugId}: ${updated.summary}\n\nStatus: ${updated.status}\nCreated: ${updated.createdAt}\nUpdated: ${updated.updatedAt}\nTags: ${updated.tags.join(", ")}\n\n## Details\n\n${updated.details}\n\n## Fix / test notes\n\n${updated.fixTips}\n`);
   return updated;

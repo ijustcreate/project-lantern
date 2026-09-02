@@ -1,6 +1,11 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Serialize)]
@@ -291,12 +296,23 @@ fn save_bug_report(app: AppHandle, report: BugReportInput) -> Result<String, Str
     });
     fs::write(dir.join("diagnostics.json"), serde_json::to_string_pretty(&diagnostic).unwrap()).map_err(|e| e.to_string())?;
     fs::write(dir.join("report.json"), serde_json::to_string_pretty(&report).unwrap()).map_err(|e| e.to_string())?;
+    let mut workflow_metadata = HashMap::new();
+    workflow_metadata.insert("agentWork".into(), serde_json::json!([]));
+    workflow_metadata.insert(
+        "statusHistory".into(),
+        serde_json::json!([{
+            "at": created.clone(),
+            "author": report.entered_by.clone(),
+            "to": "open",
+            "note": "Report created"
+        }]),
+    );
     let record = BugRecord {
         bug_id: bug_id.clone(), summary: report.summary.clone(), details: report.details.clone(),
         fix_tips: report.fix_tips.clone(), entered_by: Some(report.entered_by.clone()), tags: report.tags.clone(), status: "open".into(),
         created_at: created.clone(), updated_at: created.clone(), attachments: saved_attachments.clone(),
         folder: dir.display().to_string(),
-        extra: HashMap::new(),
+        extra: workflow_metadata,
     };
     fs::write(dir.join("catalog.json"), serde_json::to_string_pretty(&record).unwrap()).map_err(|e| e.to_string())?;
     let markdown = format!("# {bug_id}: {}\n\nCreated: {created}\nEntered by: {}\nTags: {}\n\n## Brief description\n\n{}\n\n## Details\n\n{}\n\n## Tips on how to fix\n\n{}\n\n## Attached evidence\n\n{}\n\n## Codex handoff\n\nStart with `diagnostics.json`, then inspect `logs/` and the screenshots. Reproduce from the Details section before changing code.\n",
