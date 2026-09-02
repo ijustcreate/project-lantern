@@ -1289,9 +1289,10 @@ function ControlCenter() {
 }
 
 type BugAttachment = { name: string; dataUrl: string };
-type BugStatus = "open" | "in-progress" | "ready-for-test" | "verified" | "closed";
+type BugStatus = "open" | "assigned-to-codex" | "in-progress" | "ready-for-test" | "verified" | "closed";
 type BugEvidence = { name: string; dataUrl?: string; path?: string; mimeType?: string };
 type AgentWorkEntry = { at: string; author: string; kind: "analysis" | "proposal" | "change" | "test" | "handoff"; note: string; replyTo?: string };
+type BugStatusHistoryEntry = { at: string; author: string; from?: BugStatus; to: BugStatus; note?: string };
 function displayBugId(bugId: string) {
   const match = bugId.match(/^BUG-(\d+)$/i);
   return match ? `BUG-${match[1].padStart(5, "0")}` : bugId;
@@ -1304,7 +1305,7 @@ function bugEvidenceImageSource(bugId: string, evidence: BugEvidence) {
   const evidenceBase = !BUG_API_ENDPOINT || BUG_API_ENDPOINT === "/__lantern/bugs" ? "/__lantern/evidence" : `${BUG_API_ENDPOINT}/evidence`;
   return `${evidenceBase}/${encodeURIComponent(bugId)}/${encodeURIComponent(fileName)}`;
 }
-type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; enteredBy?: string; stepsToReproduce?: string; expectedResult?: string; actualResult?: string; frequency?: string; impact?: string; diagnostics?: Record<string, unknown>; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[] };
+type BugRecord = { bugId: string; summary: string; details: string; fixTips: string; tags: string[]; status: BugStatus; createdAt: string; updatedAt: string; attachments: string[]; folder: string; enteredBy?: string; stepsToReproduce?: string; expectedResult?: string; actualResult?: string; frequency?: string; impact?: string; diagnostics?: Record<string, unknown>; evidence?: BugEvidence[]; agentWork?: AgentWorkEntry[]; statusHistory?: BugStatusHistoryEntry[] };
 const WEB_BUGS_KEY = "project-lantern-bug-catalog";
 const BUG_USERS_KEY = "project-lantern-bug-users";
 const ACTIVE_BUG_USER_KEY = "project-lantern-active-bug-user";
@@ -1514,7 +1515,7 @@ function BugReportPanel({ initialAttachments, captureStatus, state, view, onSave
         const now = new Date().toISOString();
         const highestBugNumber = bugs.reduce((highest, bug) => Math.max(highest, Number(bug.bugId.match(/\d+/)?.[0] ?? 0)), 0);
         const bugId = `BUG-${String(highestBugNumber + 1).padStart(5, "0")}`;
-        const record: BugRecord = { bugId, summary, details, fixTips, enteredBy, stepsToReproduce, expectedResult, actualResult, frequency, impact, diagnostics: payload.appState, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], folder: `.lantern/bugs/${bugId}` };
+        const record: BugRecord = { bugId, summary, details, fixTips, enteredBy, stepsToReproduce, expectedResult, actualResult, frequency, impact, diagnostics: payload.appState, tags: payload.tags, status: "open", createdAt: now, updatedAt: now, attachments: attachments.map((item) => item.name), evidence: attachments, agentWork: [], statusHistory: [{ at: now, author: enteredBy, to: "open", note: "Report created" }], folder: `.lantern/bugs/${bugId}` };
         bugs.unshift(record);
         writeWebBugs(bugs);
         if (BUG_API_ENDPOINT) {
@@ -1734,7 +1735,7 @@ function EvidenceViewer({ bugId, evidence, onClose }: { bugId: string; evidence:
 }
 
 function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNewBug: () => void; launcherVisible: boolean; onLauncherVisibleChange: (visible: boolean) => void }) {
-  const defaultStatusFilters: BugStatus[] = ["open", "in-progress", "ready-for-test"];
+  const defaultStatusFilters: BugStatus[] = ["open", "assigned-to-codex", "in-progress", "ready-for-test"];
   const initialActiveUser = currentBugUser();
   const readViewPreferences = (user: string) => {
     try {
@@ -1859,11 +1860,20 @@ function BugsView({ onNewBug, launcherVisible, onLauncherVisibleChange }: { onNe
   const toggleStatusFilter = (status: BugStatus) => {
     setStatusFilters((current) => current.includes(status) ? current.filter((value) => value !== status) : [...current, status]);
   };
-  const statusOrder: BugStatus[] = ["open", "in-progress", "ready-for-test", "verified", "closed"];
-  const statusLabel = (status: BugStatus) => status.replace(/-/g, " ");
-  const renderBugRow = (bug: BugRecord) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)} · Entered by {bugEnteredBy(bug)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>;
+  const statusOrder: BugStatus[] = ["open", "assigned-to-codex", "in-progress", "ready-for-test", "verified", "closed"];
+  const statusLabel = (status: BugStatus) => status === "assigned-to-codex" ? "Assigned to Codex" : status.replace(/-/g, " ");
+  const renderBugRow = (bug: BugRecord) => <div className={selected?.bugId === bug.bugId ? "bug-row active" : "bug-row"} key={bug.bugId}><button type="button" className="bug-row-main" onClick={() => setSelected({ ...bug })}><span className={`bug-status-dot ${bug.status}`} /><span><small>{displayBugId(bug.bugId)} · Entered by {bugEnteredBy(bug)}</small><strong>{bug.summary}</strong><em>{bug.tags.join(" · ") || "No tags"} · {bug.attachments.length} attachment{bug.attachments.length === 1 ? "" : "s"}</em></span></button><select className={`bug-row-status ${bug.status}`} aria-label={`Status for ${displayBugId(bug.bugId)}`} value={bug.status} onChange={(event) => void save({ ...bug, status: event.target.value as BugStatus })}><option value="open">Open</option><option value="assigned-to-codex">Assigned to Codex</option><option value="in-progress">In progress</option><option value="ready-for-test">Ready for test</option><option value="verified">Verified</option><option value="closed">Closed</option></select><ChevronRight size={17} /></div>;
   const save = async (bug: BugRecord) => {
-    const next = { ...bug, updatedAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const previous = bugs.find((item) => item.bugId === bug.bugId);
+    const statusChanged = previous && previous.status !== bug.status;
+    const next = {
+      ...bug,
+      updatedAt: now,
+      statusHistory: statusChanged
+        ? [...(bug.statusHistory ?? previous.statusHistory ?? []), { at: now, author: activeUser, from: previous.status, to: bug.status, note: bug.status === "assigned-to-codex" ? "User approved this report for a Codex fix." : undefined }]
+        : bug.statusHistory
+    };
     try {
       if (isTauri()) await invoke<BugRecord>("update_bug_report", { bug: next });
       else {
@@ -2018,6 +2028,7 @@ Please inspect the Project Lantern workspace, reproduce this issue, implement th
             }) : <small>No {commentTab === "user" ? "user comments" : "AI comments"} yet.</small>}
             {commentTab === "user" && <div className="bug-comment-composer">{replyTo !== null && <div className="reply-context">Replying to {selected.agentWork?.[replyTo]?.author}<button onClick={() => setReplyTo(null)}><X size={12} /></button></div>}<textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={replyTo === null ? `Comment as ${activeUser}…` : `Reply as ${activeUser}…`} /><button type="button" className="command-button secondary compact" disabled={!comment.trim()} onClick={addComment}><Send size={14} /> {replyTo === null ? "Add comment" : "Reply"}</button></div>}
           </div>
+          {!!selected.statusHistory?.length && <div className="bug-status-history"><strong>Status history</strong>{selected.statusHistory.map((entry, index) => <article key={`${entry.at}-${index}`}><span>{entry.from ? `${statusLabel(entry.from)} → ` : ""}{statusLabel(entry.to)}</span><small>{entry.author} · {new Date(entry.at).toLocaleString()}</small>{entry.note && <p>{entry.note}</p>}</article>)}</div>}
         </div>
         <footer className="bug-detail-actions"><button className="command-button danger" onClick={() => setPendingBugDelete(selected)}><Trash2 size={16} /> Delete bug</button><button className="command-button secondary" onClick={() => void exportBugToCodex(selected)}><ClipboardCopy size={16} /> Export to Codex</button><button className="command-button primary" onClick={() => void save(selected)}><Save size={16} /> Save changes</button></footer>
       </> : <div className="bugs-empty"><Pencil size={26} /><strong>Select a bug</strong><span>Open it here to edit details or move it to Ready for test.</span></div>}</aside>

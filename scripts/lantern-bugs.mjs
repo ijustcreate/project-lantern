@@ -3,6 +3,24 @@ import path from "node:path";
 
 const root = path.resolve(".lantern", "bugs");
 const [command = "list", argument, ...rest] = process.argv.slice(2);
+const allowedStatuses = ["open", "assigned-to-codex", "in-progress", "ready-for-test", "verified", "closed"];
+const milestones = {
+  "received": { kind: "handoff", note: "Received in morning scan." },
+  "work-started": { kind: "analysis", note: "Work started.", status: "in-progress" },
+  "implementation-complete": { kind: "change", note: "Implementation complete." },
+  "testing-started": { kind: "test", note: "Testing started." },
+  "testing-finished": { kind: "test", note: "Testing finished." },
+  "ready-for-human": { kind: "handoff", note: "Ready for human to mark fixed.", status: "ready-for-test" }
+};
+
+function changeStatus(bug, next, author = "Codex", note) {
+  if (bug.status === next) return;
+  const at = new Date().toISOString();
+  bug.statusHistory ??= [];
+  bug.statusHistory.push({ at, author, from: bug.status, to: next, ...(note ? { note } : {}) });
+  bug.status = next;
+  bug.updatedAt = at;
+}
 
 async function all() {
   let entries;
@@ -38,7 +56,8 @@ if (command === "add") {
       attachments: [],
       evidence: [],
       folder: path.join(".lantern", "bugs", bugId),
-      agentWork: []
+      agentWork: [],
+      statusHistory: [{ at: now, author: "Codex", to: "open", note: "Report created" }]
     };
     await import("node:fs/promises").then(({ mkdir }) => mkdir(folder, { recursive: true }));
     await writeFile(path.join(folder, "catalog.json"), JSON.stringify(bug, null, 2));
@@ -56,14 +75,28 @@ if (command === "add") {
 } else if (command === "status") {
   const bug = bugs.find((item) => item.bugId.toLowerCase() === (argument ?? "").toLowerCase());
   const next = rest[0];
-  const allowed = ["open", "in-progress", "ready-for-test", "verified", "closed"];
-  if (!bug || !allowed.includes(next)) {
+  if (!bug || !allowedStatuses.includes(next)) {
     console.error("Usage: npm run bugs -- status BUG-0002 in-progress");
     process.exitCode = 1;
   } else {
-    bug.status = next; bug.updatedAt = new Date().toISOString();
+    changeStatus(bug, next, "Codex", next === "assigned-to-codex" ? "Explicitly approved for a Codex fix." : undefined);
     await writeFile(path.join(root, bug.bugId, "catalog.json"), JSON.stringify(bug, null, 2));
     console.log(`${bug.bugId} is now ${next}.`);
+  }
+} else if (command === "milestone") {
+  const bug = bugs.find((item) => item.bugId.toLowerCase() === (argument ?? "").toLowerCase());
+  const milestone = milestones[rest[0]];
+  if (!bug || !milestone) {
+    console.error(`Usage: npm run bugs -- milestone BUG-0002 ${Object.keys(milestones).join("|")}`);
+    process.exitCode = 1;
+  } else {
+    const at = new Date().toISOString();
+    bug.agentWork ??= [];
+    bug.agentWork.push({ at, author: "Codex", kind: milestone.kind, note: milestone.note });
+    if (milestone.status) changeStatus(bug, milestone.status, "Codex", milestone.note);
+    bug.updatedAt = at;
+    await writeFile(path.join(root, bug.bugId, "catalog.json"), JSON.stringify(bug, null, 2));
+    console.log(`Recorded “${milestone.note}” on ${bug.bugId}.`);
   }
 } else if (command === "work") {
   const bug = bugs.find((item) => item.bugId.toLowerCase() === (argument ?? "").toLowerCase());
@@ -80,6 +113,6 @@ if (command === "add") {
     console.log(`Added ${kind} entry to ${bug.bugId}.`);
   }
 } else {
-  console.error("Usage: npm run bugs -- [add \"Summary\" \"Details\" | list | show BUG-0002 | status BUG-0002 in-progress | work BUG-0002 proposal \"note\"]");
+  console.error("Usage: npm run bugs -- [add \"Summary\" \"Details\" | list | show BUG-0002 | status BUG-0002 assigned-to-codex | milestone BUG-0002 received | work BUG-0002 proposal \"note\"]");
   process.exitCode = 1;
 }

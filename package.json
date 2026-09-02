@@ -9,6 +9,7 @@
     "build:worker": "wrangler deploy --dry-run --outdir output/worker",
     "preview": "vite preview --host 127.0.0.1",
     "bugs": "node scripts/lantern-bugs.mjs",
+    "test:bug-workflow": "node scripts/test-bug-workflow.mjs",
     "changelog": "node scripts/lantern-changelog.mjs",
     "cloudflare:deploy": "wrangler deploy",
     "cloudflare:migrate": "wrangler d1 execute project-lantern-bugs --remote --file worker/schema.sql",

@@ -1,5 +1,26 @@
 [
   {
+    "id": "DEV-0446",
+    "title": "Add Assigned to Codex bug workflow",
+    "summary": "Added an explicit Codex-approval status, durable milestone comments and status history, preserved report wording and screenshots, and kept native/shared saves lossless.",
+    "author": "Codex",
+    "createdAt": "Sep 1, 2026, 7:34 PM",
+    "areas": [
+      "Bug reports",
+      "Automation workflow"
+    ],
+    "files": [
+      "src/App.tsx",
+      "src/styles.css",
+      "worker/bugs.ts",
+      "scripts/lantern-bugs.mjs",
+      "scripts/test-bug-workflow.mjs",
+      "src-tauri/src/lib.rs",
+      "package.json"
+    ],
+    "tests": "npm run test:bug-workflow; npm run build; npm run build:worker; Playwright local selector, transition, and status-history verification"
+  },
+  {
     "id": "DEV-0445",
     "title": "Square mobile display previews",
     "summary": "Mobile board, announcement, Blip, and board-editor preview surfaces now use a taller square format, while announcement Save changes stays visible.",

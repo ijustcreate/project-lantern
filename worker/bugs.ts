@@ -19,7 +19,10 @@ type BugRecord = {
   enteredBy?: string;
   evidence?: BugEvidence[];
   agentWork?: unknown[];
+  statusHistory?: unknown[];
 };
+
+const allowedBugStatuses = new Set(["open", "assigned-to-codex", "in-progress", "ready-for-test", "verified", "closed"]);
 
 const allowedOrigins = new Set([
   "https://ijustcreate.github.io",
@@ -207,21 +210,24 @@ async function saveBug(request: Request, env: Env) {
   const saved: BugRecord = {
     ...input,
     bugId,
-    summary: String(input.summary ?? "").trim().slice(0, 300),
+    // Submitted report copy is evidence. Keep spelling and whitespace exactly as
+    // entered when workflow metadata changes; only enforce the storage ceiling.
+    summary: String(input.summary ?? "").slice(0, 300),
     details: String(input.details ?? "").slice(0, 20000),
     fixTips: String(input.fixTips ?? "").slice(0, 10000),
     tags: Array.isArray(input.tags) ? input.tags.map(String).slice(0, 20) : [],
-    status: String(input.status ?? "open").slice(0, 40),
+    status: allowedBugStatuses.has(String(input.status)) ? String(input.status) : (existing?.status ?? "open"),
     enteredBy: String(input.enteredBy ?? existing?.enteredBy ?? "Unattributed").trim().slice(0, 80) || "Unattributed",
     createdAt: existing?.createdAt ?? input.createdAt ?? now,
     updatedAt: now,
     evidence: evidence.length ? evidence : (existing?.evidence ?? []),
     attachments: evidence.length ? evidence.map((item) => item.path ?? item.name) : (existing?.attachments ?? []),
     agentWork: Array.isArray(input.agentWork) ? input.agentWork : (existing?.agentWork ?? []),
+    statusHistory: Array.isArray(input.statusHistory) ? input.statusHistory : (existing?.statusHistory ?? []),
     folder: `shared/${bugId}`
   };
 
-  if (!saved.summary) return json(request, { error: "A brief description is required" }, 400);
+  if (!saved.summary.trim()) return json(request, { error: "A brief description is required" }, 400);
   await env.BUGS_DB.prepare(`
     INSERT INTO bug_reports (bug_id, summary, status, created_at, updated_at, record_json)
     VALUES (?, ?, ?, ?, ?, ?)

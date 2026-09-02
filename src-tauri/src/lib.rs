@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::{Path, PathBuf}, process::Command};
+use std::{collections::HashMap, fs, path::{Path, PathBuf}, process::Command};
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Serialize)]
@@ -64,6 +64,10 @@ struct BugRecord {
     updated_at: String,
     attachments: Vec<String>,
     folder: String,
+    // Keep browser-added workflow history, comments, diagnostics, and evidence
+    // intact when a desktop operator changes only status or notes.
+    #[serde(default, flatten)]
+    extra: HashMap<String, serde_json::Value>,
 }
 
 fn bug_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -292,6 +296,7 @@ fn save_bug_report(app: AppHandle, report: BugReportInput) -> Result<String, Str
         fix_tips: report.fix_tips.clone(), entered_by: Some(report.entered_by.clone()), tags: report.tags.clone(), status: "open".into(),
         created_at: created.clone(), updated_at: created.clone(), attachments: saved_attachments.clone(),
         folder: dir.display().to_string(),
+        extra: HashMap::new(),
     };
     fs::write(dir.join("catalog.json"), serde_json::to_string_pretty(&record).unwrap()).map_err(|e| e.to_string())?;
     let markdown = format!("# {bug_id}: {}\n\nCreated: {created}\nEntered by: {}\nTags: {}\n\n## Brief description\n\n{}\n\n## Details\n\n{}\n\n## Tips on how to fix\n\n{}\n\n## Attached evidence\n\n{}\n\n## Codex handoff\n\nStart with `diagnostics.json`, then inspect `logs/` and the screenshots. Reproduce from the Details section before changing code.\n",
