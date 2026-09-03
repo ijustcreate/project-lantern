@@ -1,5 +1,19 @@
 [
   {
+    "id": "DEV-0448",
+    "title": "Retire Project Lantern Pages site",
+    "summary": "The former Project Lantern address now presents a clear link to the Toy Soldier Brigade recognition-board site.",
+    "author": "Codex",
+    "createdAt": "Sep 3, 2026, 10:51 AM",
+    "areas": [
+      "Deployment"
+    ],
+    "files": [
+      "index.html"
+    ],
+    "tests": "GITHUB_ACTIONS=true npm run build"
+  },
+  {
     "id": "DEV-0447",
     "title": "Harden bug workflow persistence",
     "summary": "Preserved existing diagnostics and future workflow fields in worker and development saves, and initialized desktop reports with an auditable open-status event.",
