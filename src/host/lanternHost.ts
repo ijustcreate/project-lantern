@@ -31,6 +31,11 @@ const configuredReadEndpoint = (import.meta.env.VITE_LANTERN_READ_ENDPOINT as st
 // shared writes outside a production build.
 const LANTERN_READ_SERVICE_ROOT = configuredReadEndpoint.replace(/\/bugs\/?$/, "");
 const LANTERN_WRITE_SERVICE_ROOT = import.meta.env.DEV ? "" : configuredWriteEndpoint.replace(/\/bugs\/?$/, "");
+// WebSocket traffic carries short-lived display heartbeats and WebRTC signaling,
+// not persisted board data. A phone opened through the read-only development
+// address must still be able to find an already-open museum display and route
+// its live stream to it.
+const LANTERN_REALTIME_SERVICE_ROOT = LANTERN_WRITE_SERVICE_ROOT || LANTERN_READ_SERVICE_ROOT;
 const LEGACY_CONTENT_MIGRATION_VERSION = 3;
 const MAX_AUDIT_HISTORY = 350;
 const MAX_BROADCAST_REMINDER_ACKNOWLEDGEMENTS = 250;
@@ -83,8 +88,8 @@ function legacySignalKey(message: HostMessage) {
 }
 
 function realtimeSocketUrl() {
-  if (!LANTERN_WRITE_SERVICE_ROOT) return "";
-  const url = new URL(`${LANTERN_WRITE_SERVICE_ROOT}/live`);
+  if (!LANTERN_REALTIME_SERVICE_ROOT) return "";
+  const url = new URL(`${LANTERN_REALTIME_SERVICE_ROOT}/live`);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 }
@@ -121,7 +126,7 @@ function ensureRealtimeSocket() {
 }
 
 function postRealtime(message: WireHostMessage) {
-  if (!LANTERN_WRITE_SERVICE_ROOT) return;
+  if (!LANTERN_REALTIME_SERVICE_ROOT) return;
   if (realtimeSocket?.readyState === WebSocket.OPEN) {
     realtimeSocket.send(JSON.stringify({ sender: realtimeClientId, message } satisfies RealtimeEnvelope));
     return;

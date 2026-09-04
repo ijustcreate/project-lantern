@@ -6175,10 +6175,11 @@ function LivePreviewPanel({
   const cameraOptions = deviceOptionList(cameraDevices, "Default camera", "Camera");
   const micOptions = deviceOptionList(micDevices, "Default mic", "Mic");
   const allScreens = Object.values(state.screens);
-  // Persisted ownership, rather than local presence pings, is the authority for
-  // where a phone broadcast is allowed to route. Presence remains useful only
-  // for delivery telemetry below.
-  const openTargetOptions = openedBoardIds(state);
+  // A phone may be running a newer shared snapshot than the dashboard that
+  // originally opened the board. Route only to displays reporting a current
+  // heartbeat; persisted ownership is a short startup fallback until those
+  // heartbeats arrive.
+  const openTargetOptions = openDisplayIds.length ? openDisplayIds : openedBoardIds(state);
   const openScreens = allScreens.filter((screen) => openTargetOptions.includes(screen.id));
   const openTargetLabels = Object.fromEntries(openScreens.map((screen) => [screen.id, `${screen.label} (${screen.orientation})`]));
   const previewScreen = state.screens[state.live.target] ?? allScreens[0];
@@ -6922,6 +6923,7 @@ function LivePreviewPanel({
           <LabeledInput label="Message" value={state.live.lowerThird} onChange={(lowerThird) => patchLive({ lowerThird })} />
           <LabeledSelect label="Broadcast to" value={openTargetOptions.includes(state.live.target as ScreenId) ? state.live.target : ""} options={["", ...openTargetOptions]} optionLabels={{ "": openTargetOptions.length ? "Choose an open display" : "No displays are open" , ...openTargetLabels }} onChange={(target) => target && patchLive({ target: target as TargetScreen })} />
           <label className="switch-row phone-background-removal"><input type="checkbox" checked={backgroundRemoval.enabled} onChange={(event) => setBackgroundRemovalEnabled(event.target.checked)} /><span>Remove background</span></label>
+          <label className="switch-row phone-audio-capture"><input type="checkbox" checked={state.live.audioEnabled !== false} onChange={(event) => patchLive({ audioEnabled: event.target.checked })} /><span><strong>Use mic</strong><small>Your phone microphone is sent to the display when its sound is on. Restart the camera after changing this.</small></span></label>
         </div>}
         {phoneMode && state.live.active && <PhoneBroadcastDelivery screen={previewScreen} delivery={previewScreen ? displayDelivery[previewScreen.id] : undefined} />}
         <footer className="phone-broadcast-actions">
