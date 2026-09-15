@@ -19,6 +19,7 @@ import "@babylonjs/core/Meshes/Builders/tubeBuilder";
 import type { Announcement, Blip, BoardDonorAnimation, BoardDonorHighlight, DisplayProfile, Donor, LanternState, RecognitionIcon, ScreenId } from "../types";
 import { boardUsesDonorAnimation, resolveBoardDonorPresentation, type ResolvedBoardDonorPresentation } from "../boardPresentation";
 import { buildDonorNameGridLayout, splitDonorNameLines } from "../donorNameLayout";
+import { sortPanelDonors } from "../donorName";
 import { resolveActiveBoardProgram } from "../scheduleResolution";
 
 interface BabylonDonorWallProps {
@@ -1118,10 +1119,10 @@ function drawComposableBoard(
     }
 
     if (panel.type === "donors") {
-      const panelDonors = donors.filter((donor) =>
+      const panelDonors = sortPanelDonors(donors.filter((donor) =>
         (panel.donorIds === undefined || panel.donorIds.includes(donor.id))
         && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
-      );
+      ), panel);
       const columns = panel.columns ?? program.columns;
       const nameFontUnit = Math.max(8, requestedSize * height / authoredCanvasHeight);
       const rows = panel.rows ?? Math.max(1, Math.ceil(panelDonors.length / columns));

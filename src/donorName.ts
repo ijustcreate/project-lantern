@@ -1,4 +1,14 @@
-import type { Donor } from "./types";
+import type { BoardPanel, Donor } from "./types";
+
+export function sortPanelDonors(donors: Donor[], panel: Pick<BoardPanel, "donorSort" | "donorIds">): Donor[] {
+  const mode = panel.donorSort ?? "manual";
+  return [...donors].sort((a, b) => {
+    if (mode === "manual") return panel.donorIds ? panel.donorIds.indexOf(a.id) - panel.donorIds.indexOf(b.id) : 0;
+    const comparison = donorSortKey(a, mode).localeCompare(donorSortKey(b, mode), undefined, { sensitivity: "base" })
+      || donorDisplayName(a).localeCompare(donorDisplayName(b), undefined, { sensitivity: "base" });
+    return mode.endsWith("-desc") ? -comparison : comparison;
+  });
+}
 
 export function donorDisplayName(donor: Donor): string {
   const legacyPeople = !donor.firstName && !donor.lastName ? parseLegacyPeople(donor.name) : [];

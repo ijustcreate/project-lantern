@@ -1,5 +1,23 @@
 [
   {
+    "id": "DEV-0648",
+    "title": "Honor alphabetical donor order on boards",
+    "summary": "Apply the selected donor-list order consistently in the inspector, board preview, and TV renderer before limiting visible names to grid capacity.",
+    "author": "Codex",
+    "createdAt": "Sep 15, 2026, 11:26 AM",
+    "areas": [
+      "Donor lists",
+      "Board display"
+    ],
+    "files": [
+      "src/donorName.ts",
+      "src/App.tsx",
+      "src/display/BabylonDonorWall.tsx",
+      "scripts/test-donor-panel-sort.mjs"
+    ],
+    "tests": "npm run build; node scripts/test-donor-panel-sort.mjs; npm run test:donor-roster-membership"
+  },
+  {
     "id": "DEV-0646",
     "title": "Fix install app dialog readability",
     "summary": "Improved contrast for the Chrome Setup fallback popup so its title, instructions, and note remain readable against the dark dialog surface.",

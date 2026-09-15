@@ -96,7 +96,7 @@ import { VisitorMessageFooter } from "./components/VisitorMessageFooter";
 import { VisitorMessageManager } from "./components/VisitorMessageManager";
 import { LanternConfirmDialog, LanternNotice, LanternTextPromptDialog } from "./components/LanternDialog";
 import { parseCurrencyAmount } from "./donorDomain";
-import { donorDisplayName, donorSortKey } from "./donorName";
+import { donorDisplayName, donorSortKey, sortPanelDonors } from "./donorName";
 import { buildDonorNameGridLayout, splitDonorNameLines } from "./donorNameLayout";
 import { donorRosterFacetOptions, donorRosterFacets, filterDonorRoster, materializeDonorPanelMembership, updateDonorRosterMembership } from "./donorRoster";
 import { AnimatedDonorName, BoardDonorPresentationEditor, FontPicker, recognitionIconGlyph } from "./components/BoardDonorPresentationEditor";
@@ -4199,17 +4199,11 @@ function ThemeStudio({
       const sortKey = rosterSort === "last-name-asc" ? "last-name" : rosterSort === "first-name-asc" ? "first-name" : rosterSort;
       return donorSortKey(a, sortKey).localeCompare(donorSortKey(b, sortKey)) || a.name.localeCompare(b.name);
     });
-  const donorListRoster = selectedDonorListIds
+  const donorListRoster = sortPanelDonors(selectedDonorListIds
     .map((donorId) => state.donors.find((donor) => donor.id === donorId))
     .filter((donor): donor is Donor => donor !== undefined)
     .filter((donor) => donor.active && (!selectedDonorTierFilters.length || selectedDonorTierFilters.includes(donor.tier)))
-    .sort((a, b) => {
-      const mode = selectedPanel?.type === "donors" ? selectedPanel.donorSort ?? "manual" : "manual";
-      if (mode === "manual") return 0;
-      const sortKey = mode === "first-name" || mode === "last-name" || mode.endsWith("-desc") ? mode : "last-name";
-      const comparison = donorSortKey(a, sortKey).localeCompare(donorSortKey(b, sortKey));
-      return mode.endsWith("-desc") ? -comparison : comparison || a.name.localeCompare(b.name);
-    }) ?? [];
+    , selectedPanel?.type === "donors" ? selectedPanel : {});
   const donorListColumns = selectedPanel?.type === "donors" ? selectedPanel.columns ?? selectedProgram?.columns ?? 1 : 1;
   const donorListRows = selectedPanel?.type === "donors" ? selectedPanel.rows ?? Math.max(1, Math.ceil(donorListRoster.length / donorListColumns)) : 1;
   const donorListCapacity = donorListRows * donorListColumns;
@@ -4975,10 +4969,10 @@ function DirectBoardCanvas({
     .map((id) => state.donors.find((donor) => donor.id === id))
     .filter((donor): donor is Donor => Boolean(donor?.active));
   const palette = boardPreviewPalette(program.palette);
-  const panelDonors = (panel: BoardPanel) => donors.filter((donor) =>
+  const panelDonors = (panel: BoardPanel) => sortPanelDonors(donors.filter((donor) =>
     (panel.donorIds === undefined || panel.donorIds.includes(donor.id))
     && (!panel.donorTierFilter?.length || panel.donorTierFilter.includes(donor.tier))
-  );
+  ), panel);
   const commitText = (panel: BoardPanel, field: "eyebrow" | "title" | "body", value: string) => onPatch(panel.id, { [field]: value });
   const beginManipulation = (event: React.PointerEvent, panel: BoardPanel, mode: "move" | "resize", edge = "") => {
     if (event.button !== 0) return;
