@@ -4128,17 +4128,15 @@ function ThemeStudio({
   const draftStateRef = useRef(draftState);
   const [savedDraftSnapshot, setSavedDraftSnapshot] = useState(() => boardEditorDraftSnapshot(savedState));
   const observedSavedSnapshot = useRef(boardEditorDraftSnapshot(savedState));
-  const pendingSavedBoardSnapshot = useRef<string | null>(null);
+  const pendingSavedBoardSnapshot = useRef<{ snapshot: string; state: LanternState } | null>(null);
   const state = draftState;
   const draftSnapshot = boardEditorDraftSnapshot(draftState);
   const incomingSavedSnapshot = boardEditorDraftSnapshot(savedState);
   const hasUnsavedChanges = draftSnapshot !== savedDraftSnapshot;
   const updateDraftState = useCallback((updater: (current: LanternState) => LanternState) => {
-    setDraftState((current) => {
-      const next = updater(current);
-      draftStateRef.current = next;
-      return next;
-    });
+    const next = updater(draftStateRef.current);
+    draftStateRef.current = next;
+    setDraftState(next);
   }, []);
   const display = state.screens[selectedDisplayId] ?? Object.values(state.screens)[0];
   const [selectedProgramId, setSelectedProgramId] = useState(() => state.boardPrograms.some((program) => program.id === requestedBoardId) ? requestedBoardId! : resolveDisplayedBoardProgramId(state, display.id));
@@ -4268,9 +4266,11 @@ function ThemeStudio({
     // to other surfaces. Ignore older relay messages during that handoff so a
     // just-saved board never briefly renders an unrelated prior version.
     if (pendingSavedBoardSnapshot.current) {
-      if (incomingSavedSnapshot === pendingSavedBoardSnapshot.current) {
+      if (incomingSavedSnapshot === pendingSavedBoardSnapshot.current.snapshot) {
+        // Rebase edits made while persistence was pending onto its acknowledgement.
+        // The submitted state is the baseline, never the current unsaved draft.
+        const nextDraft = mergeConcurrentState(pendingSavedBoardSnapshot.current.state, draftStateRef.current, savedState);
         pendingSavedBoardSnapshot.current = null;
-        const nextDraft = structuredClone(savedState);
         draftStateRef.current = nextDraft;
         setDraftState(nextDraft);
         setSavedDraftSnapshot(incomingSavedSnapshot);
@@ -4554,7 +4554,7 @@ function ThemeStudio({
     if (currentDraftSnapshot === savedDraftSnapshot) return;
     setSaveStatus("saving");
     const savedBoardSnapshot = currentDraftSnapshot;
-    pendingSavedBoardSnapshot.current = savedBoardSnapshot;
+    pendingSavedBoardSnapshot.current = { snapshot: savedBoardSnapshot, state: currentDraft };
     const boardDraft = {
       ...savedState,
       board: currentDraft.board,

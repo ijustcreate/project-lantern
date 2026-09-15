@@ -18,6 +18,22 @@
     "tests": "npm run build; node scripts/test-donor-panel-sort.mjs; npm run test:donor-roster-membership"
   },
   {
+    "id": "DEV-0647",
+    "title": "Preserve donor edits while board saves finish",
+    "summary": "Keep newer donor-list and formatting edits when an earlier board save returns to the editor. Refresh the draft reference synchronously so immediate saves use current edits.",
+    "author": "Codex",
+    "createdAt": "Sep 15, 2026, 11:25 AM",
+    "areas": [
+      "Board Editor",
+      "Donor lists"
+    ],
+    "files": [
+      "src/App.tsx",
+      "scripts/test-board-save-handoff.mjs"
+    ],
+    "tests": "Board save handoff regression, concurrent merge, state preservation, state authority, donor roster membership, and production build passed"
+  },
+  {
     "id": "DEV-0646",
     "title": "Fix install app dialog readability",
     "summary": "Improved contrast for the Chrome Setup fallback popup so its title, instructions, and note remain readable against the dark dialog surface.",
