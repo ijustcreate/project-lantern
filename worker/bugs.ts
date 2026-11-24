@@ -162,18 +162,72 @@ function rawJson(request: Request, value: string, status = 200, extraHeaders: Re
 }
 
 /** A hibernating, metadata-only WebSocket room. WebRTC media never passes through it. */
+type LiveRoomAttachment = {
+  networkAddress?: string;
+  userAgent?: string;
+  connectedAt?: string;
+  screenId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  online?: boolean;
+};
+
+type DisplayHistoryEvent = {
+  screenId: string;
+  deviceName: string;
+  status: "opened" | "closed" | "offline" | "online";
+  at: number;
+};
+
+/**
+ * Hibernating WebSocket room for display discovery and WebRTC signaling.
+ *
+ * Presence heartbeats are intentionally NOT written to Durable Object storage.
+ * A display used to persist two SQLite-backed values every ~1.8 seconds, which
+ * could exhaust the 100k rows_written free-tier allowance with a single TV.
+ * Connected WebSockets are the live-session source of truth; storage is used
+ * only for sparse lifecycle history.
+ */
 export class MuseumLiveRoom {
   constructor(private state: DurableObjectState) {}
+
+  private async appendHistory(event: DisplayHistoryEvent) {
+    const history = (await this.state.storage.get<DisplayHistoryEvent[]>("display-history")) ?? [];
+    const previous = history[history.length - 1];
+    // Avoid duplicate close/offline events emitted during a fast page teardown.
+    if (previous
+      && previous.screenId === event.screenId
+      && previous.deviceName === event.deviceName
+      && previous.status === event.status
+      && event.at - previous.at < 2_000) return;
+    history.push(event);
+    if (history.length > 100) history.splice(0, history.length - 100);
+    await this.state.storage.put("display-history", history);
+  }
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
-      const sessions = (await this.state.storage.get<Record<string, Record<string, unknown>>>("display-sessions")) ?? {};
-      const history = (await this.state.storage.get<unknown[]>("display-history")) ?? [];
+
+      // A connected socket is already an authoritative liveness signal. Do not
+      // mirror heartbeats into SQLite just to reconstruct this list.
+      const sessionsByDevice = new Map<string, Record<string, unknown>>();
       const now = Date.now();
-      const active = Object.values(sessions).filter((item) => item.online !== false && now - Number(item.serverSeenAt ?? 0) <= 5_000).map(({ networkAddress: _networkAddress, userAgent: _userAgent, ...safe }) => safe);
-      return Response.json({ sessions: active, history: history.slice(-100) });
+      for (const socket of this.state.getWebSockets()) {
+        const attachment = socket.deserializeAttachment() as LiveRoomAttachment | null;
+        if (!attachment?.screenId || !attachment.deviceId || attachment.online === false) continue;
+        sessionsByDevice.set(attachment.deviceId, {
+          screenId: attachment.screenId,
+          deviceId: attachment.deviceId,
+          deviceName: attachment.deviceName ?? "Display browser",
+          serverSeenAt: now,
+          online: true
+        });
+      }
+      const history = (await this.state.storage.get<DisplayHistoryEvent[]>("display-history")) ?? [];
+      return Response.json({ sessions: [...sessionsByDevice.values()], history: history.slice(-100) });
     }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.state.acceptWebSocket(server);
@@ -181,43 +235,70 @@ export class MuseumLiveRoom {
       networkAddress: request.headers.get("CF-Connecting-IP") ?? undefined,
       userAgent: request.headers.get("User-Agent") ?? undefined,
       connectedAt: new Date().toISOString()
-    });
+    } satisfies LiveRoomAttachment);
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(sender: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (typeof message !== "string" || message.length > 250_000) return;
     try {
-      const envelope = JSON.parse(message) as { sender?: string; message?: { type?: string; screenId?: string; deviceId?: string; deviceName?: string; userAgent?: string; timestamp?: string; status?: "closed" | "offline" | "online" } };
-      const presence = envelope.message;
-      if ((presence?.type === "display-presence" || presence?.type === "display-session-status") && presence.screenId && presence.deviceId) {
-        const attachment = sender.deserializeAttachment() as { networkAddress?: string; userAgent?: string } | null;
-        const sessions = (await this.state.storage.get<Record<string, unknown>>("display-sessions")) ?? {};
-        const now = Date.now();
-        for (const [key, value] of Object.entries(sessions)) {
-          const seenAt = typeof (value as { serverSeenAt?: number }).serverSeenAt === "number" ? (value as { serverSeenAt: number }).serverSeenAt : 0;
-          if (now - seenAt > 15_000) delete sessions[key];
-        }
-        const prior = sessions[presence.deviceId] as { serverSeenAt?: number } | undefined;
-        const status = presence.type === "display-presence" ? "opened" : presence.status!;
-        const history = (await this.state.storage.get<Array<Record<string, unknown>>>("display-history")) ?? [];
-        if (status !== "opened" || !prior || now - Number(prior.serverSeenAt ?? 0) > 5_000) history.push({ screenId: presence.screenId, deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120), status, at: now });
-        if (history.length > 100) history.splice(0, history.length - 100);
-        await this.state.storage.put("display-history", history);
-        sessions[presence.deviceId] = {
-          screenId: presence.screenId,
-          deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120),
-          userAgent: String(presence.userAgent ?? attachment?.userAgent ?? "").slice(0, 500),
-          networkAddress: attachment?.networkAddress,
-          serverSeenAt: now,
-          online: status !== "offline" && status !== "closed"
+      const envelope = JSON.parse(message) as {
+        sender?: string;
+        message?: {
+          type?: string;
+          screenId?: string;
+          deviceId?: string;
+          deviceName?: string;
+          userAgent?: string;
+          timestamp?: string;
+          status?: "closed" | "offline" | "online";
         };
-        await this.state.storage.put("display-sessions", sessions);
+      };
+      const presence = envelope.message;
+      if ((presence?.type === "display-presence" || presence?.type === "display-session-status")
+        && presence.screenId
+        && presence.deviceId) {
+        const attachment = (sender.deserializeAttachment() as LiveRoomAttachment | null) ?? {};
+        const status = presence.type === "display-presence" ? "opened" : presence.status!;
+        const nextOnline = status !== "offline" && status !== "closed";
+        const firstSession = !attachment.screenId || !attachment.deviceId;
+        const identityChanged = attachment.screenId !== presence.screenId || attachment.deviceId !== presence.deviceId;
+        const lifecycleMessage = presence.type === "display-session-status";
+
+        // Persist attachment metadata only when a session is established or its
+        // lifecycle changes. Routine presence heartbeats stay memory/CPU-only.
+        if (firstSession
+          || identityChanged
+          || lifecycleMessage
+          || attachment.deviceName !== presence.deviceName
+          || attachment.userAgent !== presence.userAgent) {
+          sender.serializeAttachment({
+            ...attachment,
+            screenId: presence.screenId,
+            deviceId: presence.deviceId,
+            deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120),
+            userAgent: String(presence.userAgent ?? attachment.userAgent ?? "").slice(0, 500),
+            online: nextOnline
+          } satisfies LiveRoomAttachment);
+        }
+
+        // History is low-frequency operational evidence. Heartbeats must never
+        // create history rows or storage writes.
+        if (firstSession || identityChanged || lifecycleMessage) {
+          await this.appendHistory({
+            screenId: presence.screenId,
+            deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120),
+            status,
+            at: Date.now()
+          });
+        }
       }
     } catch {
       // Signaling can be relayed without telemetry if a client sends a legacy payload.
     }
-    // SDP and ICE candidates are tiny; relay only signaling, never camera media.
+
+    // SDP, ICE, state updates, and presence are relayed only; camera media never
+    // passes through the Worker.
     for (const socket of this.state.getWebSockets()) if (socket !== sender) socket.send(message);
   }
 }
