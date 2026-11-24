@@ -15,6 +15,7 @@
     "test:state-authority": "node scripts/test-state-authority.mjs",
     "test:state-preservation": "node scripts/test-state-preservation.mjs",
     "test:shared-state-worker": "node scripts/test-shared-state-worker.mjs",
+    "test:live-room-heartbeats": "node scripts/test-live-room-heartbeats.mjs",
     "test:sideways-mounted-display": "node scripts/test-sideways-mounted-display.mjs",
     "test:tv-safe-board-renderer": "node scripts/test-tv-safe-board-renderer.mjs",
     "test:donor-roster-membership": "node scripts/test-donor-roster-membership.mjs",

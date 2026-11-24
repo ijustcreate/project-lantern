@@ -54,8 +54,9 @@ integration are retired; their source remains in the Version 1 backup branches.
 Display routes request the browser's
 [Screen Wake Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API)
 and retry the request when the page becomes visible or focused and once per
-minute if no lock is held. The existing five-second content poll keeps boards
-current; it does not simulate remote-control input or physically switch TV
+minute if no lock is held. Realtime updates keep boards current, with a
+30-second shared-state poll as a fallback when a display misses a live update;
+neither mechanism simulates remote-control input or physically switches TV
 power. Physical off/wake based on the schedule requires a verified TV-control
 transport and an awake, connected PC agent. That hardware integration is a
 separate Version 2 acceptance requirement, not a completed browser feature.

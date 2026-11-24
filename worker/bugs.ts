@@ -161,17 +161,56 @@ function rawJson(request: Request, value: string, status = 200, extraHeaders: Re
   });
 }
 
+type DisplaySessionAttachment = {
+  networkAddress?: string;
+  userAgent?: string;
+  connectedAt: string;
+  screenId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  lastStatus?: "opened" | "closed" | "offline" | "online";
+  statusUpdatedAt?: number;
+};
+
 /** A hibernating, metadata-only WebSocket room. WebRTC media never passes through it. */
 export class MuseumLiveRoom {
   constructor(private state: DurableObjectState) {}
 
+  private async appendDisplayHistory(event: {
+    screenId: string;
+    deviceName: string;
+    status: "opened" | "closed" | "offline" | "online";
+    at: number;
+  }) {
+    const history = (await this.state.storage.get<Array<Record<string, unknown>>>("display-history")) ?? [];
+    history.push(event);
+    if (history.length > 100) history.splice(0, history.length - 100);
+    await this.state.storage.put("display-history", history);
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade") !== "websocket") {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
-      const sessions = (await this.state.storage.get<Record<string, Record<string, unknown>>>("display-sessions")) ?? {};
       const history = (await this.state.storage.get<unknown[]>("display-history")) ?? [];
       const now = Date.now();
-      const active = Object.values(sessions).filter((item) => item.online !== false && now - Number(item.serverSeenAt ?? 0) <= 5_000).map(({ networkAddress: _networkAddress, userAgent: _userAgent, ...safe }) => safe);
+
+      // Presence is ephemeral. The open hibernating WebSockets are the source
+      // of truth; persisting a session row for every heartbeat previously
+      // generated two Durable Object writes per heartbeat and exhausted the
+      // free-tier rows_written allowance every day.
+      const active = this.state.getWebSockets().flatMap((socket) => {
+        const attachment = socket.deserializeAttachment() as DisplaySessionAttachment | null;
+        if (!attachment?.screenId || !attachment.deviceId) return [];
+        if (attachment.lastStatus === "offline" || attachment.lastStatus === "closed") return [];
+        return [{
+          screenId: attachment.screenId,
+          deviceId: attachment.deviceId,
+          deviceName: attachment.deviceName ?? "Display browser",
+          serverSeenAt: now,
+          online: true
+        }];
+      });
+
       return Response.json({ sessions: active, history: history.slice(-100) });
     }
     const pair = new WebSocketPair();
@@ -181,7 +220,7 @@ export class MuseumLiveRoom {
       networkAddress: request.headers.get("CF-Connecting-IP") ?? undefined,
       userAgent: request.headers.get("User-Agent") ?? undefined,
       connectedAt: new Date().toISOString()
-    });
+    } satisfies DisplaySessionAttachment);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -191,34 +230,64 @@ export class MuseumLiveRoom {
       const envelope = JSON.parse(message) as { sender?: string; message?: { type?: string; screenId?: string; deviceId?: string; deviceName?: string; userAgent?: string; timestamp?: string; status?: "closed" | "offline" | "online" } };
       const presence = envelope.message;
       if ((presence?.type === "display-presence" || presence?.type === "display-session-status") && presence.screenId && presence.deviceId) {
-        const attachment = sender.deserializeAttachment() as { networkAddress?: string; userAgent?: string } | null;
-        const sessions = (await this.state.storage.get<Record<string, unknown>>("display-sessions")) ?? {};
+        const previous = (sender.deserializeAttachment() as DisplaySessionAttachment | null) ?? { connectedAt: new Date().toISOString() };
         const now = Date.now();
-        for (const [key, value] of Object.entries(sessions)) {
-          const seenAt = typeof (value as { serverSeenAt?: number }).serverSeenAt === "number" ? (value as { serverSeenAt: number }).serverSeenAt : 0;
-          if (now - seenAt > 15_000) delete sessions[key];
+        const screenChanged = previous.screenId !== presence.screenId || previous.deviceId !== presence.deviceId;
+        const deviceName = String(presence.deviceName ?? previous.deviceName ?? "Display browser").slice(0, 120);
+        const userAgent = String(presence.userAgent ?? previous.userAgent ?? "").slice(0, 500);
+        const nextStatus: DisplaySessionAttachment["lastStatus"] = presence.type === "display-session-status"
+          ? presence.status
+          : screenChanged || !previous.lastStatus
+            ? "opened"
+            : previous.lastStatus === "offline"
+              ? "online"
+              : previous.lastStatus;
+        const statusChanged = nextStatus !== previous.lastStatus;
+        const metadataChanged = screenChanged || deviceName !== previous.deviceName || userAgent !== previous.userAgent;
+
+        // serializeAttachment persists only when identity/status changes. A
+        // routine display-presence heartbeat now performs zero storage writes.
+        if (metadataChanged || statusChanged) {
+          sender.serializeAttachment({
+            ...previous,
+            screenId: presence.screenId,
+            deviceId: presence.deviceId,
+            deviceName,
+            userAgent,
+            lastStatus: nextStatus,
+            statusUpdatedAt: now
+          } satisfies DisplaySessionAttachment);
         }
-        const prior = sessions[presence.deviceId] as { serverSeenAt?: number } | undefined;
-        const status = presence.type === "display-presence" ? "opened" : presence.status!;
-        const history = (await this.state.storage.get<Array<Record<string, unknown>>>("display-history")) ?? [];
-        if (status !== "opened" || !prior || now - Number(prior.serverSeenAt ?? 0) > 5_000) history.push({ screenId: presence.screenId, deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120), status, at: now });
-        if (history.length > 100) history.splice(0, history.length - 100);
-        await this.state.storage.put("display-history", history);
-        sessions[presence.deviceId] = {
-          screenId: presence.screenId,
-          deviceName: String(presence.deviceName ?? "Display browser").slice(0, 120),
-          userAgent: String(presence.userAgent ?? attachment?.userAgent ?? "").slice(0, 500),
-          networkAddress: attachment?.networkAddress,
-          serverSeenAt: now,
-          online: status !== "offline" && status !== "closed"
-        };
-        await this.state.storage.put("display-sessions", sessions);
+
+        if (screenChanged || statusChanged) {
+          await this.appendDisplayHistory({
+            screenId: presence.screenId,
+            deviceName,
+            status: nextStatus ?? "opened",
+            at: now
+          });
+        }
       }
     } catch {
       // Signaling can be relayed without telemetry if a client sends a legacy payload.
     }
     // SDP and ICE candidates are tiny; relay only signaling, never camera media.
     for (const socket of this.state.getWebSockets()) if (socket !== sender) socket.send(message);
+  }
+
+  async webSocketClose(sender: WebSocket): Promise<void> {
+    try {
+      const attachment = sender.deserializeAttachment() as DisplaySessionAttachment | null;
+      if (!attachment?.screenId || !attachment.deviceId || attachment.lastStatus === "closed") return;
+      await this.appendDisplayHistory({
+        screenId: attachment.screenId,
+        deviceName: attachment.deviceName ?? "Display browser",
+        status: "closed",
+        at: Date.now()
+      });
+    } catch {
+      // Presence history is diagnostic only; a closing socket must not fail cleanup.
+    }
   }
 }
 
