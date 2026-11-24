@@ -434,7 +434,7 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
       onStream(null);
     }
   });
-  const presenceTimer = window.setInterval(announcePresence, 1800);
+  const presenceTimer = window.setInterval(announcePresence, 15_000);
   const telemetryTimer = window.setInterval(() => {
     if (!peer || peer.connectionState !== "connected") return;
     void peer.getStats().then((stats) => {
@@ -449,7 +449,7 @@ export function attachDisplayVideoReceiver(screenId: ScreenId, onStream: StreamL
       });
       channel.post({ type: "display-video-status", screenId, status: "receiving", timestamp: new Date().toISOString(), detail: "Display is receiving video.", fps, bitrateKbps } satisfies HostMessage);
     }).catch(() => undefined);
-  }, 2500);
+  }, 10_000);
   announcePresence();
   const announceOnline = () => { announceSessionStatus("online"); announcePresence(); };
   const announceOffline = () => announceSessionStatus("offline");
