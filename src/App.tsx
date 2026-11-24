@@ -10341,7 +10341,7 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
       }
     };
     void refreshLiveState();
-    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
+    const interval = window.setInterval(() => void refreshLiveState(), 30_000);
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") {
         refreshGuard.current.receivedLiveUpdate();
@@ -10441,7 +10441,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       }
     };
     void refreshLiveState();
-    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
+    const interval = window.setInterval(() => void refreshLiveState(), 30_000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshLiveState();
     };
