@@ -22,7 +22,8 @@
     "cloudflare:deploy": "wrangler deploy",
     "cloudflare:migrate": "wrangler d1 execute project-lantern-bugs --remote --file worker/schema.sql",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "test:live-room-storage": "node scripts/test-live-room-storage.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^8.36.0",
