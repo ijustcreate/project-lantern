@@ -1,5 +1,22 @@
 [
   {
+    "id": "DEV-0601",
+    "title": "Throttle live display telemetry",
+    "summary": "Reduced display presence heartbeats and video telemetry frequency, and widened local liveness windows so realtime display monitoring stays accurate while the Cloudflare live room handles far fewer messages.",
+    "author": "Alfie",
+    "createdAt": "Nov 23, 2026, 5:03 PM",
+    "areas": [
+      "Display delivery",
+      "Cloudflare",
+      "Performance"
+    ],
+    "files": [
+      "src/host/videoBridge.ts",
+      "src/App.tsx"
+    ],
+    "tests": "npm run build; npm run build:worker; npm run test:live-room-heartbeats"
+  },
+  {
     "id": "DEV-0600",
     "title": "Stop Cloudflare heartbeat write amplification",
     "summary": "Display presence now uses hibernating WebSocket attachments instead of persisting session snapshots on every heartbeat, lifecycle history writes only when status changes, and display state polling falls back every 30 seconds instead of every five seconds.",
