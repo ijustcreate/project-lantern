@@ -1,5 +1,25 @@
 [
   {
+    "id": "DEV-0600",
+    "title": "Stop Cloudflare display heartbeat write amplification",
+    "summary": "Display presence now uses connected WebSockets instead of persisting every heartbeat to Durable Object storage, presence and video telemetry are throttled, and display state polling is a 30-second fallback to reduce Workers CPU load while realtime updates remain immediate.",
+    "author": "Alfie",
+    "createdAt": "Nov 23, 2026, 4:52 PM",
+    "areas": [
+      "Cloudflare hosting",
+      "Display delivery",
+      "Reliability"
+    ],
+    "files": [
+      "worker/bugs.ts",
+      "src/host/videoBridge.ts",
+      "src/App.tsx",
+      "scripts/test-live-room-storage.mjs",
+      "README.md"
+    ],
+    "tests": "npm run build; npm run build:worker; npm run test:shared-state-worker; npm run test:live-room-storage"
+  },
+  {
     "id": "DEV-0599",
     "title": "Allow multiple donor group filters",
     "summary": "Donor group pills now toggle independently, so Explore and Play can be selected together; the group dropdown remains available as a single-group shortcut.",
