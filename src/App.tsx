@@ -138,6 +138,8 @@ import {
 import type { SharedStatePersistenceDetail } from "./host/lanternHost";
 
 const APP_BUILD = import.meta.env.VITE_LANTERN_BUILD ?? "local";
+const DISPLAY_PRESENCE_STALE_MS = 35_000;
+const DISPLAY_STATE_FALLBACK_POLL_MS = 30_000;
 import { mergeConcurrentState } from "./concurrentStateMerge";
 import { attachDisplayVideoReceiver, DirectorVideoBridge } from "./host/videoBridge";
 import type {
@@ -538,7 +540,7 @@ function ControlCenter() {
       setDisplayPresence(Object.fromEntries(lastSeen));
     });
     const prune = window.setInterval(() => {
-      const cutoff = Date.now() - 5_000;
+      const cutoff = Date.now() - DISPLAY_PRESENCE_STALE_MS;
       let changed = false;
       lastSeen.forEach((presence, screenId) => {
         if (Date.parse(presence.timestamp) < cutoff) {
@@ -2591,7 +2593,7 @@ function Dashboard({
                     <div className="dashboard-display-heading">
                       <strong>{screen.label}</strong>
                       <button className="icon-button dashboard-identify-button" onClick={() => identifyDisplay(screen.id)} title={`Identify ${screen.label}`} aria-label={`Identify ${screen.label}`}><Radio size={15} /></button>
-                      <span className={`dashboard-display-presence ${displayIsOpen ? "open" : "closed"}`} title={displayIsOpen ? `${displaySession!.deviceName} is actively reporting from this board.` : "No active display session has reported in the last five seconds."}>
+                      <span className={`dashboard-display-presence ${displayIsOpen ? "open" : "closed"}`} title={displayIsOpen ? `${displaySession!.deviceName} is actively reporting from this board.` : "No recent display session heartbeat has been received."}>
                         <Circle size={8} fill="currentColor" aria-hidden="true" /> {displayIsOpen ? `Open · ${displaySession!.deviceName}` : "Closed"}
                       </span>
                       <span className={`dashboard-assignment-pill ${activeBoard ? "board" : "unscheduled"}`} title={activeBoard ? `Active board: ${activeBoard.name}` : "No active board is scheduled"}>{activeBoard ? `Board · ${activeBoard.name}` : "Nothing scheduled"}</span>
@@ -6687,7 +6689,7 @@ function LivePreviewPanel({
       const now = Date.now();
       let changed = false;
       presence.forEach((seenAt, screenId) => {
-        if (now - seenAt > 5_000) {
+        if (now - seenAt > DISPLAY_PRESENCE_STALE_MS) {
           presence.delete(screenId);
           changed = true;
         }
@@ -10341,7 +10343,7 @@ function DisplayWallApp({ screenIds }: { screenIds: ScreenId[] }) {
       }
     };
     void refreshLiveState();
-    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
+    const interval = window.setInterval(() => void refreshLiveState(), DISPLAY_STATE_FALLBACK_POLL_MS);
     const channel = createHostChannel((message) => {
       if (message.type === "state-update") {
         refreshGuard.current.receivedLiveUpdate();
@@ -10441,7 +10443,7 @@ function DisplayApp({ screenId }: { screenId: ScreenId }) {
       }
     };
     void refreshLiveState();
-    const interval = window.setInterval(() => void refreshLiveState(), 5_000);
+    const interval = window.setInterval(() => void refreshLiveState(), DISPLAY_STATE_FALLBACK_POLL_MS);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshLiveState();
     };
